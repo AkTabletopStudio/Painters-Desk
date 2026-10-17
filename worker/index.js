@@ -176,7 +176,12 @@ async function me(request, env) {
   const providers = Object.entries(PROVIDERS).filter(([, p]) => p.id(env) && p.secret(env)).map(([k, p]) => ({ id: k, label: p.label }));
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
-  return json({ user, logins, providers, devLogin: env.DEV_LOGIN === '1' });
+  // Setup check: which sign-in keys this deployment can see (names and yes/no only, never values).
+  const setup = {
+    providers: Object.fromEntries(Object.entries(PROVIDERS).map(([k, p]) => [k, { id: !!p.id(env), secret: !!p.secret(env) }])),
+    names: Object.keys(env).filter(k => typeof env[k] === 'string').sort(),
+  };
+  return json({ user, logins, providers, devLogin: env.DEV_LOGIN === '1', setup });
 }
 
 async function startSession(env, url, userId, returnTo) {
