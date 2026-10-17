@@ -2,7 +2,7 @@
 
 This experiment adds a small API (`worker/index.js`) behind `/api/*`, a Cloudflare D1 database (`migrations/`), and the
 front-end pages in `account.js`. The colour wheel still works without any of it: if `/api/me` can't be reached,
-the extra tabs stay hidden.
+or no sign-in method is set up yet, the extra tabs stay hidden.
 
 ## Try it locally (no keys needed)
 
@@ -17,10 +17,11 @@ profiles) to try comments between users.
 
 ## Before it can go live
 
-1. **Create the database** (once): `npx wrangler d1 create painters-desk`, then paste the printed `database_id`
-   into `wrangler.jsonc`, and run `npm run db:migrate:remote` (run it again whenever a new file lands in `migrations/`).
-2. **Create the photo bucket** (once): `npx wrangler r2 bucket create painters-desk-images`. R2 has to be switched on
-   for the Cloudflare account first (dashboard > R2); the free tier covers 10 GB.
+1. **Database**: done. The live D1 database `painters-desk` exists and both migrations are applied. Run
+   `npm run db:migrate:remote` whenever a new file lands in `migrations/`.
+2. **Photo bucket** (once): switch on R2 for the Cloudflare account (dashboard > R2; the free tier covers 10 GB), run
+   `npx wrangler r2 bucket create painters-desk-images`, then uncomment the `r2_buckets` line in `wrangler.jsonc`.
+   Until then, tutorials work but photo uploads say "Photo storage is not set up yet".
 3. **Create the OAuth apps** and store their keys as Worker secrets
    (`npx wrangler secret put GOOGLE_CLIENT_ID`, and so on, or in the Cloudflare dashboard under the Worker's
    Settings > Variables and Secrets). Each sign-in button appears once both its ID and secret are set.
@@ -58,5 +59,5 @@ renewed every six months.
   link can open it, so a private tutorial's photos are hidden only by that link being unguessable. Photos removed
   from a tutorial, or belonging to a deleted tutorial or account, are deleted from R2. Photos uploaded but never
   saved are not cleaned up yet.
-  Private recipes return "not found" to everyone except the owner. Comments are only allowed on public recipes,
+- Private recipes return "not found" to everyone except the owner. Comments are only allowed on public recipes,
   by signed-in users, with a 10-second gap between comments per user.
