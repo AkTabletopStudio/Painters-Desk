@@ -17,9 +17,8 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Tutorial photos need an R2 bucket. Once R2 is enabled on the account, run
-  // `npx wrangler r2 bucket create painters-desk-images` and add this back (the deploy fails while the bucket is missing):
-  // "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "painters-desk-images" }],
+  // Tutorial photos (R2). The deploy fails if this bucket doesn't exist.
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "painters-desk-images" }],
   // OAuth client IDs and secrets are set as secrets, never here (see SETUP-ACCOUNTS.md).
   // Needed by the Workers Builds preview command (npx wrangler preview) on PR branches.
   "previews": {}

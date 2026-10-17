@@ -19,9 +19,7 @@ profiles) to try comments between users.
 
 1. **Database**: done. The live D1 database `painters-desk` exists and both migrations are applied. Run
    `npm run db:migrate:remote` whenever a new file lands in `migrations/`.
-2. **Photo bucket** (once): switch on R2 for the Cloudflare account (dashboard > R2; the free tier covers 10 GB), run
-   `npx wrangler r2 bucket create painters-desk-images`, then uncomment the `r2_buckets` line in `wrangler.jsonc`.
-   Until then, tutorials work but photo uploads say "Photo storage is not set up yet".
+2. **Photo bucket**: done. R2 bucket `painters-desk-images` exists and is bound as `IMAGES`.
 3. **Create the OAuth apps** and store their keys as Worker secrets
    (`npx wrangler secret put GOOGLE_CLIENT_ID`, and so on, or in the Cloudflare dashboard under the Worker's
    Settings > Variables and Secrets). Each sign-in button appears once both its ID and secret are set.
