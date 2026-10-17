@@ -51,7 +51,7 @@ function renderAccount(){
  const err=/error=/.test(location.hash)?'<p class="err">Sign-in was cancelled or failed. Please try again.</p>':'';
  if(!ME){
   const btns=INFO.providers.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${ret}">Continue with ${esc(p.label)}</a>`).join(' ');
-  el.innerHTML=`<h1>Sign in</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. Your first sign-in creates your account.</p>
+  el.innerHTML=`<h1>Sign in</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. Your first sign-in creates your account. See the <a href="privacy.html">privacy policy</a> for what we store.</p>
   <div class="row">${btns||'<span class="s">No sign-in methods are set up on this server yet.</span>'}</div>
   ${INFO.devLogin?`<div class="row"><input class="inp" id="devName" placeholder="Test user name" value="Test Painter" style="max-width:220px"><button class="btn" id="devGo" type="button">Dev sign-in</button><span class="s">Local testing only.</span></div>`:''}</div>`;
   if(INFO.devLogin)$('devGo').onclick=()=>location.href=`/api/auth/dev?name=${encodeURIComponent($('devName').value)}&return=${ret}`;
