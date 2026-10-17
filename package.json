@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "wrangler d1 migrations apply painters-desk --local && wrangler dev",
+    "db:migrate:remote": "wrangler d1 migrations apply painters-desk --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
+  }
+}

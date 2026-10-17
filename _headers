@@ -4,6 +4,8 @@
   Cache-Control: no-cache
 /app.js
   Cache-Control: no-cache
+/account.js
+  Cache-Control: no-cache
 /data.js
   Cache-Control: no-cache
 /manifest.webmanifest

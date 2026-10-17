@@ -43,20 +43,55 @@ details.br{margin:4px 0}details.br>summary{padding:4px 0}details.rg{margin:2px 0
 .mt .chip{cursor:pointer}.mt .chip em{font-style:normal;font-size:10.5px;color:var(--mut)}
 .mt .ck{border-color:#2a9d5c}.mt .ck b{color:#2a9d5c;font-size:11px}
 .mt button{font:inherit;font-size:12.5px;padding:3px 10px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer;margin:4px 6px 0 0}
+b.own{color:#d9a400;font-size:12px}
+nav.top{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:0 0 6px;border-bottom:1px solid var(--line);padding-bottom:6px}
+nav.top a{color:var(--fg);text-decoration:none;padding:5px 10px;border-radius:8px;font-size:14px}
+nav.top a.on{background:var(--card);border:1px solid var(--line)}
+nav.top .sp{flex:1}
+nav.top img,.av{width:22px;height:22px;border-radius:50%;vertical-align:middle;margin-right:4px}
+.btn{font:inherit;font-size:14px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block}
+.btn.pri{background:#2a6fdb;border-color:#2a6fdb;color:#fff}.btn.dan{color:#c0392b}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--fg);text-decoration:none;display:block}
+.card h3{margin:0 0 4px;font-size:15px}
+.sw{display:flex;gap:3px;flex-wrap:wrap;margin:6px 0}.sw i{width:18px;height:18px;border-radius:50%;border:1px solid #8886;display:block}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;border:1px solid var(--line);color:var(--mut);margin-right:4px}
+.f{display:block;margin:10px 0}.f>span{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
+.f input[type=text],.f input[type=url],.f textarea,.f select,.inp{width:100%;box-sizing:border-box;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.f textarea{min-height:160px;resize:vertical}
+.res{border:1px solid var(--line);border-radius:8px;max-height:220px;overflow:auto;margin-top:4px}
+.res .pi{padding:4px 8px}.res .pi:hover{background:var(--bg)}
+.chip .x{cursor:pointer;margin-left:2px;color:var(--mut);font-weight:700}
+.steps{white-space:pre-wrap;line-height:1.55}
+.cm{border-top:1px solid var(--line);padding:8px 0}.cm .who{font-size:12.5px;color:var(--mut)}.cm p{margin:4px 0;white-space:pre-wrap}
+.err{color:#c0392b;font-size:13px}
+.lnk{background:none;border:none;color:var(--mut);cursor:pointer;font:inherit;font-size:12px;padding:0 4px;text-decoration:underline}
 </style></head><body><div class="wrap">
+<nav class="top" id="nav"><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
+<section id="v-wheel">
 <h1>The Painters Desk</h1>
 <p class="s">Hue runs around the wheel; paints nearer the rim are lighter, nearer the center darker. Tap a paint to see its complement and neighbors for underpainting, shading and glazing. Dashed outline = wash, glowing outline = fluorescent.</p>
 <details class="panel" id="pickd" open><summary><b>Choose paints</b> · <span id="cnt"></span></summary>
 <div class="bar"><input id="q" type="search" placeholder="Search paints (name or code)"> <button id="clr" type="button">Clear all</button></div>
 <p class="s">Tick a whole range, or open it and tick individual paints. Selections from different ranges and brands show on the wheel together. While searching, a range checkbox selects only the matches.</p>
-<div id="tree"></div></details>
+<div id="tree"></div>
+<div class="row" id="mine" hidden><button class="btn" type="button" id="useMine">Show my collection</button><button class="btn" type="button" id="addMine">Add ticked paints to my collection</button><label><input type="checkbox" id="onlyMine"> Matches from my paints only</label></div></details>
 <label><input type="checkbox" id="lab" checked> Show labels</label>
 <svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
 <div class="panel" id="sel"><b>Tap a paint on the wheel.</b></div>
 <div class="panel"><h2>Neutrals, greys &amp; whites (tap to inspect)</h2><div class="strip" id="neu"></div>
 <p class="s" style="margin-top:8px">Use the Choose paints panel to show any mix of paints from any brand. Basing textures appear in this list only, when selected.</p></div>
+</section>
+<section id="v-paints" hidden></section>
+<section id="v-recipes" hidden></section>
+<section id="v-recipe" hidden></section>
+<section id="v-edit" hidden></section>
+<section id="v-account" hidden></section>
 <p class="s" style="margin:18px 0 6px"><b>The Painters Desk</b> is created by AK Tabletop Studio. © 2026 AK Tabletop Studio. AK Tabletop Studio is not affiliated with AK Interactive. Swatch colours are estimates and will differ from the real paints. Cross-brand matches are close, never exact; they draw on the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart and the Herrick Games hobby paint comparison chart, plus a nearest-colour calculation. This tool is unofficial and not affiliated with or endorsed by Games Workshop, The Army Painter, Monument Hobbies, Vallejo, AK Interactive or Two Thin Coats. Paint names are trademarks of their owners.</p>
 </div>
 <script src="data.js"></script>
 <script src="app.js"></script>
+<script src="account.js"></script>
 </body></html>

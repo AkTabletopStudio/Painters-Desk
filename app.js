@@ -4,7 +4,9 @@ RAW.split('\n').forEach(l=>{if(l[0]==='#'){g=l[1];return}const[n,c,h]=l.split('|
 const mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;let H=0;
 if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
 const S=d?d/(1-Math.abs(2*L-1)):0;
-P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b})});
+P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n})});
+// Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
+let OWN=null,ONLY_MINE=false;const own=p=>!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
 let CH=[],NE=[],U=h=>h;const on={A:1},CX=500,CY=500;
 function layout(){CH=P.filter(p=>p.on&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);NE=P.filter(p=>p.on&&!CH.includes(p)).sort((a,b)=>a.L-b.L);
 const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
@@ -35,11 +37,11 @@ s+=`<g class="dot" data-i="${P.indexOf(p)}" opacity="${on?1:.2}"><circle cx="${p
 (show?`<g transform="translate(${p.x} ${p.y}) scale(${kk}) translate(${-p.x} ${-p.y})">`+ls.map((t,i)=>`<text x="${p.x}" y="${p.y-(ls.length*8-4)/1+i*8.5-2+4}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${p.x}" y="${p.y+20-(ls.length>1?1:-3)-(ls.length>1?0:0)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c})</title></g>`});
 svg.innerHTML=s;
 svg.querySelectorAll('.dot').forEach(e=>e.onclick=()=>pick(P[+e.dataset.i]));
-const chip=p=>`<span class="chip"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span>`;
+const chip=p=>`<span class="chip"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`;
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel)wireMatch(sel)}
 function pick(p){sel=p===sel?null:p;draw()}
 document.getElementById('lab').onchange=draw;
-function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${P.indexOf(p)}"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
+function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${P.indexOf(p)}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
 document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]))}
 const GL={A:'Warpaints Fanatic',R:'Warpaints Air',S:'Speedpaint 2.0',b:'Colour: Base',s:'Colour: Shade',l:'Colour: Layer',c:'Colour: Contrast',t:'Colour: Technical',a:'Colour: Air',d:'Colour: Dry',p:'Tone Pro',M:'Standard / Signature / AMP',W:'Washes',F:'Fluorescents',T:'Transparents',X:'Metallics','1':'1-Step',E:'Expert Artist',P:'Primers',G:'Weathering pigments',B:'Basing textures (list only)',K:'AK Quick Gen',V:'Game Color',u:'Game Color Metallic',i:'Game Color Ink',f:'Game Color Special FX / Fluo',x:'Xpress Color',w:'Game Color Wash',Y:'Model Air',Z:'Model Color',H:'Color wheel: outer ring (highlights)',N:'Color wheel: middle ring (midtones)',O:'Color wheel: inner ring (shadows)',J:'Brights',q:'Metallics',z:'Washes',r:'Glazes',k:'Tonal families & flesh tones'};
 const BRANDS=[['Army Painter',['A','R','S']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z']],['AK Interactive',['K']],['Two Thin Coats',['H','N','O','J','q','z','r','k']]];
@@ -51,14 +53,14 @@ let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.119
 p.lab=[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]})})();
 const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
 const MSRC={t:'Two Thin Coats comparison chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart'};
-function matchData(p){const i=P.indexOf(p),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})),out=[];
+function matchData(p){const i=P.indexOf(p),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
 BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;const ch=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d);
-const have=new Set(ch.map(m=>m.p));const near=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d).slice(0,ch.length?2:3);
+const have=new Set(ch.map(m=>m.p));const near=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d).slice(0,ch.length?2:3);
 out.push({bn,ch,near})});return out}
 function matchHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>';
-const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${P.indexOf(m.p)}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
-md.forEach(o=>{h+=`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o.ch.map(m=>c(m,1)).join('')}${o.near.map(m=>c(m,0)).join('')}</div></div>`});
-return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
+const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${P.indexOf(m.p)}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
+md.forEach(o=>{if(!o.ch.length&&!o.near.length)return;h+=`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o.ch.map(m=>c(m,1)).join('')}${o.near.map(m=>c(m,0)).join('')}</div></div>`});
+if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
 function addOn(list,p){list.forEach(q=>q.on=true);layout();renderNeu();boxes();showP(p)}
 function showP(p){if(CH.includes(p)){sel=p;draw()}else{sel=null;draw();neutralShow(p)}}
 function wireMatch(p){const el=document.getElementById('sel');
