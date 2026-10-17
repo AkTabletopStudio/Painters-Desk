@@ -107,34 +107,69 @@ let rScope='public';
 async function renderRecipes(){
  const el=$('v-recipes');
  el.innerHTML=`<h1>Recipes &amp; tutorials</h1><p class="s">Painting recipes and tutorials from the community. Keep yours private or share them publicly.</p>
- <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new">+ New recipe</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
+ <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new">+ New tutorial or recipe</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
  <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&q=${encodeURIComponent($('rq').value)}`);
-   L.innerHTML=d.recipes.length?d.recipes.map(r=>`<a class="card" href="#/recipe/${esc(r.id)}"><h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div></a>`).join('')
+   L.innerHTML=d.recipes.length?d.recipes.map(r=>`<a class="card" href="#/recipe/${esc(r.id)}">${r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} step${r.steps===1?'':'s'}</span>`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div></a>`).join('')
     :`<p class="s">${rScope==='mine'?'You have not saved any recipes yet.':'No public recipes yet. Be the first to share one.'}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  load()}
 
-/* ---------- one recipe + comments ---------- */
+/* ---------- photos & video ---------- */
+const imgURL=id=>'/api/images/'+encodeURIComponent(id);
+// Shrink a photo in the browser (long edge 1600px, JPEG) before uploading, so phone photos upload fast.
+async function uploadPhoto(file){
+ if(!/^image\//.test(file.type))throw new Error('Please choose a photo');
+ const bmp=await createImageBitmap(file),k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+ const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+ c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+ const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
+ const r=await fetch('/api/images',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'image/jpeg'},body:blob});
+ const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Upload failed');return d.id}
+// YouTube and Vimeo links play inside the page; any other link is shown as a plain link.
+function videoEmbed(link){
+ let m=link.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
+ if(m)return `<div class="vid"><iframe src="https://www.youtube-nocookie.com/embed/${m[1]}" title="Video" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe></div>`;
+ m=link.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+ if(m)return `<div class="vid"><iframe src="https://player.vimeo.com/video/${m[1]}" title="Video" allow="fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+ return `<p>Video / article: <a href="${esc(link)}" target="_blank" rel="noopener nofollow ugc">${esc(link)}</a></p>`}
+// Rough preview of a mix: parts-weighted average of the swatches in linear light. Swatches are estimates, so this is too.
+function mixColour(mix){
+ const ps=mix.map(m=>({p:BYKEY.get(m.k),w:m.parts})).filter(x=>x.p);if(ps.length<2)return null;
+ const lin=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92},gam=v=>Math.round(255*(v>.0031308?1.055*Math.pow(v,1/2.4)-.055:12.92*v));
+ const W=ps.reduce((a,x)=>a+x.w,0),c=[0,0,0];
+ ps.forEach(({p,w})=>[1,3,5].forEach((o,i)=>c[i]+=lin(parseInt(p.h.slice(o,o+2),16))*w/W));
+ return '#'+c.map(v=>gam(v).toString(16).padStart(2,'0')).join('')}
+function mixHTML(mix){
+ if(!mix.length)return'';
+ const ratio=mix.length>1?`<b>${mix.map(m=>m.parts).join(':')} mix</b> of `:'';
+ const mc=mixColour(mix);
+ return `<div class="mix">${ratio}${mix.map(m=>{const p=BYKEY.get(m.k);return `<span class="chip" data-k="${esc(m.k)}"><i style="background:${p?p.h:'#888'}"></i>${p?star(p)+esc(p.n):'Unknown paint'}${mix.length>1?` <em>×${m.parts}</em>`:''}${p?` <span style="color:var(--mut)">${esc(GL[p.g])}</span>`:''}</span>`}).join('')}${mc?`<span class="chip" title="Rough estimate from the swatch colours"><i style="background:${mc}"></i>≈ mixed</span>`:''}</div>`}
+
+/* ---------- one recipe / tutorial + comments ---------- */
 async function renderRecipe(id){
  const el=$('v-recipe');el.innerHTML='<p class="s">Loading…</p>';
  let d;try{d=await api('/recipes/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
  const r=d.recipe,mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
  <p class="s"><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>by ${r.author.avatar?`<img class="av" src="${esc(r.author.avatar)}" alt="">`:''}${esc(r.author.name)} · updated ${fmtDate(r.updated_at)}</p>
+ ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank"><img class="ph cover" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
  ${r.summary?`<p>${esc(r.summary)}</p>`:''}
+ ${r.link?videoEmbed(r.link):''}
  <div class="panel"><h2>Paints used</h2><div class="chips" id="rp">${r.paints.map(k=>pchip(k)).join('')||'<span class="s">No paints listed.</span>'}</div>
  ${r.paints.length?'<button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>':''}</div>
- ${r.link?`<p>Video / article: <a href="${esc(r.link)}" target="_blank" rel="noopener nofollow ugc">${esc(r.link)}</a></p>`:''}
- ${r.body?`<div class="panel"><h2>Steps</h2><div class="steps">${esc(r.body)}</div></div>`:''}
+ ${r.steps.map((s,i)=>`<div class="panel step"><h2>Step ${i+1}${s.title?' · '+esc(s.title):''}</h2>
+  ${s.image?`<a href="${imgURL(s.image)}" target="_blank"><img class="ph" src="${imgURL(s.image)}" alt="Step ${i+1}" loading="lazy"></a>`:''}
+  ${mixHTML(s.mix)}${s.text?`<div class="steps">${esc(s.text)}</div>`:''}</div>`).join('')}
+ ${r.body?`<div class="panel"><h2>${r.steps.length?'Notes':'Steps'}</h2><div class="steps">${esc(r.body)}</div></div>`:''}
  ${mine||ME?.admin?`<div class="row">${mine?`<a class="btn" href="#/recipe/${esc(r.id)}/edit">Edit</a>`:''}<button class="btn dan" id="rDel" type="button">Delete</button></div>`:''}
  ${r.visibility==='public'?`<div class="panel"><h2>Discussion</h2><div id="cms">${d.comments.map(c=>cmHTML(c,canMod(c))).join('')||'<p class="s" id="nocm">No comments yet.</p>'}</div>
   ${ME?`<label class="f"><span>Add a comment</span><textarea id="cBody" maxlength="2000" style="min-height:70px" class="inp"></textarea></label><div class="row"><button class="btn pri" id="cGo" type="button">Post comment</button><span class="err" id="cErr"></span></div>`:signInLink('Registered painters can join the discussion.')}</div>`
-  :(mine?'<p class="s">This recipe is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
- el.querySelectorAll('#rp .chip').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}});
+  :(mine?'<p class="s">This is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
+ el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
  if($('rDel'))$('rDel').onclick=async()=>{if($('rDel').dataset.c){await api('/recipes/'+r.id,{method:'DELETE'});location.hash='#/recipes'}else{$('rDel').dataset.c=1;$('rDel').textContent='Click again to delete for good'}};
  const wireDel=()=>el.querySelectorAll('[data-dc]').forEach(b=>b.onclick=async()=>{await api('/comments/'+b.dataset.dc,{method:'DELETE'});b.closest('.cm').remove()});
@@ -145,33 +180,79 @@ async function renderRecipe(id){
 const cmHTML=(c,del)=>`<div class="cm"><div class="who">${c.author.avatar?`<img class="av" src="${esc(c.author.avatar)}" alt="">`:''}<b>${esc(c.author.name)}</b> · ${fmtDate(c.created_at)}${del?` <button class="lnk" data-dc="${esc(c.id)}" type="button">delete</button>`:''}</div><p>${esc(c.body)}</p></div>`;
 
 /* ---------- create / edit ---------- */
+const STEP_NAMES=['Prime','Zenithal','Base coat','Wash / shade','Layer','Highlight','Edge highlight','Glaze','Drybrush','Details','Freehand','Weathering','Basing','Varnish'];
 async function renderEdit(id){
  const el=$('v-edit');
- if(!ME){el.innerHTML='<h1>New recipe</h1>'+signInLink('Recipes are saved to your account.');return}
- let r={kind:'recipe',title:'',summary:'',body:'',link:'',paints:[],visibility:'private'};
+ if(!ME){el.innerHTML='<h1>New tutorial</h1>'+signInLink('Tutorials are saved to your account.');return}
+ let r={kind:'tutorial',title:'',summary:'',body:'',link:'',paints:[],steps:[],cover:'',visibility:'private'};
  if(id){try{r=(await api('/recipes/'+encodeURIComponent(id))).recipe}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p>`;return}}
- let paints=[...r.paints];
- el.innerHTML=`<p><a href="${id?'#/recipe/'+esc(id):'#/recipes'}">← Back</a></p><h1>${id?'Edit':'New'} ${r.kind==='tutorial'?'tutorial':'recipe'}</h1><div class="panel">
- <label class="f"><span>Type</span><select id="eKind"><option value="recipe">Paint recipe</option><option value="tutorial">Tutorial</option></select></label>
- <label class="f"><span>Title</span><input type="text" id="eTitle" maxlength="120" placeholder="e.g. Grimy NMM gold in four layers"></label>
- <label class="f"><span>Short summary</span><input type="text" id="eSum" maxlength="300" placeholder="What this recipe is for"></label>
- <div class="f"><span>Paints used</span><div class="chips" id="eP"></div><input class="inp" id="eQ" type="search" placeholder="Search paints to add (name or code)"><div class="res" id="eRes" hidden></div>
-  ${OWN.size?'<label><input type="checkbox" id="eMine"> Search my paints only</label>':''}</div>
- <label class="f"><span>Steps (one per line works well)</span><textarea id="eBody" maxlength="20000" placeholder="1. Prime black\n2. Basecoat Retributor Armour\n3. Wash Reikland Fleshshade"></textarea></label>
- <label class="f"><span>Video or article link (optional)</span><input type="url" id="eLink" maxlength="500" placeholder="https://"></label>
+ const steps=r.steps.length?r.steps.map(s=>({...s,mix:s.mix.map(m=>({...m}))})):[{title:'',text:'',image:'',mix:[]}];
+ let cover=r.cover,busy=0;
+ // Paints listed before steps existed (or outside any step) are kept as "other paints".
+ const inSteps=new Set(steps.flatMap(s=>s.mix.map(m=>m.k)));let extra=r.paints.filter(k=>!inSteps.has(k));
+ const back=id?'#/recipe/'+esc(id):'#/recipes';
+ el.innerHTML=`<p><a href="${back}">← Back</a></p><h1>${id?'Edit':'New'} ${r.kind==='tutorial'?'tutorial':'recipe'}</h1><div class="panel">
+ <label class="f"><span>Type</span><select id="eKind"><option value="tutorial">Tutorial</option><option value="recipe">Paint recipe</option></select></label>
+ <label class="f"><span>Title</span><input type="text" id="eTitle" maxlength="120" placeholder="e.g. Deep purple robes in three steps"></label>
+ <label class="f"><span>Short summary</span><input type="text" id="eSum" maxlength="300" placeholder="What this is for"></label>
+ <div class="f"><span>Main photo (the finished model)</span><div id="eCover"></div></div>
+ <label class="f"><span>Video link (optional; YouTube and Vimeo play in the page)</span><input type="url" id="eLink" maxlength="500" placeholder="https://youtube.com/watch?v=…"></label></div>
+ <h2 style="font-size:16px;margin-top:16px">Steps</h2><p class="s">One step per stage, e.g. Base coat, then Edge highlight. Add the paints you used with their ratio, a photo of the result, and any details.</p>
+ <div id="eSteps"></div><button class="btn" id="eAdd" type="button">+ Add step</button>
+ <div class="panel" style="margin-top:14px"><div class="f"><span>Other paints used (not in a step)</span><div id="eX"></div></div>
+ <label class="f"><span>Notes (optional)</span><textarea id="eBody" maxlength="20000" style="min-height:90px" placeholder="Anything else: brushes, tips, thinning"></textarea></label>
  <div class="f"><span>Who can see it</span><label><input type="radio" name="eVis" value="private"> Private, only me</label><br><label><input type="radio" name="eVis" value="public"> Public, anyone can view and registered users can comment</label></div>
- <div class="row"><button class="btn pri" id="eSave" type="button">Save</button><a class="btn" href="${id?'#/recipe/'+esc(id):'#/recipes'}">Cancel</a><span class="err" id="eErr"></span></div></div>`;
+ <div class="row"><button class="btn pri" id="eSave" type="button">Save</button><a class="btn" href="${back}">Cancel</a><span class="err" id="eErr"></span></div></div>
+ <datalist id="stepNames">${STEP_NAMES.map(n=>`<option value="${n}">`).join('')}</datalist>`;
  $('eKind').value=r.kind;$('eTitle').value=r.title;$('eSum').value=r.summary;$('eBody').value=r.body;$('eLink').value=r.link;
  el.querySelector(`input[name=eVis][value=${r.visibility}]`).checked=true;
- const drawP=()=>{$('eP').innerHTML=paints.map(k=>pchip(k,1)).join('')||'<span class="s">None yet.</span>';$('eP').querySelectorAll('.x').forEach(x=>x.onclick=()=>{paints=paints.filter(k=>k!==x.closest('.chip').dataset.k);drawP()})};
- const search=()=>{const q=$('eQ').value.trim().toLowerCase(),R=$('eRes');if(!q){R.hidden=true;return}
-  const mineOnly=$('eMine')?.checked,hits=P.filter(p=>(p.n+' '+p.c).toLowerCase().includes(q)&&!paints.includes(p.k)&&(!mineOnly||OWN.has(p.k))).slice(0,30);
-  R.hidden=false;R.innerHTML=hits.map(p=>`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
-  R.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>{if(paints.length<60)paints.push(d.dataset.k);drawP();$('eQ').value='';R.hidden=true;$('eQ').focus()})};
- $('eQ').oninput=search;if($('eMine'))$('eMine').onchange=search;
- drawP();
- $('eSave').onclick=async()=>{$('eSave').disabled=true;$('eErr').textContent='';
-  const b={kind:$('eKind').value,title:$('eTitle').value,summary:$('eSum').value,body:$('eBody').value,link:$('eLink').value.trim(),paints,visibility:el.querySelector('input[name=eVis]:checked').value};
+
+ // A photo slot: shows the picture with Replace/Remove, or an upload button.
+ function photoSlot(box,get,set,label){
+  const draw=()=>{const v=get();box.innerHTML=(v?`<img class="ph" src="${imgURL(v)}" alt="">`:'')+`<div class="row"><label class="btn">${v?'Replace photo':label}<input type="file" accept="image/*" hidden></label>${v?'<button class="btn dan" type="button" data-rm>Remove</button>':''}<span class="s" data-st></span></div>`;
+   box.querySelector('input').onchange=async e=>{const f=e.target.files[0];if(!f)return;const st=box.querySelector('[data-st]');st.textContent='Uploading…';busy++;
+    try{set(await uploadPhoto(f));draw()}catch(err){st.textContent=err.message;st.className='err'}busy--};
+   const rm=box.querySelector('[data-rm]');if(rm)rm.onclick=()=>{set('');draw()}};
+  draw()}
+ photoSlot($('eCover'),()=>cover,v=>cover=v,'Add main photo');
+
+ // A paint search box; calls onPick(paintKey).
+ function paintSearch(box,exclude,onPick){
+  box.innerHTML=`<input class="inp" type="search" placeholder="Add a paint (search name or code)">${OWN.size?'<label class="s"><input type="checkbox"> my paints only</label>':''}<div class="res" hidden></div>`;
+  const q=box.querySelector('input[type=search]'),mine=box.querySelector('input[type=checkbox]'),R=box.querySelector('.res');
+  const go=()=>{const t=q.value.trim().toLowerCase();if(!t){R.hidden=true;return}const ex=exclude();
+   const hits=P.filter(p=>(p.n+' '+p.c).toLowerCase().includes(t)&&!ex.includes(p.k)&&(!mine?.checked||OWN.has(p.k))).slice(0,30);
+   R.hidden=false;R.innerHTML=hits.map(p=>`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
+   R.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>onPick(d.dataset.k))};
+  q.oninput=go;if(mine)mine.onchange=go}
+
+ function drawExtra(){const box=$('eX');box.innerHTML=`<div class="chips">${extra.map(k=>pchip(k,1)).join('')}</div><div></div>`;
+  box.querySelectorAll('.x').forEach(x=>x.onclick=()=>{extra=extra.filter(k=>k!==x.closest('.chip').dataset.k);drawExtra()});
+  paintSearch(box.lastElementChild,()=>extra,k=>{if(extra.length<60)extra.push(k);drawExtra();box.querySelector('input[type=search]').focus()})}
+ drawExtra();
+
+ function drawSteps(){const S=$('eSteps');
+  S.innerHTML=steps.map((s,i)=>`<div class="panel step" data-i="${i}"><div class="row" style="margin:0"><b>Step ${i+1}</b><span style="flex:1"></span>
+   <button class="btn" type="button" data-mv="-1" ${i?'':'disabled'} title="Move up">↑</button><button class="btn" type="button" data-mv="1" ${i<steps.length-1?'':'disabled'} title="Move down">↓</button><button class="btn dan" type="button" data-del title="Remove step">✕</button></div>
+   <label class="f"><span>Step name</span><input type="text" list="stepNames" maxlength="80" data-f="title" placeholder="e.g. Base coat"></label>
+   <div class="f"><span>Paints and mix ratio</span><div class="mixed">${s.mix.map((m,j)=>{const p=BYKEY.get(m.k);return `<div class="mrow"><i style="background:${p?p.h:'#888'}"></i><span>${p?esc(p.n)+' <em>'+esc(GL[p.g])+'</em>':'Unknown paint'}</span><input type="number" min="1" max="20" value="${m.parts}" data-parts="${j}" title="Parts" aria-label="Parts"><span class="s">part${m.parts>1?'s':''}</span><span class="x" data-rmix="${j}" title="Remove">×</span></div>`}).join('')}</div>
+    ${s.mix.length>1?`<p class="s" data-ratio>Ratio ${s.mix.map(m=>m.parts).join(':')}</p>`:''}<div data-ps></div></div>
+   <label class="f"><span>Details</span><textarea maxlength="4000" data-f="text" style="min-height:70px" placeholder="e.g. Two thin coats, thinned with a drop of medium"></textarea></label>
+   <div class="f"><span>Photo of this step</span><div data-ph></div></div></div>`).join('');
+  S.querySelectorAll('.step').forEach(box=>{const i=+box.dataset.i,s=steps[i];
+   box.querySelectorAll('[data-f]').forEach(inp=>{inp.value=s[inp.dataset.f];inp.oninput=()=>s[inp.dataset.f]=inp.value});
+   box.querySelectorAll('[data-parts]').forEach(inp=>inp.oninput=()=>{s.mix[+inp.dataset.parts].parts=Math.min(20,Math.max(1,+inp.value||1));const rt=box.querySelector('[data-ratio]');if(rt)rt.textContent='Ratio '+s.mix.map(m=>m.parts).join(':')});
+   box.querySelectorAll('[data-rmix]').forEach(x=>x.onclick=()=>{s.mix.splice(+x.dataset.rmix,1);drawSteps()});
+   box.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{const j=i+ +b.dataset.mv;[steps[i],steps[j]]=[steps[j],steps[i]];drawSteps()});
+   box.querySelector('[data-del]').onclick=()=>{steps.splice(i,1);if(!steps.length)steps.push({title:'',text:'',image:'',mix:[]});drawSteps()};
+   paintSearch(box.querySelector('[data-ps]'),()=>s.mix.map(m=>m.k),k=>{if(s.mix.length<8)s.mix.push({k,parts:1});drawSteps();S.querySelector(`.step[data-i="${i}"] [data-ps] input[type=search]`).focus()});
+   photoSlot(box.querySelector('[data-ph]'),()=>s.image,v=>s.image=v,'Add photo')})}
+ drawSteps();
+ $('eAdd').onclick=()=>{steps.push({title:'',text:'',image:'',mix:[]});drawSteps();$('eSteps').lastElementChild.querySelector('[data-f=title]').focus()};
+
+ $('eSave').onclick=async()=>{if(busy){$('eErr').textContent='Please wait for photos to finish uploading.';return}
+  $('eSave').disabled=true;$('eErr').textContent='';
+  const b={kind:$('eKind').value,title:$('eTitle').value,summary:$('eSum').value,body:$('eBody').value,link:$('eLink').value.trim(),cover,steps,paints:extra,visibility:el.querySelector('input[name=eVis]:checked').value};
   try{const d=await api(id?'/recipes/'+id:'/recipes',{method:id?'PUT':'POST',body:b});location.hash='#/recipe/'+d.recipe.id}
   catch(e){$('eErr').textContent=e.message;$('eSave').disabled=false}}}
 

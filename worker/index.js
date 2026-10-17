@@ -87,6 +87,8 @@ async function route(request, env, url) {
   }
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/comments$/)) && m === 'POST') return addComment(request, env, r[1]);
   if ((r = p.match(/^\/api\/comments\/([\w-]+)$/)) && m === 'DELETE') return deleteComment(request, env, r[1]);
+  if (p === '/api/images' && m === 'POST') return uploadImage(request, env);
+  if ((r = p.match(/^\/api\/images\/([\w-]+)$/)) && m === 'GET') return getImage(env, r[1]);
   return json({ error: 'Not found' }, 404);
 }
 
@@ -267,11 +269,14 @@ async function logout(request, env, url) {
 
 async function deleteAccount(request, env) {
   const u = await requireUser(request, env);
+  const imgs = (await env.DB.prepare('SELECT id FROM images WHERE user_id = ?').bind(u.id).all()).results.map(i => i.id);
+  await deleteImages(env, imgs);
   // Child rows go first so this works whether or not D1 enforces the foreign keys.
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comments WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
     env.DB.prepare('DELETE FROM recipes WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
+    env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM identities WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id),
@@ -303,7 +308,7 @@ async function putCollection(request, env) {
 
 const recipeOut = r => ({
   id: r.id, kind: r.kind, title: r.title, summary: r.summary, body: r.body, link: r.link,
-  paints: JSON.parse(r.paints || '[]'), visibility: r.visibility, created_at: r.created_at, updated_at: r.updated_at,
+  paints: JSON.parse(r.paints || '[]'), steps: JSON.parse(r.steps || '[]'), cover: r.cover || '', visibility: r.visibility, created_at: r.created_at, updated_at: r.updated_at,
   author: { id: r.user_id, name: r.author_name, avatar: r.author_avatar }, comments: r.comment_count ?? undefined,
 });
 
@@ -319,7 +324,13 @@ async function listRecipes(request, env, url) {
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count
      FROM recipes r JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY r.updated_at DESC LIMIT 100`
   ).bind(...args).all()).results;
-  return json({ recipes: rows.map(r => { const o = recipeOut(r); delete o.body; return o; }) });
+  // The list only needs a picture: the main photo, else the last step photo (usually the finished model).
+  return json({ recipes: rows.map(r => {
+    const o = recipeOut(r);
+    o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
+    o.steps = o.steps.length; delete o.body;
+    return o;
+  }) });
 }
 
 async function loadRecipe(env, id) {
@@ -340,41 +351,123 @@ async function getRecipe(request, env, id) {
   return json({ recipe: recipeOut(r), comments });
 }
 
+const IMAGE_ID = /^[0-9a-f-]{36}$/;
+
+// Validate the steps and make sure every photo they use was uploaded by this user.
+function cleanSteps(raw) {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length > 30) throw new HttpError(400, 'Too many steps (max 30)');
+  const steps = raw.map((s, i) => {
+    const mix = (Array.isArray(s?.mix) ? s.mix : []).filter(m => typeof m?.k === 'string' && m.k && m.k.length <= 120)
+      .map(m => ({ k: m.k, parts: Math.min(20, Math.max(1, Math.round(Number(m.parts) || 1))) }));
+    if (mix.length > 8) throw new HttpError(400, `Step ${i + 1} has too many paints (max 8)`);
+    const image = typeof s?.image === 'string' && IMAGE_ID.test(s.image) ? s.image : '';
+    return { title: str(s?.title, 80, `Step ${i + 1} name`), text: str(s?.text, 4000, `Step ${i + 1} details`), image, mix };
+  }).filter(s => s.title || s.text || s.image || s.mix.length);
+  return steps;
+}
+
+async function checkImagesOwned(env, u, ids) {
+  for (const id of ids) {
+    const row = await env.DB.prepare('SELECT user_id FROM images WHERE id = ?').bind(id).first();
+    if (!row || row.user_id !== u.id) throw new HttpError(400, 'A photo is missing, please upload it again');
+  }
+}
+
+const recipeImages = r => new Set([r.cover, ...r.steps.map(s => s.image)].filter(Boolean));
+
+async function deleteImages(env, ids) {
+  ids = [...ids];
+  if (!ids.length) return;
+  if (env.IMAGES) await env.IMAGES.delete(ids.map(id => `img/${id}`));
+  await env.DB.batch(ids.map(id => env.DB.prepare('DELETE FROM images WHERE id = ?').bind(id)));
+}
+
 async function saveRecipe(request, env, id) {
   const u = await requireUser(request, env), b = await body(request);
+  const steps = cleanSteps(b.steps);
+  const cover = typeof b.cover === 'string' && IMAGE_ID.test(b.cover) ? b.cover : '';
+  // "paints" is every paint in the steps plus any extras listed separately; it drives list swatches and the wheel button.
+  const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])], 60);
   const rec = {
     kind: b.kind === 'tutorial' ? 'tutorial' : 'recipe',
     title: str(b.title, 120, 'Title', { required: true }),
     summary: str(b.summary, 300, 'Summary'),
-    body: str(b.body, 20000, 'Steps'),
-    link: str(b.link, 500, 'Link'),
-    paints: JSON.stringify(paintKeys(b.paints, 60)),
+    body: str(b.body, 20000, 'Notes'),
+    link: str(b.link, 500, 'Video link'),
+    paints: JSON.stringify(paints),
+    steps: JSON.stringify(steps),
+    cover,
     visibility: b.visibility === 'public' ? 'public' : 'private',
   };
   if (rec.link && !/^https?:\/\//i.test(rec.link)) throw new HttpError(400, 'Link must start with http:// or https://');
+  const used = recipeImages({ cover, steps });
   const t = now(), isNew = !id;
+  let removed = [];
   if (id) {
-    const old = await env.DB.prepare('SELECT user_id FROM recipes WHERE id = ?').bind(id).first();
+    const old = await env.DB.prepare('SELECT user_id, cover, steps FROM recipes WHERE id = ?').bind(id).first();
     if (!old || old.user_id !== u.id) throw new HttpError(404, 'Recipe not found');
-    await env.DB.prepare('UPDATE recipes SET kind=?, title=?, summary=?, body=?, link=?, paints=?, visibility=?, updated_at=? WHERE id=?')
-      .bind(rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.visibility, t, id).run();
+    const before = recipeImages({ cover: old.cover, steps: JSON.parse(old.steps || '[]') });
+    await checkImagesOwned(env, u, [...used].filter(i => !before.has(i)));
+    removed = [...before].filter(i => !used.has(i));
+    await env.DB.prepare('UPDATE recipes SET kind=?, title=?, summary=?, body=?, link=?, paints=?, steps=?, cover=?, visibility=?, updated_at=? WHERE id=?')
+      .bind(rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.steps, rec.cover, rec.visibility, t, id).run();
   } else {
+    await checkImagesOwned(env, u, [...used]);
     id = crypto.randomUUID();
-    await env.DB.prepare('INSERT INTO recipes (id, user_id, kind, title, summary, body, link, paints, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-      .bind(id, u.id, rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.visibility, t, t).run();
+    await env.DB.prepare('INSERT INTO recipes (id, user_id, kind, title, summary, body, link, paints, steps, cover, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(id, u.id, rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.steps, rec.cover, rec.visibility, t, t).run();
   }
+  await deleteImages(env, removed);
   return json({ recipe: recipeOut(await loadRecipe(env, id)) }, isNew ? 201 : 200);
 }
 
 async function deleteRecipe(request, env, id) {
   const u = await requireUser(request, env);
-  const r = await env.DB.prepare('SELECT user_id FROM recipes WHERE id = ?').bind(id).first();
+  const r = await env.DB.prepare('SELECT user_id, cover, steps FROM recipes WHERE id = ?').bind(id).first();
   if (!r || (r.user_id !== u.id && !u.admin)) throw new HttpError(404, 'Recipe not found');
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comments WHERE recipe_id = ?').bind(id),
     env.DB.prepare('DELETE FROM recipes WHERE id = ?').bind(id),
   ]);
+  await deleteImages(env, recipeImages({ cover: r.cover, steps: JSON.parse(r.steps || '[]') }));
   return json({ ok: true });
+}
+
+/* ---------- photos ---------- */
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE = 5 * 1024 * 1024;
+
+// The page shrinks photos before upload; the raw image bytes are the request body.
+async function uploadImage(request, env) {
+  const u = await requireUser(request, env);
+  if (!env.IMAGES) throw new HttpError(503, 'Photo storage is not set up yet');
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim();
+  if (!IMAGE_TYPES.includes(type)) throw new HttpError(400, 'Photos must be JPEG, PNG or WebP');
+  const data = await request.arrayBuffer();
+  if (!data.byteLength) throw new HttpError(400, 'Empty photo');
+  if (data.byteLength > MAX_IMAGE) throw new HttpError(413, 'Photo is too large (max 5 MB)');
+  const id = crypto.randomUUID();
+  await env.IMAGES.put(`img/${id}`, data, { httpMetadata: { contentType: type } });
+  await env.DB.prepare('INSERT INTO images (id, user_id, content_type, size, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(id, u.id, type, data.byteLength, now()).run();
+  return json({ id, url: `/api/images/${id}` }, 201);
+}
+
+// Photo IDs are random, so a private tutorial's photos can only be found by someone who has the link.
+async function getImage(env, id) {
+  if (!env.IMAGES || !IMAGE_ID.test(id)) return json({ error: 'Not found' }, 404);
+  const obj = await env.IMAGES.get(`img/${id}`);
+  if (!obj) return json({ error: 'Not found' }, 404);
+  const type = obj.httpMetadata?.contentType;
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': IMAGE_TYPES.includes(type) ? type : 'application/octet-stream',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 /* ---------- comments (public recipes, signed-in users) ---------- */

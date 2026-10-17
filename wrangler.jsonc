@@ -18,6 +18,10 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Tutorial photos. Create once with `npx wrangler r2 bucket create painters-desk-images`.
+  "r2_buckets": [
+    { "binding": "IMAGES", "bucket_name": "painters-desk-images" }
+  ],
   // OAuth client IDs and secrets are set as secrets, never here (see SETUP-ACCOUNTS.md).
   // Needed by the Workers Builds preview command (npx wrangler preview) on PR branches.
   "previews": {}
