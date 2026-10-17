@@ -21,7 +21,8 @@ function showOnWheel(keys){const s=new Set(keys);P.forEach(p=>p.on=s.has(p.k));s
 
 /* ---------- session ---------- */
 async function loadMe(){
- try{INFO=await api('/me');API=true;ME=INFO.user}catch(e){API=false;ME=null}
+ // The extra tabs only show once there is a way to sign in (or someone is already signed in).
+ try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length)}catch(e){API=false;ME=null}
  if(ME){try{OWN=new Set((await api('/collection')).paints)}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
  document.querySelectorAll('#nav a[data-v]').forEach(a=>{if(a.dataset.v!=='wheel')a.hidden=!API});
  $('acct').innerHTML=ME?(ME.avatar?`<img src="${esc(ME.avatar)}" alt="">`:'')+esc(ME.name):'Sign in';
