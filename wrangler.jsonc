@@ -4,5 +4,7 @@
   "compatibility_date": "2026-10-17",
   "assets": {
     "directory": "."
-  }
+  },
+  // Needed by the Workers Builds preview command (npx wrangler preview) on PR branches.
+  "previews": {}
 }
