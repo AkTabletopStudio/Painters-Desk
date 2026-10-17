@@ -1,0 +1,12 @@
+# Copy to .dev.vars for local development (never commit .dev.vars).
+# DEV_LOGIN=1 shows a "Dev sign-in" button that logs in as any test name without OAuth keys. Never set it in production.
+DEV_LOGIN=1
+# Optional: comma-separated emails that can delete any recipe or comment (moderation).
+ADMIN_EMAILS=
+# Optional locally; each provider appears on the sign-in screen once both values are set.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=

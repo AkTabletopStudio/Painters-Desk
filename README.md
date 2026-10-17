@@ -7,6 +7,7 @@ Miniature-paint colour wheel with cross-brand matches, by AK Tabletop Studio. St
 - `data.js` – paint list and cross-brand match data (large, rarely changes)
 - `manifest.webmanifest`, `sw.js`, `icons/` – make it installable and offline-capable
 - `_headers` – tells Cloudflare Pages not to cache the page or service worker
+- `account.js`, `worker/`, `migrations/` – accounts, paint collections, recipes and comments (experimental; see `SETUP-ACCOUNTS.md`)
 
 ## Deploy (Cloudflare Pages)
 Framework preset: None. Build command: (empty). Output directory: `/`.
