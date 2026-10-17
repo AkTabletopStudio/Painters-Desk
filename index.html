@@ -23,7 +23,8 @@ p.s{color:var(--mut);margin:0 0 12px;font-size:14px}
 #v-wheel>p.s{font-size:16px;max-width:720px;color:var(--fg);opacity:.85}
 .wrap{max-width:1100px;margin:auto}
 @media (min-width:1000px){.wrap{max-width:1440px}
-.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,30%);gap:24px;align-items:start}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,30%);grid-template-rows:auto 1fr;grid-template-areas:"w s" "n s";column-gap:24px;align-items:start}
+.stage #w{grid-area:w}.stage #neup{grid-area:n;margin-top:20px}.stage #sel{grid-area:s;align-self:start}
 .stage #w{margin:12px 0 0}
 .stage #sel{position:sticky;top:12px;margin:12px 0 0;max-height:calc(100vh - 36px);overflow:auto;overscroll-behavior:contain}
 .stage #sel .mt .bl{flex-basis:100%;padding-top:0}}
@@ -115,9 +116,9 @@ nav.top img,.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;m
 <div class="stage">
 <svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
 <div class="panel" id="sel"><b>Tap a paint on the wheel.</b></div>
-</div>
-<div class="panel"><h2>Neutrals, greys &amp; whites (tap to inspect)</h2><div class="strip" id="neu"></div>
+<div class="panel" id="neup"><h2>Neutrals, greys &amp; whites (tap to inspect)</h2><div class="strip" id="neu"></div>
 <p class="s" style="margin-top:8px">Use the Choose paints panel to show any mix of paints from any brand. Basing textures appear in this list only, when selected.</p></div>
+</div>
 </section>
 <section id="v-paints" hidden></section>
 <section id="v-recipes" hidden></section>
