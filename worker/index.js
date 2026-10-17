@@ -51,6 +51,11 @@ const PROVIDERS = {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // One address for the whole site, so sign-in redirect URLs and the session cookie always match.
+    if (url.hostname.startsWith('www.')) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
       // Writes must come from this site's own pages (blocks cross-site form posts using the session cookie).
