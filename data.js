@@ -37,7 +37,7 @@ Bright Green Blue|AMP-009|#8fc0b0
 Green Oxide|S16|#2f7a6a
 Dark Emerald|S20|#1d4a4a
 Dark Jade|S01|#14504c
-Jade|021|#136b63
+Jade|021|#014a58
 Bright Jade|067|#2f9e8a
 Dark Turquoise|S34|#1b6e84
 Turquoise|054|#1aa0b8
@@ -46,7 +46,7 @@ Payne’s Grey|S02|#3a4658
 Blue Black|056|#1f2a3a
 Dark Navy Blue|AMP-005|#1c1f3e
 Dark Blue|034|#1f2f7a
-Dark Grey Blue|014|#2e4a8a
+Dark Grey Blue|014|#263754
 Ultramarine|S35|#3a52b0
 Blue|005|#1f5fb0
 Sky Blue|012|#4a90d0
@@ -74,20 +74,20 @@ Peach Flesh|AMP-008|#f0b08a
 Tan Flesh|024|#b87a5a
 Dark Warm Flesh|S08|#c88a5a
 Warm Flesh|073|#e0a070
-Olive Flesh|041|#a08a5a
+Olive Flesh|041|#ddc9ac
 Black Brown|040|#2a1e1a
 Petroleum Brown|S14|#4a3220
 Dark Umber|019|#4a3028
 Dark Golden Brown|062|#5e4118
 Warm Brown|S09|#8a5a2e
-Light Umber|018|#a07a55
+Light Umber|018|#5f392c
 Drab Brown|S40|#5e4e3e
 Dark Green Brown|S25|#4a4026
 Dark Orange Brown|S26|#7a4a22
 Green Brown|AMP-020|#6a5a30
 Caramel Brown|S28|#a8702e
 Orange Brown|S27|#9a5a22
-Golden Brown|017|#c8a05a
+Golden Brown|017|#dca027
 Khaki|061|#b8a878
 Bone|S23|#c8c0aa
 Dark Ivory|S07|#a09a80
@@ -1427,85 +1427,85 @@ Kronos Flesh||#caa474
 Ares Flesh||#e6c789
 #V
 Elf Skin Tone|72.004|#bc6e49
-Hot Orange|72.009|#de2c27
-Sunrise Blue|72.118|#65bde1
-Leather Brown|72.040|#3f2914
-Bloody Red|72.010|#a81e22
-Moon Yellow|72.005|#e9b113
-Scarlet Red|72.012|#4d1624
-Pale Flesh|72.003|#c58b6e
+Hot Orange|72.009|#e34020
+Sunrise Blue|72.118|#a2e0f2
+Leather Brown|72.040|#c18223
+Bloody Red|72.010|#df2836
+Moon Yellow|72.005|#eed70c
+Scarlet Red|72.012|#a0262e
+Pale Flesh|72.003|#ebd3b9
 Sun Yellow|72.006|#f68917
-Gory Red|72.011|#57141b
-Rosy Flesh|72.100|#e25f5b
+Gory Red|72.011|#a51c21
+Rosy Flesh|72.100|#edab90
 Gold Yellow|72.007|#e96c1c
-Athena Skin|72.107|#aa544f
-Succubus Skin|72.108|#693d3f
-Skin Tone|72.099|#f89f6f
-Scrofulous Brown|72.038|#9e531b
+Athena Skin|72.107|#e18879
+Succubus Skin|72.108|#b05b5e
+Skin Tone|72.099|#edca9e
+Scrofulous Brown|72.038|#d87e18
 Sunset Orange|72.110|#f4742e
-Orange Fire|72.008|#f14a24
-Nocturnal Red|72.111|#2e141b
+Orange Fire|72.008|#ed6110
+Nocturnal Red|72.111|#622122
 Evil Red|72.112|#291621
-Squid Pink|72.013|#c657a2
-Warlord Purple|72.014|#751f43
-Alien Purple|72.076|#46377a
-Hexed Lichen|72.015|#2a1734
+Squid Pink|72.013|#eb9ce0
+Warlord Purple|72.014|#ab2e62
+Alien Purple|72.076|#766ebd
+Hexed Lichen|72.015|#553771
 Royal Purple|72.016|#1b162a
 Midnight Purple|72.116|#1b132a
-Elfic Blue|72.117|#3d577c
-Ultramarine Blue|72.022|#152042
+Elfic Blue|72.117|#78a2d6
+Ultramarine Blue|72.022|#4e75b5
 Night Blue|72.019|#0b0f17
-Electric Blue|72.023|#206e8b
-Magic Blue|72.021|#204185
-Imperial Blue|72.020|#111d2d
-Verdigris|72.096|#7ad0a1
-Aquamarine|72.119|#167c7d
-Turquoise|72.024|#133e45
-Abyssal Turquoise|72.120|#11202e
-Ghost Green|72.121|#59c485
-Glacier Blue|72.095|#adcaea
-Jade Green|72.026|#124538
-Scurvy Green|72.027|#0e2d22
-Bile Green|72.122|#c2e01c
-Scorpy Green|72.032|#3d7e36
-Goblin Green|72.030|#374928
-Sick Green|72.029|#345834
-Angel Green|72.123|#1f3322
-Dark Green|72.028|#101e18
-Camouflage Green|72.031|#5d5a27
-Dirty Grey|72.145|#3b351f
-Cayman Green|72.067|#322f18
-Khaki|72.061|#66543d
-Desert Yellow|72.063|#6c542c
-Earth|72.062|#473424
+Electric Blue|72.023|#2db7d7
+Magic Blue|72.021|#148dd4
+Imperial Blue|72.020|#30518d
+Verdigris|72.096|#d3f3f3
+Aquamarine|72.119|#01c0cf
+Turquoise|72.024|#0b95b5
+Abyssal Turquoise|72.120|#2d4d66
+Ghost Green|72.121|#aedec6
+Glacier Blue|72.095|#dee4f3
+Jade Green|72.026|#00ab9b
+Scurvy Green|72.027|#226e69
+Bile Green|72.122|#eef91a
+Scorpy Green|72.032|#51cf02
+Goblin Green|72.030|#77aa33
+Sick Green|72.029|#44962f
+Angel Green|72.123|#0a830b
+Dark Green|72.028|#26562f
+Camouflage Green|72.031|#b2a424
+Dirty Grey|72.145|#86813e
+Cayman Green|72.067|#857c37
+Khaki|72.061|#cfab77
+Desert Yellow|72.063|#c7a421
+Earth|72.062|#a07135
 Bronze Brown|72.036|#8c511e
-Plague Brown|72.039|#805224
-Beasty Brown|72.043|#472f1d
-Parasite Brown|72.042|#62341d
-Grunge Brown|72.115|#5c2e1e
-Gorgon Brown|72.124|#311c18
-Tan|72.066|#70433e
-Dark Flesh Tone|72.044|#341917
-Charred Brown|72.045|#1e1515
-Wolf Grey|72.047|#8ab1b4
-Steel Grey|72.102|#3d4c54
-Sombre Grey|72.048|#2d373f
-Warm Grey|72.148|#6f5756
-Stonewall Grey|72.049|#504d4c
-Neutral Grey|72.050|#3a3c3b
-Charcoal|72.155|#131311
+Plague Brown|72.039|#e0ab24
+Beasty Brown|72.043|#b66724
+Parasite Brown|72.042|#cd7228
+Grunge Brown|72.115|#bf5835
+Gorgon Brown|72.124|#904638
+Tan|72.066|#d1775d
+Dark Flesh Tone|72.044|#953b2c
+Charred Brown|72.045|#60342e
+Wolf Grey|72.047|#d9dce4
+Steel Grey|72.102|#87acc6
+Sombre Grey|72.048|#77859b
+Warm Grey|72.148|#dbb2b3
+Stonewall Grey|72.049|#bdafad
+Neutral Grey|72.050|#a6a09b
+Charcoal|72.155|#484142
 Black|72.051|#050301
-Scarlet Blood|72.106|#a91f26
-Bone White|72.034|#c9c398
-Dead Flesh|72.035|#81712f
-Elfic Flesh|72.098|#ebcd8d
-Barbarian Skin|72.071|#68503c
-Toxic Yellow|72.109|#d7c031
-Lustful Purple|72.114|#6e4e8f
-Deep Magenta|72.113|#3f172e
-Off-White|72.101|#fceea0
-Foul Green|72.025|#24694b
-Dead White|72.001|#ffffff
+Scarlet Blood|72.106|#d71626
+Bone White|72.034|#dac7a8
+Dead Flesh|72.035|#dcca68
+Elfic Flesh|72.098|#e9d9c0
+Barbarian Skin|72.071|#c09566
+Toxic Yellow|72.109|#eae083
+Lustful Purple|72.114|#b09acb
+Deep Magenta|72.113|#792d5c
+Off-White|72.101|#eee7d4
+Foul Green|72.025|#3dc1a4
+Dead White|72.001|#efe9ec
 #u
 Silver|72.052|#dce0df
 Chainmail|72.053|#cdd0d3
@@ -2124,17 +2124,17 @@ Ice Yellow|AK11036|#fbf08e
 Pale Yellow|AK11038|#fbdc60
 Purulent Yellow|AK11039|#e7cf4a
 Sahara Yellow|AK11040|#a98f29
-Golden Yellow|AK11041|#fbaf54
+Golden Yellow|AK11041|#fbd14f
 Volcanic Yellow|AK11042|#f39329
 Dirty Yellow|AK11043|#eca630
-Yellow|AK11044|#fcb52b
-Radiant Yellow|AK11046|#ffd329
+Yellow|AK11044|#f6d10e
+Radiant Yellow|AK11046|#fbf903
 Lemon Yellow|AK11047|#fbe133
 Laser Yellow|AK11048|#eae84b
 Fluorescent Yellow|AK11049|#e8e73c
-Light Flesh|AK11050|#fed9ac
+Light Flesh|AK11050|#f5ece4
 Luminous Flesh|AK11051|#ebbc7f
-Basic Skin Tone|AK11052|#fab07a
+Basic Skin Tone|AK11052|#fbd6a6
 Radiant Flesh|AK11053|#faad5e
 Medium Flesh Tone|AK11054|#c4803a
 Sunny Skin Tone|AK11055|#f9a45a
@@ -2158,7 +2158,7 @@ Blood Red|AK11089|#c82e2a
 Vermillion|AK11090|#c4553e
 Carmine|AK11091|#b8462f
 Matt Red|AK11092|#b33a27
-Brick Red|AK11093|#994830
+Brick Red|AK11093|#d44136
 Bordeaux Red|AK11094|#9d4038
 Dirty Red|AK11095|#7a1515
 Wine Red|AK11096|#630a0f
@@ -2166,17 +2166,17 @@ Burnt Red|AK11097|#4b2c22
 Black Red|AK11098|#3a211b
 Ocher Orange|AK11099|#f9a464
 Light Brown|AK11100|#cb8043
-Orange Brown|AK11101|#ad5c29
+Orange Brown|AK11101|#e17713
 Tan Earth|AK11121|#735534
 Green Ochre|AK11122|#9c7d3e
 Japanese Brown|AK11123|#8d6926
-Middle Stone|AK11124|#806b30
+Middle Stone|AK11124|#a88629
 Grey-Brown|AK11125|#65543b
-Green-Brown|AK11126|#655425
+Green-Brown|AK11126|#9d752c
 British Khaki|AK11127|#5d4820
 Luminous Green|AK11128|#c2d954
 Fluorescent Green|AK11129|#8fc740
-Pistachio|AK11130|#d5d13d
+Pistachio|AK11130|#dae804
 Green-Grey|AK11132|#d5e0b8
 Dark Green-Grey|AK11133|#324a3c
 Green Sky|AK11134|#80b086
@@ -2184,17 +2184,17 @@ Faded Green|AK11135|#738571
 Frog Green|AK11136|#91bc3e
 Lime Green|AK11137|#7e9f3d
 Interior Yellow Green|AK11138|#a39f31
-Golden Olive|AK11139|#6d7932
+Golden Olive|AK11139|#7ca629
 Mint Green|AK11143|#159269
 Emerald|AK11144|#0a6447
 Lizard Green|AK11145|#125a35
 Dark Green|AK11146|#19441f
 Olive Green|AK11147|#455e2a
 Medium Olive Green|AK11148|#374e23
-Intermediate Green|AK11149|#4d6e39
+Intermediate Green|AK11149|#529346
 Gunship Green|AK11150|#3f4f35
 Brownish Green|AK11151|#4c4215
-Alga Green|AK11152|#4e5c27
+Alga Green|AK11152|#417d22
 Extra Dark Green|AK11153|#182d27
 German Field Grey|AK11154|#383923
 Command Green|AK11155|#272a13
@@ -2242,14 +2242,14 @@ White|AK11001|#ffffff
 Deep Yellow|AK11045|#ffc425
 Intense Pink|AK11065|#ee778f
 Laser Magenta|AK11066|#640231
-Magenta|AK11067|#ad3763
+Magenta|AK11067|#d645a0
 Fluorescent Magenta|AK11068|#f0586f
 Light Orange|AK11077|#f57f45
 Medium Orange|AK11078|#f3703e
 Burn Orange|AK11079|#dd663a
 Deep Orange|AK11080|#f26931
-Deep Brown|AK11102|#7d492b
-Medium Rust|AK11103|#984d36
+Deep Brown|AK11102|#a64b27
+Medium Rust|AK11103|#bd4529
 Saddle Brown|AK11104|#61372c
 Light Rust|AK11105|#dd6026
 Mahogany Brown|AK11106|#5b280d
@@ -2267,8 +2267,8 @@ Golden Brown|AK11117|#a47425
 Ochre|AK11118|#c0903a
 Cork|AK11119|#98704a
 Mud Brown|AK11120|#654e31
-Grass Green|AK11140|#5f8339
-Light Green|AK11141|#5a9541
+Grass Green|AK11140|#59991e
+Light Green|AK11141|#50ba50
 Deep Green|AK11142|#196533
 Deep Blue|AK11182|#10456a
 #j
@@ -2279,7 +2279,7 @@ Blue Violet|AK11070|#836ea5
 Lilac|AK11071|#5f5e71
 Deep Violet|AK11072|#6b536d
 Purple|AK11073|#51424d
-Deep Purple|AK11074|#724b6a
+Deep Purple|AK11074|#773e85
 Violet Red|AK11075|#4f2f34
 Pastel Peach|AK11076|#f8995a
 Pastel Green|AK11131|#9dd29a
