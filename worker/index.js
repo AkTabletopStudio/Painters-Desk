@@ -54,6 +54,12 @@ export default {
     // One address for the whole site, so sign-in redirect URLs and the session cookie always match.
     if (url.hostname.startsWith('www.')) {
       url.hostname = url.hostname.slice(4);
+      // Browsers that saved the site offline on www keep serving their cached copy and never see the redirect,
+      // and they refuse a redirected service worker update. Give them a worker that clears that copy and
+      // sends open tabs to the bare domain.
+      if (url.pathname === '/sw.js') return new Response(wwwRetireWorker(url.origin), {
+        headers: { 'content-type': 'text/javascript', 'cache-control': 'no-store' },
+      });
       return Response.redirect(url.toString(), 301);
     }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -496,4 +502,17 @@ async function deleteComment(request, env, id) {
   if (!c || (c.user_id !== u.id && c.owner !== u.id && !u.admin)) throw new HttpError(404, 'Comment not found');
   await env.DB.prepare('DELETE FROM comments WHERE id = ?').bind(id).run();
   return json({ ok: true });
+}
+
+function wwwRetireWorker(target) {
+  return `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil((async () => {
+  for (const k of await caches.keys()) await caches.delete(k);
+  await self.registration.unregister();
+  for (const c of await self.clients.matchAll({ type: 'window' })) {
+    const u = new URL(c.url);
+    c.navigate(${JSON.stringify(target)} + u.pathname + u.search + u.hash);
+  }
+})()));
+`;
 }
