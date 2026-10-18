@@ -168,7 +168,7 @@ Primary Magenta|E015|#b01a5a
 Primary Yellow|E016|#f5d018
 Chrome Oxide Green|E017|#3a6a3a
 Red Oxide Tint|E018|#c88a78
-Pthalo Turquoise Light|E019|#4a8aa0
+Phthalo Turquoise Light|E019|#4a8aa0
 Quinacridone Magenta|E020|#9a1a6a
 Arylide Yellow Deep|E021|#f0b818
 Alizarin Crimson Hue|E022|#8a1a2e
