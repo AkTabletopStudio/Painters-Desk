@@ -5,6 +5,9 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BYKEY=new Map(P.map(p=>[p.k,p]));
+// Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
+const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
+const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
 const VIEWS=['welcome','wheel','paints','recipes','recipe','edit','account','profile','reset'];
 let ME=null,INFO=null,API=false;
 
@@ -259,6 +262,7 @@ function videoEmbed(link){
  return `<p>Video / article: <a href="${esc(link)}" target="_blank" rel="noopener nofollow ugc">${esc(link)}</a></p>`}
 // Rough preview of a mix: parts-weighted average of the swatches in linear light. Swatches are estimates, so this is too.
 function mixColour(mix){
+ // Water is left out: it thins the paint rather than changing its colour.
  const ps=mix.map(m=>({p:BYKEY.get(m.k),w:m.parts})).filter(x=>x.p);if(ps.length<2)return null;
  const lin=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92},gam=v=>Math.round(255*(v>.0031308?1.055*Math.pow(v,1/2.4)-.055:12.92*v));
  const W=ps.reduce((a,x)=>a+x.w,0),c=[0,0,0];
@@ -268,15 +272,16 @@ function mixHTML(mix){
  if(!mix.length)return'';
  const ratio=mix.length>1?`<b>${mix.map(m=>m.parts).join(':')} mix</b> of `:'';
  const mc=mixColour(mix);
- return `<div class="mix">${ratio}${mix.map(m=>{const p=BYKEY.get(m.k);return `<span class="chip" data-k="${esc(m.k)}"><i style="background:${p?p.h:'#888'}"></i>${p?star(p)+esc(p.n):'Unknown paint'}${mix.length>1?` <em>×${m.parts}</em>`:''}${p?` <span style="color:var(--mut)">${esc(GL[p.g])}</span>`:''}</span>`}).join('')}${mc?`<span class="chip" title="Rough estimate from the swatch colours"><i style="background:${mc}"></i>≈ mixed</span>`:''}</div>`}
+ return `<div class="mix">${ratio}${mix.map(m=>{const p=mixP(m.k),w=p===WATER;return `<span class="chip${w?' wtr':''}" ${w?'':`data-k="${esc(m.k)}"`}><i style="background:${p?p.h:'#888'}"></i>${w?'💧 Water':p?star(p)+esc(p.n):'Unknown paint'}${mix.length>1?` <em>×${m.parts}</em>`:''}${p&&!w?` <span style="color:var(--mut)">${esc(GL[p.g])}</span>`:''}</span>`}).join('')}${mc?`<span class="chip" title="Rough estimate from the swatch colours"><i style="background:${mc}"></i>≈ mixed</span>`:''}</div>`}
 
 // A paint search box; calls onPick(paintKey).
-function paintSearch(box,exclude,onPick){
+function paintSearch(box,exclude,onPick,water){
  box.innerHTML=`<input class="inp" type="search" placeholder="Add a paint (search name or code)">${OWN.size?'<label class="s"><input type="checkbox"> my paints only</label>':''}<div class="res" hidden></div>`;
  const q=box.querySelector('input[type=search]'),mine=box.querySelector('input[type=checkbox]'),R=box.querySelector('.res');
  const go=()=>{const t=q.value.trim().toLowerCase();if(!t){R.hidden=true;return}const ex=exclude();
   const hits=P.filter(p=>(p.n+' '+p.c).toLowerCase().includes(t)&&!ex.includes(p.k)&&(!mine?.checked||OWN.has(p.k))).slice(0,30);
-  R.hidden=false;R.innerHTML=hits.map(p=>`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
+  if(water&&!ex.includes(WATER.k)&&/^(wa(t(er?)?)?|thin|dilut)/.test(t))hits.unshift(WATER);
+  R.hidden=false;R.innerHTML=hits.map(p=>p===WATER?`<div class="pi" data-k="${WATER.k}"><i style="background:${WATER.h}"></i><span>💧 Water <em>for thinning, washes and glazes</em></span></div>`:`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
   R.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>onPick(d.dataset.k))};
  q.oninput=go;if(mine)mine.onchange=go}
 
@@ -304,7 +309,7 @@ function voteHTML(r,mine){
 async function renderRecipe(id){
  const el=$('v-recipe');el.innerHTML='<p class="s">Loading…</p>';
  let d;try{d=await api('/recipes/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
- const r=d.recipe,mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
+ const r=d.recipe;r.paints=r.paints.filter(k=>k!==WATER.k);const mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
  <p class="s"><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
  ${voteHTML(r,mine)}
@@ -358,7 +363,7 @@ async function renderEdit(id){
  <label class="f"><span>Short summary</span><input type="text" id="eSum" maxlength="300" placeholder="What this is for"></label>
  <div class="f"><span>Main photo (the finished model)</span><div id="eCover"></div></div>
  <label class="f"><span>Video link (optional; YouTube and Vimeo play in the page)</span><input type="url" id="eLink" maxlength="500" placeholder="https://youtube.com/watch?v=…"></label></div>
- <h2 style="font-size:16px;margin-top:16px">Steps</h2><p class="s">One step per stage, e.g. Base coat, then Edge highlight. Add the paints you used with their ratio, a photo of the result, and any details.</p>
+ <h2 style="font-size:16px;margin-top:16px">Steps</h2><p class="s">One step per stage, e.g. Base coat, then Edge highlight. Add the paints you used with their ratio (add Water to show thinning, e.g. 1:2 for a glaze), a photo of the result, and any details.</p>
  <div id="eSteps"></div><button class="btn" id="eAdd" type="button">+ Add step</button>
  <div class="panel" style="margin-top:14px"><div class="f"><span>Other paints used (not in a step)</span><div id="eX"></div></div>
  <label class="f"><span>Notes (optional)</span><textarea id="eBody" maxlength="20000" style="min-height:90px" placeholder="Anything else: brushes, tips, thinning"></textarea></label>
@@ -386,8 +391,8 @@ async function renderEdit(id){
   S.innerHTML=steps.map((s,i)=>`<div class="panel step" data-i="${i}"><div class="row" style="margin:0"><b>Step ${i+1}</b><span style="flex:1"></span>
    <button class="btn" type="button" data-mv="-1" ${i?'':'disabled'} title="Move up">↑</button><button class="btn" type="button" data-mv="1" ${i<steps.length-1?'':'disabled'} title="Move down">↓</button><button class="btn dan" type="button" data-del title="Remove step">✕</button></div>
    <label class="f"><span>Step name</span><input type="text" list="stepNames" maxlength="80" data-f="title" placeholder="e.g. Base coat"></label>
-   <div class="f"><span>Paints and mix ratio</span><div class="mixed">${s.mix.map((m,j)=>{const p=BYKEY.get(m.k);return `<div class="mrow"><i style="background:${p?p.h:'#888'}"></i><span>${p?esc(p.n)+' <em>'+esc(GL[p.g])+'</em>':'Unknown paint'}</span><input type="number" min="1" max="20" value="${m.parts}" data-parts="${j}" title="Parts" aria-label="Parts"><span class="s">part${m.parts>1?'s':''}</span><span class="x" data-rmix="${j}" title="Remove">×</span></div>`}).join('')}</div>
-    ${s.mix.length>1?`<p class="s" data-ratio>Ratio ${s.mix.map(m=>m.parts).join(':')}</p>`:''}<div data-ps></div></div>
+   <div class="f"><span>Paints and mix ratio</span><div class="mixed">${s.mix.map((m,j)=>{const p=mixP(m.k);return `<div class="mrow"><i style="background:${p?p.h:'#888'}"></i><span>${p===WATER?'💧 Water <em>for thinning</em>':p?esc(p.n)+' <em>'+esc(GL[p.g])+'</em>':'Unknown paint'}</span><input type="number" min="1" max="20" value="${m.parts}" data-parts="${j}" title="Parts" aria-label="Parts"><span class="s">part${m.parts>1?'s':''}</span><span class="x" data-rmix="${j}" title="Remove">×</span></div>`}).join('')}</div>
+    ${s.mix.length>1?`<p class="s" data-ratio>Ratio ${s.mix.map(m=>m.parts).join(':')}</p>`:''}<div data-ps></div>${s.mix.some(m=>m.k===WATER.k)||s.mix.length>=8?'':'<button class="btn" type="button" data-water title="Add water to show a thinning ratio, e.g. 1:2 paint to water for a glaze">+ 💧 Water</button>'}</div>
    <label class="f"><span>Details</span><textarea maxlength="4000" data-f="text" style="min-height:70px" placeholder="e.g. Two thin coats, thinned with a drop of medium"></textarea></label>
    <div class="f"><span>Photo of this step</span><div data-ph></div></div></div>`).join('');
   S.querySelectorAll('.step').forEach(box=>{const i=+box.dataset.i,s=steps[i];
@@ -396,7 +401,8 @@ async function renderEdit(id){
    box.querySelectorAll('[data-rmix]').forEach(x=>x.onclick=()=>{s.mix.splice(+x.dataset.rmix,1);drawSteps()});
    box.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{const j=i+ +b.dataset.mv;[steps[i],steps[j]]=[steps[j],steps[i]];drawSteps()});
    box.querySelector('[data-del]').onclick=()=>{steps.splice(i,1);if(!steps.length)steps.push({title:'',text:'',image:'',mix:[]});drawSteps()};
-   paintSearch(box.querySelector('[data-ps]'),()=>s.mix.map(m=>m.k),k=>{if(s.mix.length<8)s.mix.push({k,parts:1});drawSteps();S.querySelector(`.step[data-i="${i}"] [data-ps] input[type=search]`).focus()});
+   paintSearch(box.querySelector('[data-ps]'),()=>s.mix.map(m=>m.k),k=>{if(s.mix.length<8)s.mix.push({k,parts:1});drawSteps();S.querySelector(`.step[data-i="${i}"] [data-ps] input[type=search]`).focus()},true);
+   const wb=box.querySelector('[data-water]');if(wb)wb.onclick=()=>{s.mix.push({k:WATER.k,parts:1});drawSteps();S.querySelector(`.step[data-i="${i}"] [data-parts="${s.mix.length-1}"]`).focus()};
    photoSlot(box.querySelector('[data-ph]'),()=>s.image,v=>s.image=v,'Add photo')})}
  drawSteps();
  $('eAdd').onclick=()=>{steps.push({title:'',text:'',image:'',mix:[]});drawSteps();$('eSteps').lastElementChild.querySelector('[data-f=title]').focus()};
