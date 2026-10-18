@@ -36,6 +36,7 @@ function route(){
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';
  if(!VIEWS.includes(view)||(!API&&view!=='wheel'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
+ const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'))));
  if(view==='paints')renderPaints();
  else if(view==='recipes')renderRecipes();
@@ -44,6 +45,7 @@ function route(){
  else if(view==='account')renderAccount();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
+$('footMore').onclick=()=>setTimeout(()=>$('foot').scrollIntoView({block:'end'}),50);
 
 /* ---------- account ---------- */
 function renderAccount(){
