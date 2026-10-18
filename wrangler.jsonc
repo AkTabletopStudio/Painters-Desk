@@ -24,5 +24,8 @@
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "painters-desk-images" }],
   // OAuth client IDs and secrets are set as secrets, never here (see SETUP-ACCOUNTS.md).
   // Needed by the Workers Builds preview command (npx wrangler preview) on PR branches.
-  "previews": {}
+  "previews": {},
+  // Cloudflare Email Sending (Workers Paid) for confirmation and password-reset emails, sent from the MAIL_FROM secret.
+  // paintersdesk.com must be onboarded under Email Service > Email Sending.
+  "send_email": [{ "name": "EMAIL" }]
 }
