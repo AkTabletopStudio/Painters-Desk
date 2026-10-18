@@ -548,15 +548,19 @@ async function setVote(request, env, recipeId) {
 }
 
 // Save a public recipe to your "Saved" list; { on: false } removes it.
+// Saving also upvotes it (except your own); unsaving leaves the upvote alone.
 async function setSave(request, env, recipeId) {
   const u = await requireUser(request, env), b = await body(request);
   if (b.on === false) await env.DB.prepare('DELETE FROM saves WHERE recipe_id = ? AND user_id = ?').bind(recipeId, u.id).run();
   else {
-    const r = await env.DB.prepare('SELECT visibility FROM recipes WHERE id = ?').bind(recipeId).first();
+    const r = await env.DB.prepare('SELECT user_id, visibility FROM recipes WHERE id = ?').bind(recipeId).first();
     if (!r || r.visibility !== 'public') throw new HttpError(404, 'Recipe not found');
-    await env.DB.prepare('INSERT OR IGNORE INTO saves (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(recipeId, u.id, now()).run();
+    const t = now(), stmts = [env.DB.prepare('INSERT OR IGNORE INTO saves (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(recipeId, u.id, t)];
+    if (r.user_id !== u.id) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO votes (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(recipeId, u.id, t));
+    await env.DB.batch(stmts);
   }
-  return json({ saved: b.on !== false });
+  const v = await loadRecipe(env, recipeId, u.id);
+  return json({ saved: b.on !== false, votes: v?.vote_count || 0, voted: !!v?.voted });
 }
 
 function wwwRetireWorker(target) {

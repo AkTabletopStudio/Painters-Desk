@@ -196,12 +196,12 @@ async function renderRecipe(id){
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
  countView(r);
  if($('rSave'))$('rSave').onclick=async()=>{const b=$('rSave');b.disabled=true;
-  try{r.saved=(await api(`/recipes/${r.id}/save`,{method:'PUT',body:{on:!r.saved}})).saved;
-   b.classList.toggle('on',r.saved);b.setAttribute('aria-pressed',r.saved);b.textContent=r.saved?'★ Saved':'☆ Save'}
+  try{const v=await api(`/recipes/${r.id}/save`,{method:'PUT',body:{on:!r.saved}});r.saved=v.saved;r.voted=v.voted;r.votes=v.votes;
+   b.classList.toggle('on',r.saved);b.setAttribute('aria-pressed',r.saved);b.textContent=r.saved?'★ Saved':'☆ Save';showVote()}
   catch(e){b.title=e.message}b.disabled=false};
+ function showVote(){const b=$('rVote');if(b){b.classList.toggle('on',r.voted);b.setAttribute('aria-pressed',r.voted);$('rVoteT').textContent=`${r.voted?'Upvoted':'Upvote'} · ${r.votes.toLocaleString()}`}}
  if($('rVote'))$('rVote').onclick=async()=>{const b=$('rVote');b.disabled=true;
-  try{const v=await api(`/recipes/${r.id}/vote`,{method:'PUT',body:{on:!r.voted}});r.voted=v.voted;r.votes=v.votes;
-   b.classList.toggle('on',r.voted);b.setAttribute('aria-pressed',r.voted);$('rVoteT').textContent=`${r.voted?'Upvoted':'Upvote'} · ${r.votes.toLocaleString()}`}
+  try{const v=await api(`/recipes/${r.id}/vote`,{method:'PUT',body:{on:!r.voted}});r.voted=v.voted;r.votes=v.votes;showVote()}
   catch(e){b.title=e.message}b.disabled=false};
  if($('rDel'))$('rDel').onclick=async()=>{if($('rDel').dataset.c){await api('/recipes/'+r.id,{method:'DELETE'});location.hash='#/recipes'}else{$('rDel').dataset.c=1;$('rDel').textContent='Click again to delete for good'}};
  const wireDel=()=>el.querySelectorAll('[data-dc]').forEach(b=>b.onclick=async()=>{await api('/comments/'+b.dataset.dc,{method:'DELETE'});b.closest('.cm').remove()});
