@@ -761,7 +761,8 @@ async function saveRecipe(request, env, id) {
   const steps = cleanSteps(b.steps);
   const cover = typeof b.cover === 'string' && IMAGE_ID.test(b.cover) ? b.cover : '';
   // "paints" is every paint in the steps plus any extras listed separately; it drives list swatches and the wheel button.
-  const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])], 60);
+  // Water can be part of a step's mix (to show a thinning ratio) but isn't a paint, so it's left out here.
+  const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])].filter(k => k !== 'water'), 60);
   const rec = {
     kind: b.kind === 'tutorial' ? 'tutorial' : 'recipe',
     title: str(b.title, 120, 'Title', { required: true }),
