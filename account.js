@@ -106,16 +106,17 @@ $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel)draw()};
 /* ---------- recipes list ---------- */
 let rScope='public';
 async function renderRecipes(){
+ if(!ME)rScope='public';
  const el=$('v-recipes');
  el.innerHTML=`<h1>Recipes &amp; tutorials</h1><p class="s">Painting recipes and tutorials from the community. Keep yours private or share them publicly.</p>
- <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new">+ New tutorial or recipe</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
+ <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new">+ New tutorial or recipe</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
  <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&q=${encodeURIComponent($('rq').value)}`);
    L.innerHTML=d.recipes.length?d.recipes.map(r=>`<a class="card" href="#/recipe/${esc(r.id)}">${r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} step${r.steps===1?'':'s'}</span>`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`).join('')
-    :`<p class="s">${rScope==='mine'?'You have not saved any recipes yet.':'No public recipes yet. Be the first to share one.'}</p>`}
+    :`<p class="s">${rScope==='mine'?'You have not written any recipes yet.':rScope==='saved'?'Nothing saved yet. Press ☆ Save on a tutorial or recipe to keep it here.':'No public recipes yet. Be the first to share one.'}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  load()}
 
@@ -166,7 +167,9 @@ function voteHTML(r,mine){
  const btn=mine?`<span class="btn vote" title="Upvotes from other painters" aria-disabled="true">${bottle(1)} ${n}</span>`
   :ME?`<button class="btn vote${r.voted?' on':''}" id="rVote" type="button" aria-pressed="${r.voted}">${bottle()}<span id="rVoteT">${r.voted?'Upvoted':'Upvote'} · ${n}</span></button>`
   :`<a class="btn vote" href="#/account" title="Sign in to upvote">${bottle()}Upvote · ${n}</a>`;
- return `<div class="row">${btn}<span class="n">${plural(r.views,'view')}</span></div>`}
+ const save=ME?`<button class="btn save${r.saved?' on':''}" id="rSave" type="button" aria-pressed="${r.saved}">${r.saved?'★ Saved':'☆ Save'}</button>`
+  :`<a class="btn save" href="#/account" title="Sign in to save">☆ Save</a>`;
+ return `<div class="row">${btn}${save}<span class="n">${plural(r.views,'view')}</span></div>`}
 
 /* ---------- one recipe / tutorial + comments ---------- */
 async function renderRecipe(id){
@@ -192,6 +195,10 @@ async function renderRecipe(id){
  el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
  countView(r);
+ if($('rSave'))$('rSave').onclick=async()=>{const b=$('rSave');b.disabled=true;
+  try{r.saved=(await api(`/recipes/${r.id}/save`,{method:'PUT',body:{on:!r.saved}})).saved;
+   b.classList.toggle('on',r.saved);b.setAttribute('aria-pressed',r.saved);b.textContent=r.saved?'★ Saved':'☆ Save'}
+  catch(e){b.title=e.message}b.disabled=false};
  if($('rVote'))$('rVote').onclick=async()=>{const b=$('rVote');b.disabled=true;
   try{const v=await api(`/recipes/${r.id}/vote`,{method:'PUT',body:{on:!r.voted}});r.voted=v.voted;r.votes=v.votes;
    b.classList.toggle('on',r.voted);b.setAttribute('aria-pressed',r.voted);$('rVoteT').textContent=`${r.voted?'Upvoted':'Upvote'} · ${r.votes.toLocaleString()}`}

@@ -99,6 +99,7 @@ async function route(request, env, url) {
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/comments$/)) && m === 'POST') return addComment(request, env, r[1]);
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/view$/)) && m === 'POST') return addView(request, env, r[1]);
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/vote$/)) && m === 'PUT') return setVote(request, env, r[1]);
+  if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/save$/)) && m === 'PUT') return setSave(request, env, r[1]);
   if ((r = p.match(/^\/api\/comments\/([\w-]+)$/)) && m === 'DELETE') return deleteComment(request, env, r[1]);
   if (p === '/api/images' && m === 'POST') return uploadImage(request, env);
   if ((r = p.match(/^\/api\/images\/([\w-]+)$/)) && m === 'GET') return getImage(env, r[1]);
@@ -288,6 +289,7 @@ async function deleteAccount(request, env) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comments WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
     env.DB.prepare('DELETE FROM votes WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
+    env.DB.prepare('DELETE FROM saves WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
     env.DB.prepare('DELETE FROM recipes WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
@@ -324,27 +326,34 @@ const recipeOut = r => ({
   id: r.id, kind: r.kind, title: r.title, summary: r.summary, body: r.body, link: r.link,
   paints: JSON.parse(r.paints || '[]'), steps: JSON.parse(r.steps || '[]'), cover: r.cover || '', visibility: r.visibility, created_at: r.created_at, updated_at: r.updated_at,
   author: { id: r.user_id, name: r.author_name, avatar: r.author_avatar }, comments: r.comment_count ?? undefined,
-  views: r.views || 0, votes: r.vote_count || 0, voted: !!r.voted,
+  views: r.views || 0, votes: r.vote_count || 0, voted: !!r.voted, saved: !!r.saved,
 });
 
 async function listRecipes(request, env, url) {
-  const scope = url.searchParams.get('scope') === 'mine' ? 'mine' : 'public';
+  const scope = ['mine', 'saved'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'public';
   const q = str(url.searchParams.get('q') || '', 100, 'Search');
   const where = [], args = [];
+  let from = 'recipes r', order = 'r.updated_at DESC';
   if (scope === 'mine') { where.push('r.user_id = ?'); args.push((await requireUser(request, env)).id); }
+  else if (scope === 'saved') {
+    // Newest saves first. A saved recipe its author has since made private drops out of the list.
+    const uid = (await requireUser(request, env)).id;
+    from = 'saves s JOIN recipes r ON r.id = s.recipe_id'; order = 's.created_at DESC';
+    where.push("s.user_id = ? AND (r.visibility = 'public' OR r.user_id = ?)"); args.push(uid, uid);
+  }
   else where.push("r.visibility = 'public'");
   if (q) { where.push('(r.title LIKE ? OR r.summary LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
   const rows = (await env.DB.prepare(
     `SELECT r.*, u.name AS author_name, u.avatar AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
-     FROM recipes r JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY r.updated_at DESC LIMIT 100`
+     FROM ${from} JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT 100`
   ).bind(...args).all()).results;
   // The list only needs a picture: the main photo, else the last step photo (usually the finished model).
   return json({ recipes: rows.map(r => {
     const o = recipeOut(r);
     o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
-    o.steps = o.steps.length; delete o.body;
+    o.steps = o.steps.length; o.saved = scope === 'saved'; delete o.body;
     return o;
   }) });
 }
@@ -353,8 +362,9 @@ async function loadRecipe(env, id, viewer = null) {
   return env.DB.prepare(
     `SELECT r.*, u.name AS author_name, u.avatar AS author_avatar,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count,
-       EXISTS (SELECT 1 FROM votes v WHERE v.recipe_id = r.id AND v.user_id = ?) AS voted
-     FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.id = ?`
+       EXISTS (SELECT 1 FROM votes v WHERE v.recipe_id = r.id AND v.user_id = ?1) AS voted,
+       EXISTS (SELECT 1 FROM saves s WHERE s.recipe_id = r.id AND s.user_id = ?1) AS saved
+     FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.id = ?2`
   ).bind(viewer || '', id).first();
 }
 
@@ -449,6 +459,7 @@ async function deleteRecipe(request, env, id) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comments WHERE recipe_id = ?').bind(id),
     env.DB.prepare('DELETE FROM votes WHERE recipe_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM saves WHERE recipe_id = ?').bind(id),
     env.DB.prepare('DELETE FROM recipes WHERE id = ?').bind(id),
   ]);
   await deleteImages(env, recipeImages({ cover: r.cover, steps: JSON.parse(r.steps || '[]') }));
@@ -514,7 +525,7 @@ async function deleteComment(request, env, id) {
   return json({ ok: true });
 }
 
-/* ---------- views & upvotes (public recipes) ---------- */
+/* ---------- views, upvotes & saves (public recipes) ---------- */
 
 // The page sends this once per browser session per recipe. The author's own visits don't count.
 async function addView(request, env, recipeId) {
@@ -534,6 +545,18 @@ async function setVote(request, env, recipeId) {
   else await env.DB.prepare('INSERT OR IGNORE INTO votes (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(recipeId, u.id, now()).run();
   const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM votes WHERE recipe_id = ?').bind(recipeId).first();
   return json({ votes: c.n, voted: b.on !== false });
+}
+
+// Save a public recipe to your "Saved" list; { on: false } removes it.
+async function setSave(request, env, recipeId) {
+  const u = await requireUser(request, env), b = await body(request);
+  if (b.on === false) await env.DB.prepare('DELETE FROM saves WHERE recipe_id = ? AND user_id = ?').bind(recipeId, u.id).run();
+  else {
+    const r = await env.DB.prepare('SELECT visibility FROM recipes WHERE id = ?').bind(recipeId).first();
+    if (!r || r.visibility !== 'public') throw new HttpError(404, 'Recipe not found');
+    await env.DB.prepare('INSERT OR IGNORE INTO saves (recipe_id, user_id, created_at) VALUES (?, ?, ?)').bind(recipeId, u.id, now()).run();
+  }
+  return json({ saved: b.on !== false });
 }
 
 function wwwRetireWorker(target) {
