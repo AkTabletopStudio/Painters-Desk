@@ -277,3 +277,14 @@ const myB=new Set(own.map(p=>BR_OF[p.g])),cand=all.filter(p=>!ownSet.has(p.k));
 const mine=pick(gaps,cand.filter(p=>myB.has(BR_OF[p.g])),10),other=pick(gaps,cand.filter(p=>!myB.has(BR_OF[p.g])),5);
 return{ramps,cells,mine,other,left:gaps.filter(x=>!x.done).length,brands:[...myB].map(i=>BRANDS[i][0])}}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+
+// Site theme picker. The choice lives in localStorage pd-look; an inline script in index.html applies it before first paint.
+{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#16221a',high:'#f5efe0'},dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
+const metas=[...document.querySelectorAll('meta[name="theme-color"]')],orig=metas.map(m=>m.content);
+const apply=l=>{if(!(l in LOOKS))l='';if(l)document.documentElement.dataset.look=l;else delete document.documentElement.dataset.look;
+ metas.forEach((m,i)=>m.content=LOOKS[l]||orig[i]);opts.forEach(o=>o.setAttribute('aria-checked',o.dataset.look===l?'true':'false'))};
+let cur='';try{cur=localStorage.getItem('pd-look')||''}catch(e){}apply(cur);
+document.getElementById('thBtn').onclick=()=>{dlg.showModal();(dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).focus()};
+opts.forEach(o=>o.onclick=()=>{apply(o.dataset.look);try{localStorage.setItem('pd-look',o.dataset.look)}catch(e){}});
+document.getElementById('thOk').onclick=()=>dlg.close();
+dlg.onclick=e=>{if(e.target===dlg)dlg.close()}}
