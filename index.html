@@ -117,8 +117,39 @@ img.av{object-fit:cover}
 .panel h3{font-size:15px;margin:16px 0 4px}
 .f input[type=email],.f input[type=password]{width:100%;box-sizing:border-box}
 :focus-visible{outline:3px solid var(--blu);outline-offset:2px}
+nav.top a.home{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 6px;font:400 15px 'Archivo Black',sans-serif}
+nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
+.hero{display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin:10px 0 22px}
+.hero .logo{width:132px;height:132px;flex:none;border:3px solid var(--ink);border-radius:30px;box-shadow:6px 6px 0 var(--ink);background:var(--card);overflow:hidden}
+.hero .logo img{width:100%;height:100%;display:block}
+.hero>div{flex:1 1 320px}.hero h1{margin:0 0 10px}
+.hero p.lead{font-size:18px;max-width:640px;margin:0 0 16px}
+.feats{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;margin:0 0 8px}
+.feat{display:flex;flex-direction:column;background:var(--card);border:3px solid var(--ink);border-radius:20px;box-shadow:5px 5px 0 var(--ink);color:var(--fg);text-decoration:none;overflow:hidden;transition:transform .08s,box-shadow .08s}
+.feat:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+.feat .band{height:14px;border-bottom:3px solid var(--ink)}
+.feat .in{padding:12px 16px 14px;display:flex;flex-direction:column;flex:1}
+.feat h3{margin:2px 0 6px;font:400 19px/1.2 'Archivo Black',sans-serif}
+.feat p{margin:0 0 10px;font-size:15px;flex:1}
+.feat ul{margin:0 0 12px;padding-left:18px;font-size:14px;color:var(--mut)}
+.feat .go{font-weight:700;font-size:15px}
+.feat:hover .go{text-decoration:underline}
+@media (min-width:900px){.feats{grid-template-columns:repeat(3,1fr)}.feat.wide{grid-column:span 2}.feat.wide ul{columns:2;column-gap:28px}}
 </style></head><body><div class="wrap">
-<nav class="top" id="nav"><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
+<nav class="top" id="nav"><a href="#/welcome" data-v="welcome" class="home" title="Welcome"><img src="icons/icon-192.png" alt="">Painters Desk</a><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
+<section id="v-welcome" hidden>
+<div class="hero"><div class="logo" id="wLogo"><img src="icons/icon-512.png" alt="The Painters Desk icon"></div>
+<div><h1>Welcome to The Painters Desk</h1>
+<p class="lead">A free colour wheel for miniature painters. See <b id="wCount">2,518</b> paints from <span id="wBrands">the big hobby brands</span> laid out by hue and lightness, find what goes with what, and match paints across brands.</p>
+<a class="btn pri" href="#/">Open the colour wheel</a></div></div>
+<div class="feats">
+<a class="feat wide" href="#/"><span class="band" style="background:var(--red)"></span><span class="in"><h3>Colour wheel</h3><p>Every paint placed by its hue around the wheel and its lightness from centre to rim. Tick whole ranges or single paints, from any mix of brands.</p><ul><li>Complements and neighbours for shading, highlights and glazes</li><li>A centre gradient that blends from the complement through your paint</li><li>Remembers the paints you last had open</li></ul><span class="go">Open the wheel →</span></span></a>
+<a class="feat" href="#/"><span class="band" style="background:var(--org)"></span><span class="in"><h3>Cross-brand matches</h3><p>Tap any paint to see its closest equivalents in the other ranges, so you can swap a paint you don't own for one you do.</p><ul><li>Matches from published conversion charts are ticked</li><li>Nearest-colour picks fill the gaps</li><li>Swatches are estimates, so check against the real pot</li></ul><span class="go">Find a match →</span></span></a>
+<a class="feat" href="#/paints" data-api><span class="band" style="background:var(--tea)"></span><span class="in"><h3>My paints</h3><p>Keep a list of the paints on your shelf and bring them up on the wheel in one tap.</p><ul><li>Show only your collection on the wheel</li><li>Limit matches to paints you already own</li></ul><span class="go">Build your collection →</span></span></a>
+<a class="feat" href="#/recipes" data-api><span class="band" style="background:var(--blu)"></span><span class="in"><h3>Recipes &amp; tutorials</h3><p>Share how you painted something, step by step, with the paints, photos and video for each stage.</p><ul><li>Browse what other painters have posted</li><li>Upvote and save the ones you like</li><li>Comment and ask questions</li></ul><span class="go">Browse recipes →</span></span></a>
+<a class="feat" href="#/account" data-api><span class="band" style="background:var(--pur)"></span><span class="in"><h3>Your account</h3><p>Sign in with Google, Discord, GitHub or an email and password to save your collection, recipes and wheel across devices.</p><ul><li>A public profile with your favourite paints</li><li>Your recipes and tutorials in one place</li></ul><span class="go">Sign in or create one →</span></span></a>
+</div>
+</section>
 <section id="v-wheel">
 <h1>The Painters Desk</h1>
 <p class="s">Hue runs around the wheel; paints nearer the rim are lighter, nearer the center darker. Tap a paint to see its complement and neighbors for underpainting, shading and glazing. Dashed outline = wash, glowing outline = fluorescent.</p>

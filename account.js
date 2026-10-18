@@ -5,7 +5,7 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BYKEY=new Map(P.map(p=>[p.k,p]));
-const VIEWS=['wheel','paints','recipes','recipe','edit','account','profile','reset'];
+const VIEWS=['welcome','wheel','paints','recipes','recipe','edit','account','profile','reset'];
 let ME=null,INFO=null,API=false;
 
 async function api(path,{method='GET',body}={}){
@@ -39,21 +39,26 @@ async function loadMe(){
  try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
  if(ME){try{OWN=new Set((await api('/collection')).paints)}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
  if(ME)await wheelSync();else onSelSave=null;
- document.querySelectorAll('#nav a[data-v]').forEach(a=>{if(a.dataset.v!=='wheel')a.hidden=!API});
+ document.querySelectorAll('#nav a[data-v]').forEach(a=>{if(a.dataset.v!=='wheel'&&a.dataset.v!=='welcome')a.hidden=!API});
+ document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+esc(ME.name):'Sign in';
  $('mine').hidden=!ME;
  renderNeu();draw()}
 
 /* ---------- router ---------- */
+// First-time visitors (nothing remembered in this browser) land on the welcome page; everyone else on the wheel.
+let FIRST=false;try{FIRST=!localStorage.getItem('pd-seen')&&!localStorage.getItem(WK);localStorage.setItem('pd-seen','1')}catch(e){}
 function route(){
+ if(FIRST){FIRST=false;if(!location.hash.replace(/^#\/?/,''))history.replaceState(null,'','#/welcome')}
  const h=location.hash.replace(/^#\/?/,''),[v,id,sub]=h.split(/[/?]/);
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
- if(!VIEWS.includes(view)||(!API&&view!=='wheel'))view='wheel';
+ if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'))));
- if(view==='paints')renderPaints();
+ if(view==='welcome')renderWelcome();
+ else if(view==='paints')renderPaints();
  else if(view==='recipes')renderRecipes();
  else if(view==='recipe')renderRecipe(id);
  else if(view==='edit')renderEdit(v==='new'?null:id);
@@ -62,6 +67,9 @@ function route(){
  else if(view==='reset')renderReset(id);
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
+function renderWelcome(){
+ $('wCount').textContent=P.length.toLocaleString('en');
+ const b=BRANDS.map(x=>x[0].split(' / ')[0]);$('wBrands').textContent=b.slice(0,-1).join(', ')+' and '+b[b.length-1]}
 $('footMore').onclick=()=>setTimeout(()=>$('foot').scrollIntoView({block:'end'}),50);
 
 /* ---------- account ---------- */
@@ -395,5 +403,6 @@ async function renderEdit(id){
   try{const d=await api(id?'/recipes/'+id:'/recipes',{method:id?'PUT':'POST',body:b});location.hash='#/recipe/'+d.recipe.id}
   catch(e){$('eErr').textContent=e.message;$('eSave').disabled=false}}}
 
+if(FIRST)route();
 loadMe().then(route);
 })();
