@@ -65,7 +65,8 @@ renewed every six months.
 ## Email + password accounts and profiles
 
 Anyone can create an account with an email and password (no keys needed). Passwords are stored as salted
-PBKDF2-SHA256 hashes (100,000 rounds, the most Workers allow); ten wrong passwords lock that account's password sign-in
+PBKDF2-SHA256 hashes (20,000 rounds, so sign-in fits the Workers Free plan's 10 ms CPU limit; on the Paid plan raise
+`PBKDF2_ITER` in `worker/index.js` up to 100,000 and passwords upgrade as people sign in); ten wrong passwords lock that account's password sign-in
 for 15 minutes. There is no mail provider yet, so emails typed at sign-up are **not confirmed** and there is no
 password-reset email. Until confirmed, such an email never grants admin rights, and if someone later signs in with
 Google (or another service) that verifies the same email, that person gets the account and the unconfirmed password

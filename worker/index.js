@@ -312,8 +312,10 @@ async function logout(request, env, url) {
 
 /* ---------- email + password accounts ---------- */
 
-// PBKDF2 via Web Crypto. Workers allow at most 100,000 iterations; the count is stored with each hash so it can change later.
-const PBKDF2_ITER = 100000;
+// PBKDF2 via Web Crypto. 20,000 rounds keeps a sign-in inside the Workers Free plan's 10 ms CPU limit
+// (100,000 is the most Workers allow and needs the Paid plan). The count is stored with each hash, and a sign-in
+// re-hashes older passwords at the current count, so raising it later upgrades accounts as people sign in.
+const PBKDF2_ITER = 20000;
 const MAX_FAILED = 10, LOCK_MINUTES = 15;
 const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
@@ -390,7 +392,9 @@ async function passwordLogin(request, env, url) {
     }
     throw new HttpError(401, 'Wrong email or password');
   }
-  if (row.failed) await env.DB.prepare('UPDATE passwords SET failed = 0 WHERE user_id = ?').bind(row.user_id).run();
+  if (+row.hash.split('$')[1] !== PBKDF2_ITER)
+    await env.DB.prepare('UPDATE passwords SET hash = ?, failed = 0 WHERE user_id = ?').bind(await hashPassword(password), row.user_id).run();
+  else if (row.failed) await env.DB.prepare('UPDATE passwords SET failed = 0 WHERE user_id = ?').bind(row.user_id).run();
   return json({ ok: true }, 200, { 'Set-Cookie': await sessionCookie(env, url, row.user_id) });
 }
 
