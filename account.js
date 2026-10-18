@@ -24,10 +24,21 @@ const who=a=>`<a class="plink" href="#/u/${esc(a.id)}">${avHTML(a)}${esc(a.name)
 function showOnWheel(keys){const s=new Set(keys);P.forEach(p=>p.on=s.has(p.k));sync();location.hash='#/'}
 
 /* ---------- session ---------- */
+// The wheel opens on the newest of this browser's and the account's last selection; with neither, on the user's collection.
+let selTimer=null;
+async function wheelSync(){
+ let srv=null,ok=true;try{const r=await api('/me/wheel');srv=r.wheel;ok=!r.unavailable}catch(e){ok=false}
+ const loc=selLocal();
+ onSelSave=ok?w=>{clearTimeout(selTimer);selTimer=setTimeout(()=>api('/me/wheel',{method:'PUT',body:w}).catch(()=>{}),1500)}:null;
+ if(srv&&srv.t&&(!loc||srv.t>loc.t)){selApply(srv);try{localStorage.setItem(WK,JSON.stringify(srv))}catch(e){}boxes();refresh()}
+ else if(loc){if(ok&&(!srv||loc.t>srv.t))api('/me/wheel',{method:'PUT',body:loc}).catch(()=>{})}
+ else if(OWN.size){P.forEach(p=>p.on=OWN.has(p.k));boxes();refresh()}}
+
 async function loadMe(){
  // The extra tabs only show once there is a way to sign in (or someone is already signed in).
  try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
  if(ME){try{OWN=new Set((await api('/collection')).paints)}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
+ if(ME)await wheelSync();else onSelSave=null;
  document.querySelectorAll('#nav a[data-v]').forEach(a=>{if(a.dataset.v!=='wheel')a.hidden=!API});
  $('acct').innerHTML=ME?avHTML(ME)+esc(ME.name):'Sign in';
  $('mine').hidden=!ME;

@@ -7,7 +7,7 @@ const S=d?d/(1-Math.abs(2*L-1)):0;
 P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n})});
 // Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
 let OWN=null,ONLY_MINE=false;const own=p=>!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
-let CH=[],NE=[],U=h=>h;const on={A:1},CX=500,CY=500;
+let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
 function layout(){CH=P.filter(p=>p.on&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);NE=P.filter(p=>p.on&&!CH.includes(p)).sort((a,b)=>a.L-b.L);
 const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
@@ -66,16 +66,23 @@ function matchHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches i
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${P.indexOf(m.p)}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
 md.forEach(o=>{if(!o.ch.length&&!o.near.length)return;h+=`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o.ch.map(m=>c(m,1)).join('')}${o.near.map(m=>c(m,0)).join('')}</div></div>`});
 if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
-function addOn(list,p){list.forEach(q=>q.on=true);layout();renderNeu();boxes();showP(p)}
+function addOn(list,p){list.forEach(q=>q.on=true);layout();renderNeu();boxes();showP(p);remember()}
 function showP(p){if(CH.includes(p)){sel=p;draw()}else{sel=null;draw();neutralShow(p)}}
 function wireMatch(p){const el=document.getElementById('sel');
 el.querySelectorAll('.mt .chip').forEach(e=>e.onclick=()=>{const q=P[+e.dataset.mi];addOn([q],q)});
 const md=matchData(p),a=document.getElementById('mAddDoc'),b=document.getElementById('mAddAll');
 if(a)a.onclick=()=>addOn(md.flatMap(o=>o.ch.map(m=>m.p)),p);if(b)b.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.near].map(m=>m.p)),p)}
 function neutralShow(p){document.getElementById('sel').innerHTML=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span></div><p class="s">Neutral paint: it sits outside the hue wheel. Use it to dull a neighboring color or set value in an underpainting; warm greys pair with oranges and flesh, cool greys with blues.</p>`+matchHTML(p);wireMatch(p)}
-P.forEach(p=>p.on=!!on[p.g]);
+// Last wheel selection: {t,g:[fully ticked ranges],k:[other ticked paint keys]}, kept in this browser and (via account.js) on the account.
+const WK='pd-wheel',GS=[...new Set(P.map(p=>p.g))];
+function selNow(){const g=GS.filter(x=>P.every(p=>p.g!==x||p.on));return{t:Date.now(),g,k:P.filter(p=>p.on&&!g.includes(p.g)).map(p=>p.k)}}
+function selLocal(){try{const w=JSON.parse(localStorage.getItem(WK));return w&&w.t?w:null}catch(e){return null}}
+function selApply(w){const g=new Set(w.g||[]),k=new Set(w.k||[]);P.forEach(p=>p.on=g.has(p.g)||k.has(p.k))}
+let onSelSave=null;
+function remember(){const w=selNow();try{localStorage.setItem(WK,JSON.stringify(w))}catch(e){}if(onSelSave)onSelSave(w)}
+const W0=selLocal();if(W0)selApply(W0);else P.forEach(p=>p.on=!!on[p.g]);
 const tree=document.getElementById('tree');
-tree.innerHTML=BRANDS.map(([bn,gs],bi)=>`<details class="br"${bi===0?' open':''}><summary><b>${bn}</b> <span class="n" data-bc="${bi}"></span></summary>`+gs.map(g=>`<details class="rg" data-g="${g}"><summary><input type="checkbox" data-r="${g}"> ${GL[g]} <span class="n" data-gc="${g}"></span></summary><div class="pl">`+P.map((p,i)=>p.g===g?`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${p.n}${p.c?' <em>'+p.c+'</em>':''}</span></label>`:'').join('')+`</div></details>`).join('')+`</details>`).join('');
+tree.innerHTML=BRANDS.map(([bn,gs],bi)=>`<details class="br"${gs.some(g=>on[g])?' open':''}><summary><b>${bn}</b> <span class="n" data-bc="${bi}"></span></summary>`+gs.map(g=>`<details class="rg" data-g="${g}"><summary><input type="checkbox" data-r="${g}"> ${GL[g]} <span class="n" data-gc="${g}"></span></summary><div class="pl">`+P.map((p,i)=>p.g===g?`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${p.n}${p.c?' <em>'+p.c+'</em>':''}</span></label>`:'').join('')+`</div></details>`).join('')+`</details>`).join('');
 const qv=()=>document.getElementById('q').value.trim().toLowerCase(),match=(p,q)=>(p.n+' '+p.c).toLowerCase().includes(q);
 const refresh=()=>{sel=null;layout();renderNeu();draw()};
 function boxes(){
@@ -83,7 +90,7 @@ function boxes(){
  let tot=0;
  BRANDS.forEach(([bn,gs],bi)=>{let bo=0;gs.forEach(g=>{const m=P.filter(p=>p.g===g),o=m.filter(p=>p.on).length,mm=q?m.filter(p=>match(p,q)):m,mo=mm.filter(p=>p.on).length;bo+=o;const cb=tree.querySelector(`input[data-r="${g}"]`);cb.checked=mm.length>0&&mo===mm.length;cb.indeterminate=mo>0&&mo<mm.length;tree.querySelector(`[data-gc="${g}"]`).textContent=o+'/'+m.length});tree.querySelector(`[data-bc="${bi}"]`).textContent=bo?'('+bo+' selected)':'';tot+=bo});
  document.getElementById('cnt').textContent=tot+' selected'}
-function sync(){boxes();refresh()}
+function sync(){boxes();refresh();remember()}
 tree.addEventListener('change',e=>{const t=e.target;
  if(t.dataset.r){const q=qv();P.forEach(p=>{if(p.g===t.dataset.r&&(!q||match(p,q)))p.on=t.checked})}
  else if(t.dataset.i!==undefined)P[+t.dataset.i].on=t.checked;
@@ -93,5 +100,5 @@ document.getElementById('q').oninput=()=>{const q=qv();
  tree.querySelectorAll('label.pi').forEach(l=>l.hidden=!!q&&!match(P[+l.dataset.i],q));
  tree.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=!!q&&!v;d.open=!!q&&v});
  tree.querySelectorAll('details.br').forEach(d=>{d.hidden=!!q&&!d.querySelector('details.rg:not([hidden])');if(q)d.open=true});boxes()};
-layout();renderNeu();sync();
+boxes();refresh();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
