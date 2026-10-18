@@ -16,29 +16,83 @@ for(let it=0;it<500;it++){for(let i=0;i<CH.length;i++){const a=CH[i];for(let j=i
 a.x+=(a.ox-a.x)*.008;a.y+=(a.oy-a.y)*.008;const dx=a.x-CX,dy=a.y-CY,d=Math.hypot(dx,dy);if(d>455||d<125){const t=Math.min(455,Math.max(125,d))/d;a.x=CX+dx*t;a.y=CY+dy*t}}}}
 function lines(n){let w=n.split(' ').map(x=>AB[x]||x);if(w.length===1)return w;let best=1,bm=1e9;for(let k=1;k<w.length;k++){const m=Math.max(w.slice(0,k).join(' ').length,w.slice(k).join(' ').length);if(m<bm){bm=m;best=k}}return[w.slice(0,best).join(' '),w.slice(best).join(' ')]}
 function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
-/* ---------- NMM (non-metallic metal) mode ----------
-   Tap a paint and it builds a light ramp for painting it as NMM: deep shadow → base → white glint.
-   Shadows darken, dull and (for warm metals) lean red-brown; highlights drain toward ivory. Each stop takes the
-   nearest ticked opaque paint by ΔE (lightness weighted, since value contrast is what sells NMM). Swatches are estimates. */
-let MODE='col',NB=null,nmmSkip=[],NMM_DRAFT=null;const NMO={n:7,t:false};
-try{const o=JSON.parse(localStorage.getItem('pd-nmm'));if(o){MODE=o.m==='nmm'?'nmm':'col';NMO.n=o.n===5?5:7;NMO.t=!!o.t}}catch(e){}
-const nmmSave=()=>{try{localStorage.setItem('pd-nmm',JSON.stringify({m:MODE,n:NMO.n,t:NMO.t}))}catch(e){}};
-// NMM is built with opaque layer paints: leave out metallics, washes, contrast/speed, inks, glazes, primers, fluoros, pigments, textures.
+/* ---------- Ramp mode (NMM, OSL, gems, skin, zenithal, edge highlights, glazes) ----------
+   Tap a paint and it builds a light ramp for the chosen technique. Each technique sets its own stops in Lab/LCh
+   (how dark and light it goes, how chroma and hue drift, and what the optional tint does). Each stop then takes the
+   nearest ticked opaque paint by ΔE (lightness weighted, since value contrast is what sells a ramp). Swatches are estimates. */
+let MODE='col',NB=null,nmmSkip=[],NMM_DRAFT=null;const NMO={n:7,t:false,q:'nmm'};
+const nmmSave=()=>{try{localStorage.setItem('pd-nmm',JSON.stringify({m:MODE,n:NMO.n,t:NMO.t,q:NMO.q}))}catch(e){}};
+// Ramps are built with opaque layer paints: leave out metallics, washes, contrast/speed, inks, glazes, primers, fluoros, pigments, textures.
 const NMM_NO=new Set(['X','u','m','L','q','W','s','w','z','n','i','c','S','T','r','t','P','G','B','F','f','1']);
 const NMM_RX=/metal|gold|silver|bronze|brass|copper|steel|iron\b|chrome|gunmetal|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|titanium|pewter|platinum|nickel|wash|glaze|\bink\b|contrast|speedpaint|filter|fluo|primer|pigment|texture|varnish|medium|transparent/i;
 const nmmOK=p=>!NMM_NO.has(p.g)&&!NMM_RX.test(p.n)&&!NMM_RX.test(p.c);
 const lch=p=>[p.lab[0],Math.hypot(p.lab[1],p.lab[2]),(Math.atan2(p.lab[2],p.lab[1])*180/Math.PI+360)%360];
 const lab3=(L,C,h)=>[L,C*Math.cos(h*Math.PI/180),C*Math.sin(h*Math.PI/180)];
 const hdS=(a,b)=>(b-a+540)%360-180;
-function nmmTargets(b){const[L0,C0,h0]=lch(b),warm=C0>12&&h0>20&&h0<110,sh=warm?hdS(h0,45)*.6:0,hl=warm?hdS(h0,95)*.5:0,n=NMO.n,out=[];
-const dk=n===7?['Deep shadow','Shadow','Dark mid']:['Deep shadow','Shadow'],lt=n===7?['Highlight','Bright highlight']:['Highlight'];
-dk.forEach((r,k)=>{const t=k/dk.length;out.push({r,t:lab3(9+(L0-9)*t,C0*(.3+.6*t),h0+sh*(1-t))})});
-out.push({r:'Base',t:b.lab,base:1});
-lt.forEach((r,k)=>{const t=(k+1)/(lt.length+1);out.push({r,t:lab3(L0+(96-L0)*t,C0*(1-.6*t),h0+hl*t)})});
-out.push({r:'Glint',t:lab3(98,3,h0)});
-// Tinted shadow: purple under warm metals, warm brown under greys/steel, otherwise the complement.
-if(NMO.t){out[0].t=lab3(12,Math.max(14,C0*.45),warm?305:C0<12?60:(h0+180)%360);out[0].tint=1}
+// Shared shape: darker roles from Ld up to the base, the base, then lighter roles from the base toward Lt.
+// sC/sH give shadow chroma and hue (t runs 0→1 toward the base), lC/lH the same for lights (t runs 0→1 away from it), then the top stop.
+function rampOf(b,o){const[L0,C0,h0]=lch(b),out=[];
+o.dk.forEach((r,k)=>{const t=k/o.dk.length;out.push({r,t:lab3(o.Ld+(L0-o.Ld)*t,o.sC(C0,t),o.sH(h0,t))})});
+out.push({r:o.baseName||'Base',t:b.lab,base:1});
+o.lt.forEach((r,k)=>{const t=(k+1)/(o.lt.length+1);out.push({r,t:lab3(L0+(o.Lt-L0)*t,o.lC(C0,t),o.lH(h0,t))})});
+out.push({r:o.top,t:lab3(o.topL,o.topC(C0),o.topH?o.topH(h0):o.lH(h0,1))});
 return out}
+const tintAt=(out,L,C,h)=>{out[0].t=lab3(L,C,h);out[0].tint=1;return out};
+const L7=()=>NMO.n===7;
+const TQ={
+nmm:{name:'NMM',full:'Non-metallic metal',sum:'Non-metallic metal ramp built on the Painters Desk wheel.',prev:'blade',tint:'Tint the deepest shadow',
+ hint:'Tap a paint on the wheel or in the neutrals list to build its NMM ramp.',
+ targets(b){const[L0,C0,h0]=lch(b),warm=C0>12&&h0>20&&h0<110,sh=warm?hdS(h0,45)*.6:0,hl=warm?hdS(h0,95)*.5:0;
+  const out=rampOf(b,{dk:L7()?['Deep shadow','Shadow','Dark mid']:['Deep shadow','Shadow'],lt:L7()?['Highlight','Bright highlight']:['Highlight'],Ld:9,Lt:96,top:'Glint',topL:98,topC:()=>3,topH:h=>h,
+   sC:(C,t)=>C*(.3+.6*t),sH:(h,t)=>h+sh*(1-t),lC:(C,t)=>C*(1-.6*t),lH:(h,t)=>h+hl*t});
+  // Tinted shadow: purple under warm metals, warm brown under greys/steel, otherwise the complement.
+  return NMO.t?tintAt(out,12,Math.max(14,C0*.45),warm?305:C0<12?60:(h0+180)%360):out},
+ tip:{'Deep shadow':'Thin coats into the deepest recesses and the side facing away from the light.','Shadow':'Most of the shaded half. Keep the edge against the base fairly crisp.','Dark mid':'Blend the shadow into the base.','Base':'The colour the metal reads as. Cover the lit half.','Highlight':'Narrower band where light falls, leaving base showing around it.','Bright highlight':'A smaller band inside the highlight.','Glint':'Tiny dots or a sharp line where the light hits hardest.'}},
+osl:{name:'OSL',full:'Object source lighting',sum:'Object source lighting ramp built on the Painters Desk wheel.',prev:'osl',tint:'Cool the unlit surface',
+ hint:'Tap the colour of the light (the glow) to build an OSL ramp.',
+ targets(b){const[L0,C0,h0]=lch(b);
+  const out=rampOf(b,{dk:L7()?['Unlit surface','Falloff','Glow edge']:['Unlit surface','Glow edge'],lt:L7()?['Bright glow','Hot core']:['Hot core'],Ld:16,Lt:94,baseName:'Glow',top:'Light source',topL:97,topC:()=>4,
+   sC:(C,t)=>Math.min(10,C*.25)+(C*1.05-Math.min(10,C*.25))*t,sH:h=>h,lC:(C,t)=>C*(1-.6*t*t),lH:(h,t)=>h+hdS(h,95)*.25*t});
+  // The surface away from the light keeps its own cool shadow: lean it toward the glow's complement.
+  return NMO.t?tintAt(out,16,12,(h0+180)%360):out},
+ tip:{'Unlit surface':'The surface beyond the glow\'s reach. Paint the area around the light in this first.','Falloff':'Where the light fades out. Feather it softly into the unlit surface.','Glow edge':'A saturated ring of the light colour on the nearest surfaces.','Glow':'The light colour on the surfaces facing the source.','Bright glow':'Closer in and on edges that face the source.','Hot core':'Right around the source, kept small.','Light source':'The source itself: the brightest point on the model.'}},
+gem:{name:'Gems',full:'Gems and lenses',sum:'Gem and lens ramp built on the Painters Desk wheel.',prev:'gem',tint:'Cool the deepest shadow',
+ hint:'Tap a paint to build a gem or lens ramp.',
+ targets(b){const[L0,C0,h0]=lch(b);
+  const out=rampOf(b,{dk:L7()?['Deep shadow','Shadow','Dark mid']:['Deep shadow','Shadow'],lt:L7()?['Reflected light','Bright reflection']:['Reflected light'],Ld:8,Lt:86,top:'Glint',topL:98,topC:()=>2,
+   sC:(C,t)=>C*(.7+.3*t),sH:h=>h,lC:(C,t)=>C*(1-.35*t),lH:h=>h});
+  return NMO.t?tintAt(out,10,Math.max(14,C0*.6),h0+hdS(h0,290)*.5):out},
+ tip:{'Deep shadow':'Fill the whole gem, then keep this on the side nearest the light.','Shadow':'A crescent blending away from the deep shadow.','Dark mid':'Blend toward the middle of the gem.','Base':'The middle band of the gem.','Reflected light':'The side away from the light: light passes through and comes out here.','Bright reflection':'A smaller crescent inside the reflected light.','Glint':'A white dot on the side nearest the light, opposite the reflection.'}},
+skin:{name:'Skin',full:'Skin tones',sum:'Skin tone ramp built on the Painters Desk wheel.',prev:'bands',tint:'Cool or purple deepest shadow',
+ hint:'Tap a skin colour (or any colour for alien skin) to build a skin ramp.',
+ targets(b){const[L0,C0,h0]=lch(b),sh=hdS(h0,35)*.5;
+  const out=rampOf(b,{dk:L7()?['Deep shadow','Shadow','Dark mid']:['Deep shadow','Shadow'],lt:L7()?['Highlight','Bright highlight']:['Highlight'],Ld:18,Lt:90,top:'Top highlight',topL:91,topC:C=>C*.22,
+   sC:(C,t)=>C*(.85+.15*t),sH:(h,t)=>h+sh*(1-t),lC:(C,t)=>C*(1-.5*t),lH:(h,t)=>h+hdS(h,80)*.4*t});
+  return NMO.t?tintAt(out,17,Math.max(14,C0*.5),310):out},
+ tip:{'Deep shadow':'Deepest creases: under the brow, nose, chin and between fingers.','Shadow':'The recesses and the underside of muscles.','Dark mid':'Blend the shadow up into the base.','Base':'The skin colour. Cover all of the skin.','Highlight':'Raised areas: brow, cheekbones, nose, knuckles.','Bright highlight':'Smaller, on the highest points of those areas.','Top highlight':'Tiny points: tip of the nose, top of the cheekbones, lower lip.'}},
+zen:{name:'Zenithal',full:'Zenithal and volumetric highlights',sum:'Zenithal / volumetric highlight ramp built on the Painters Desk wheel.',prev:'bands',tint:'Lean the deepest shadow to the complement',
+ hint:'Tap a base colour to build stepped highlights from it.',
+ targets(b){const[L0,C0,h0]=lch(b),hl=L7()?['Highlight 1','Highlight 2','Highlight 3']:['Highlight'];
+  const out=rampOf(b,{dk:['Deep shadow','Shadow'],lt:hl,Ld:Math.max(6,L0*.35),Lt:92,top:'Top highlight',topL:Math.min(95,L0+(95-L0)*.85),topC:C=>C*.35,
+   sC:(C,t)=>C*(.6+.4*t),sH:h=>h,lC:(C,t)=>C*(1-.45*t),lH:h=>h});
+  return NMO.t?tintAt(out,Math.max(8,L0*.35),Math.max(10,C0*.35),(h0+180)%360):out},
+ tip:{'Deep shadow':'The underside of each panel or fold, facing the ground.','Shadow':'Blend the shadow up into the base.','Base':'Cover the whole area.','Highlight':'The upper half of each panel or fold, facing the light.','Highlight 1':'The upper two thirds of each panel or fold.','Highlight 2':'The upper third, on the tops of folds and panels.','Highlight 3':'The highest ridges and the tops of the upper panels.','Top highlight':'Only the highest points, nearest the light.'}},
+edge:{name:'Edges',full:'Edge highlights',sum:'Edge highlight steps built on the Painters Desk wheel.',prev:'bands',tint:'',steps:['2 edges','3 edges'],
+ hint:'Tap a base colour to get its edge highlights.',
+ targets(b){return rampOf(b,{dk:[],lt:L7()?['Edge 1','Edge 2']:['Edge'],Ld:0,Lt:90,top:'Fine edge',topL:lch(b)[0]+(96-lch(b)[0])*.85,topC:C=>C*.35,
+   sC:C=>C,sH:h=>h,lC:(C,t)=>C*(1-.4*t),lH:h=>h})},
+ tip:{'Base':'The base colour, already painted.','Edge':'Along every edge and raised line with the side of the brush.','Edge 1':'Along every edge and raised line with the side of the brush.','Edge 2':'A thinner line on the edges that face the light.','Fine edge':'Dots on corners and the sharpest, highest edges.'}},
+glaze:{name:'Glazes',full:'Glazing blend',sum:'Glazing blend built on the Painters Desk wheel, with a water ratio for each step.',prev:'bands',tint:'Lean the deepest glaze to the complement',glaze:1,
+ hint:'Tap a base colour to build a glazing blend with water ratios.',
+ targets(b){const[L0,C0,h0]=lch(b),w=L7()?[5,4,1,3,4,5,6]:[4,1,3,4,5];
+  const out=rampOf(b,{dk:L7()?['Deep glaze','Shadow glaze']:['Shadow glaze'],lt:L7()?['Glaze 1','Glaze 2','Glaze 3']:['Glaze 1','Glaze 2'],Ld:Math.max(8,L0*.4),Lt:L0+(90-L0)*.85,top:'Final glaze',topL:L0+(90-L0)*.85,topC:C=>C*.5,
+   sC:(C,t)=>C*(.75+.25*t),sH:h=>h,lC:(C,t)=>C*(1-.4*t),lH:h=>h});
+  out.forEach((x,i)=>x.w=w[i]);
+  return NMO.t?tintAt(out,Math.max(8,L0*.4),Math.max(10,C0*.4),(h0+180)%360):out},
+ tip:{'Deep glaze':'Very thin, built up in the deepest recesses over several coats.','Shadow glaze':'Thin coats over the shaded areas, letting each dry.','Base':'Thinned a little so it goes on smooth. Cover the whole area.','Glaze 1':'Thin coats over the lit two thirds. Wipe most of the paint off the brush first.','Glaze 2':'Thinner, over a smaller area inside the last.','Glaze 3':'Thinner again, over a smaller area.','Final glaze':'The thinnest, only on the highest points. Several coats build it up.'}}};
+const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
+try{const o=JSON.parse(localStorage.getItem('pd-nmm'));if(o){MODE=o.m==='nmm'?'nmm':'col';NMO.n=o.n===5?5:7;NMO.t=!!o.t;NMO.q=TQ[o.q]?o.q:'nmm'}}catch(e){}
+const nmmTargets=b=>TQN().targets(b);
 function nmmRamp(b){const pool=P.filter(p=>p.on&&nmmOK(p)&&(!ONLY_MINE||own(p))),used=new Set(),ok=nmmOK(b)&&(!ONLY_MINE||own(b));
 const w=(a,c)=>Math.hypot(1.6*(a[0]-c[0]),a[1]-c[1],a[2]-c[2]),d76=(a,c)=>Math.hypot(a[0]-c[0],a[1]-c[1],a[2]-c[2]);
 if(ok)used.add(b);
@@ -48,32 +102,41 @@ const m=c[(nmmSkip[i]||0)%Math.min(c.length,8)].q;used.add(m);return{...x,p:m,d:
 const labHex=([L,A,B])=>{const fy=(L+16)/116,iv=t=>t**3>.008856?t**3:(t-16/116)/7.787,X=iv(fy+A/500)*.95047,Y=iv(fy),Z=iv(fy-B/200)*1.08883;
 const s=v=>{v=v>.0031308?1.055*v**(1/2.4)-.055:12.92*v;return Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0')};
 return'#'+s(3.2406*X-1.5372*Y-.4986*Z)+s(-.9689*X+1.8758*Y+.0415*Z)+s(.0557*X-.204*Y+1.057*Z)};
-// Wheel overlay: the ramp as a path through the paints that sit on the wheel, and the centre disc painted as the ramp (glint at the top).
-function nmmWheel(R){const on=R.filter(x=>x.p&&CH.includes(x.p));let s='';
+// Gradient stops, lightest first. OSL draws radially (source in the middle); the rest top (light) to bottom (dark).
+const rampStops=R=>{const st=R.filter(x=>x.p).reverse();return st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${x.p.h}"/>`).join('')};
+const rampGrad=(id,R,rad)=>rad?`<radialGradient id="${id}" cx=".5" cy=".5" r=".5">${rampStops(R)}</radialGradient>`:`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${rampStops(R)}</linearGradient>`;
+// Wheel overlay: the ramp as a path through the paints that sit on the wheel, and the centre disc painted as the ramp.
+function nmmWheel(R){const on=R.filter(x=>x.p&&CH.includes(x.p)),T=TQN();let s='';
 if(on.length>1)s+=`<polyline points="${on.map(x=>x.p.x+','+x.p.y).join(' ')}" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" opacity=".6"/>`;
-const st=R.filter(x=>x.p).reverse();
-return s+`<defs><linearGradient id="ng" x1="0" y1="0" x2="0" y2="1">${st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${x.p.h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#ng)" stroke="#1b1b1b" stroke-width="3"><title>NMM ramp, glint to deep shadow</title></circle>`}
-const NMM_TIP={'Deep shadow':'Thin coats into the deepest recesses and the side facing away from the light.','Shadow':'Most of the shaded half. Keep the edge against the base fairly crisp.','Dark mid':'Blend the shadow into the base.','Base':'The colour the metal reads as. Cover the lit half.','Highlight':'Narrower band where light falls, leaving base showing around it.','Bright highlight':'A smaller band inside the highlight.','Glint':'Tiny dots or a sharp line where the light hits hardest.'};
-function nmmPanel(b,R){const el=document.getElementById('sel'),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const q=d=>d<6?['close','Close']:d<12?['fair','Fair']:['loose','Loose'],metal=!nmmOK(b);
+return s+`<defs>${rampGrad('ng',R,T.prev==='osl')}</defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#ng)" stroke="#1b1b1b" stroke-width="3"><title>${T.full} ramp</title></circle>`}
+// Small preview of the ramp on a shape that suits the technique.
+function rampPrev(R,T){const st=R.filter(x=>x.p);
+if(T.prev==='blade')return`<svg class="blade" viewBox="0 0 300 90" role="img" aria-label="Ramp preview on a sword blade"><defs>${rampGrad('nb',R)}</defs><rect x="6" y="38" width="44" height="14" rx="3" fill="#5a3a1a" stroke="#1b1b1b" stroke-width="2.5"/><rect x="48" y="20" width="12" height="50" rx="3" fill="url(#nb)" stroke="#1b1b1b" stroke-width="2.5"/><path d="M60 26 L262 26 L294 45 L262 64 L60 64 Z" fill="url(#nb)" stroke="#1b1b1b" stroke-width="3" stroke-linejoin="round"/></svg>`;
+if(T.prev==='osl')return`<svg class="blade" viewBox="0 0 300 120" role="img" aria-label="Ramp preview as light spreading from a source"><defs>${rampGrad('nb',R,1)}</defs><rect x="4" y="4" width="292" height="112" rx="14" fill="${st[0].p.h}" stroke="#1b1b1b" stroke-width="3"/><ellipse cx="150" cy="60" rx="120" ry="54" fill="url(#nb)"/><circle cx="150" cy="60" r="7" fill="${st[st.length-1].p.h}" stroke="#1b1b1b" stroke-width="2"/></svg>`;
+if(T.prev==='gem'){const lin=st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-2)).toFixed(3)}" stop-color="${x.p.h}"/>`).slice(0,-1).join('');
+ return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Ramp preview on a round gem"><defs><linearGradient id="nb" x1=".2" y1="0" x2=".8" y2="1">${lin}</linearGradient></defs><circle cx="150" cy="55" r="46" fill="#7a6a4a" stroke="#1b1b1b" stroke-width="3"/><circle cx="150" cy="55" r="38" fill="url(#nb)" stroke="#1b1b1b" stroke-width="3"/><circle cx="137" cy="40" r="5" fill="${st[st.length-1].p.h}"/></svg>`}
+const w=292/st.length;return`<svg class="blade" viewBox="0 0 300 60" role="img" aria-label="Ramp preview as stepped bands">${st.map((x,i)=>`<rect x="${(4+i*w).toFixed(1)}" y="6" width="${w.toFixed(1)}" height="48" fill="${x.p.h}"/>`).join('')}<rect x="4" y="6" width="292" height="48" rx="6" fill="none" stroke="#1b1b1b" stroke-width="3"/></svg>`}
+function nmmPanel(b,R){const el=document.getElementById('sel'),T=TQN(),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const q=d=>d<6?['close','Close']:d<12?['fair','Fair']:['loose','Loose'],metal=!nmmOK(b),wt=x=>T.glaze?`<span class="nwt" title="Paint to water">1:${x.w} 💧</span>`:'';
 const rows=R.map((x,i)=>{const role=x.r+(x.tint?' · tinted':'');if(!x.p)return`<div class="nrow"><div class="nrole">${role}</div><span class="nsw" style="background:${labHex(x.t)}"></span><div class="nnm"><b>No ticked paint left</b><span>Tick more ranges to fill this step</span></div></div>`;
 const [qc,ql]=x.pick?['pick','Your pick']:q(x.d);
-return`<div class="nrow${x.base?' nbase':''}"><div class="nrole">${role}</div><span class="nsw" style="background:${x.p.h}" title="Paint"><i style="background:${labHex(x.t)}" title="Ramp target"></i></span><div class="nnm"><b>${star(x.p)}${esc(x.p.n)}</b><span>${esc(GL[x.p.g])}${x.p.c?' · '+esc(x.p.c):''}</span></div><span class="nq ${qc}" title="${x.pick?'':'ΔE '+x.d.toFixed(1)+' from the ramp target'}">${ql}</span>${x.alt?`<button type="button" class="nsk" data-sk="${i}" title="Try the next nearest paint" aria-label="Swap ${esc(x.r)} paint">↻</button>`:'<span></span>'}</div>`}).join('');
-const st=R.filter(x=>x.p).reverse(),off=st.map((x,i)=>(i/Math.max(1,st.length-1)).toFixed(3));
-el.innerHTML=`<b>NMM ramp from:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${esc(b.n)} <span style="color:var(--mut)">${esc(b.c)}</span></span></div>`+
+return`<div class="nrow${x.base?' nbase':''}"><div class="nrole">${role}</div><span class="nsw" style="background:${x.p.h}" title="Paint"><i style="background:${labHex(x.t)}" title="Ramp target"></i></span><div class="nnm"><b>${star(x.p)}${esc(x.p.n)}</b><span>${esc(GL[x.p.g])}${x.p.c?' · '+esc(x.p.c):''}</span>${wt(x)}</div><span class="nq ${qc}" title="${x.pick?'':'ΔE '+x.d.toFixed(1)+' from the ramp target'}">${ql}</span>${x.alt?`<button type="button" class="nsk" data-sk="${i}" title="Try the next nearest paint" aria-label="Swap ${esc(x.r)} paint">↻</button>`:'<span></span>'}</div>`}).join('');
+el.innerHTML=`<b>${esc(T.full)} ramp from:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${esc(b.n)} <span style="color:var(--mut)">${esc(b.c)}</span></span></div>`+
 (metal?'<p class="s">That\'s a metallic or effect paint, so the base uses the nearest opaque paint instead.</p>':'')+
-`<div class="nrows">${rows}</div>
-<svg class="blade" viewBox="0 0 300 90" role="img" aria-label="Ramp preview on a sword blade"><defs><linearGradient id="nb" x1="0" y1="0" x2="0" y2="1">${st.map((x,i)=>`<stop offset="${off[i]}" stop-color="${x.p.h}"/>`).join('')}</linearGradient></defs><rect x="6" y="38" width="44" height="14" rx="3" fill="#5a3a1a" stroke="#1b1b1b" stroke-width="2.5"/><rect x="48" y="20" width="12" height="50" rx="3" fill="url(#nb)" stroke="#1b1b1b" stroke-width="2.5"/><path d="M60 26 L262 26 L294 45 L262 64 L60 64 Z" fill="url(#nb)" stroke="#1b1b1b" stroke-width="3" stroke-linejoin="round"/></svg>
-<p class="s">Small dot = the colour the ramp asks for; big dot = the nearest of your ticked paints (${ONLY_MINE?'from your collection only':'tick more ranges for closer matches'}). Close / Fair / Loose = ΔE under 6, under 12, above that. ↻ swaps a step for the next nearest paint. Swatches are estimates, so check the ramp on the model.</p>
+`<div class="nrows">${rows}</div>${rampPrev(R,T)}
+<p class="s">Small dot = the colour the ramp asks for; big dot = the nearest of your ticked paints (${ONLY_MINE?'from your collection only':'tick more ranges for closer matches'}). Close / Fair / Loose = ΔE under 6, under 12, above that. ↻ swaps a step for the next nearest paint.${T.glaze?' 1:4 💧 = one part paint to four parts water; thinner glazes need more coats.':''} Swatches are estimates, so check the ramp on the model.</p>
 <div class="row"><button class="btn" type="button" id="nmmTut">Save as tutorial</button></div>`;
 el.querySelectorAll('[data-sk]').forEach(e=>e.onclick=()=>{const i=+e.dataset.sk;nmmSkip[i]=(nmmSkip[i]||0)+1;draw()});
-document.getElementById('nmmTut').onclick=()=>{NMM_DRAFT={kind:'tutorial',title:'NMM '+b.n.trim(),summary:'Non-metallic metal ramp built on the Painters Desk wheel.',
- steps:R.filter(x=>x.p).map(x=>({title:x.r,text:NMM_TIP[x.r]||'',image:'',mix:[{k:x.p.k,parts:1}]}))};location.hash='#/new'}}
-function nmmUI(){const n=MODE==='nmm';document.getElementById('mCol').classList.toggle('pri',!n);document.getElementById('mNmm').classList.toggle('pri',n);
+document.getElementById('nmmTut').onclick=()=>{NMM_DRAFT={kind:'tutorial',title:T.name+' '+b.n.trim(),summary:T.sum,
+ steps:R.filter(x=>x.p).map(x=>({title:x.r,text:T.tip[x.r]||'',image:'',mix:[{k:x.p.k,parts:1}].concat(T.glaze?[{k:'water',parts:x.w}]:[])}))};location.hash='#/new'}}
+function nmmUI(){const n=MODE==='nmm',T=TQN(),ss=T.steps||['5','7'];document.getElementById('mCol').classList.toggle('pri',!n);document.getElementById('mNmm').classList.toggle('pri',n);
 document.getElementById('mCol').setAttribute('aria-pressed',!n);document.getElementById('mNmm').setAttribute('aria-pressed',n);document.getElementById('nmmOpt').hidden=!n;
-document.getElementById('nSteps').value=String(NMO.n);document.getElementById('nTint').checked=NMO.t}
+document.getElementById('nTech').value=NMO.q;const o=document.getElementById('nSteps').options;o[0].textContent=ss[0];o[1].textContent=ss[1];
+document.getElementById('nSteps').value=String(NMO.n);document.getElementById('nTint').checked=NMO.t;document.getElementById('nTintL').hidden=!T.tint;document.getElementById('nTintT').textContent=T.tint}
 function setMode(m){MODE=m;nmmSave();nmmUI();nmmSkip=[];if(m==='nmm')NB=sel;else if(NB&&!CH.includes(NB)){const p=NB;NB=null;draw();neutralShow(p);return}draw()}
+document.getElementById('nTech').innerHTML=TQK.map(k=>`<option value="${k}">${TQ[k].full}</option>`).join('');
 document.getElementById('mCol').onclick=()=>setMode('col');document.getElementById('mNmm').onclick=()=>setMode('nmm');
+document.getElementById('nTech').onchange=e=>{NMO.q=TQ[e.target.value]?e.target.value:'nmm';nmmSkip=[];nmmSave();nmmUI();draw()};
 document.getElementById('nSteps').onchange=e=>{NMO.n=+e.target.value;nmmSkip=[];nmmSave();draw()};
 document.getElementById('nTint').onchange=e=>{NMO.t=e.target.checked;nmmSkip=[];nmmSave();draw()};
 nmmUI();
@@ -106,7 +169,7 @@ svg.innerHTML=s;
 svg.querySelectorAll('.dot').forEach(e=>e.onclick=()=>pick(P[+e.dataset.i]));
 const chip=p=>`<span class="chip"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`;
 if(R){nmmPanel(NBp,R);return}
-if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>Tap a paint on the wheel or in the neutrals list to build its NMM ramp.</b>';return}
+if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>'+TQN().hint+'</b>';return}
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel)wireMatch(sel)}
 function pick(p){sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
