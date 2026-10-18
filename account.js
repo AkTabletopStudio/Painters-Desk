@@ -222,7 +222,7 @@ const addLbl=t=>{$('addMine').textContent=t;setTimeout(()=>$('addMine').textCont
 $('addMine').onclick=()=>{if(!OWN)return;const ks=P.filter(p=>p.on).map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));if(!ks.length)return;if(!nw.length)return addLbl('Already in your collection ✓');
  const d=$('addDlg'),n=nw.length,had=ks.length-n;$('addDlgM').textContent=`This adds ${n} paint${n===1?'':'s'} to your collection`+(had?` (${had} ticked already in it).`:'.');d.returnValue='';
  d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(nw,true);addLbl(`Added ${n} paint${n===1?'':'s'} ✓`);renderNeu();draw()};d.showModal();$('addNo').focus()};
-$('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel)draw()};
+$('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
 
 /* ---------- recipes list ---------- */
 let rScope='public';
@@ -352,6 +352,7 @@ async function renderEdit(id){
  if(!ME){el.innerHTML='<h1>New tutorial</h1>'+signInLink('Tutorials are saved to your account.');return}
  let r={kind:'tutorial',title:'',summary:'',body:'',link:'',paints:[],steps:[],cover:'',visibility:'private'};
  if(id){try{r=(await api('/recipes/'+encodeURIComponent(id))).recipe}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p>`;return}}
+ else if(NMM_DRAFT){r={...r,...NMM_DRAFT};NMM_DRAFT=null} // a ramp sent from the wheel's NMM mode
  const steps=r.steps.length?r.steps.map(s=>({...s,mix:s.mix.map(m=>({...m}))})):[{title:'',text:'',image:'',mix:[]}];
  let cover=r.cover,busy=0;
  // Paints listed before steps existed (or outside any step) are kept as "other paints".
