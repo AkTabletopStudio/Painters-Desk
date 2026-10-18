@@ -20,6 +20,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 Rubik,system-u
 body::before{content:"";display:block;height:12px;margin:0 -14px 14px;background:linear-gradient(90deg,var(--red) 0 16.66%,var(--org) 0 33.33%,var(--yel) 0 50%,var(--tea) 0 66.66%,var(--blu) 0 83.33%,var(--pur) 0)}
 h1{font:400 clamp(34px,6vw,56px)/1 'Archivo Black',sans-serif;letter-spacing:-1px;margin:14px 0 10px}
 p.s{color:var(--mut);margin:0 0 12px;font-size:14px}
+#foot{margin:18px 0 6px}#foot p.s{font-size:12px;line-height:1.45;margin:0}
 #v-wheel>p.s{font-size:16px;max-width:720px;color:var(--fg);opacity:.85}
 .wrap{max-width:1100px;margin:auto}
 @media (min-width:1000px){.wrap{max-width:1440px}
@@ -130,7 +131,10 @@ nav.top img,.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;m
 <section id="v-recipe" hidden></section>
 <section id="v-edit" hidden></section>
 <section id="v-account" hidden></section>
-<p class="s" style="margin:18px 0 6px"><b>The Painters Desk</b> is created by AK Tabletop Studio. © 2026 AK Tabletop Studio. AK Tabletop Studio is not affiliated with AK Interactive. Swatch colours are estimates and will differ from the real paints. Many Vallejo Game Color swatches and some Pro Acryl and AK 3rd Gen swatches are sampled from Antinea's photo databases of airbrushed bottle caps. Cross-brand matches are close, never exact; they draw on the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart, plus a nearest-colour calculation. This tool is unofficial and not affiliated with or endorsed by Games Workshop, The Army Painter, Monument Hobbies, Vallejo, AK Interactive or Two Thin Coats. Paint names are trademarks of their owners. <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
+<footer id="foot">
+<p class="s" id="footFull"><b>The Painters Desk</b> is created by AK Tabletop Studio. © 2026 AK Tabletop Studio. AK Tabletop Studio is not affiliated with AK Interactive. Swatch colours are estimates and will differ from the real paints. Many Vallejo Game Color swatches and some Pro Acryl and AK 3rd Gen swatches are sampled from Antinea's photo databases of airbrushed bottle caps. Cross-brand matches are close, never exact; they draw on the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart, plus a nearest-colour calculation. This tool is unofficial and not affiliated with or endorsed by Games Workshop, The Army Painter, Monument Hobbies, Vallejo, AK Interactive or Two Thin Coats. Paint names are trademarks of their owners. <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
+<p class="s" id="footShort" hidden>© 2026 AK Tabletop Studio. Swatch colours are estimates. Unofficial, not affiliated with any paint brand. <a href="#/" id="footMore" style="color:inherit">Full notice</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
+</footer>
 </div>
 <script src="data.js"></script>
 <script src="app.js"></script>
