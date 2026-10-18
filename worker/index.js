@@ -96,6 +96,8 @@ async function route(request, env, url) {
   if ((r = p.match(/^\/api\/auth\/callback\/(\w+)$/)) && m === 'GET') return oauthCallback(request, env, url, r[1]);
   if (p === '/api/auth/dev' && m === 'GET') return devLogin(request, env, url);
   if (p === '/api/auth/logout' && m === 'POST') return logout(request, env, url);
+  if (p === '/api/me/wheel' && m === 'GET') return getWheel(request, env);
+  if (p === '/api/me/wheel' && m === 'PUT') return putWheel(request, env);
   if (p === '/api/collection' && m === 'GET') return getCollection(request, env);
   if (p === '/api/collection' && m === 'PUT') return putCollection(request, env);
   if (p === '/api/recipes' && m === 'GET') return listRecipes(request, env, url);
@@ -622,6 +624,40 @@ async function putCollection(request, env) {
   ];
   for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
   return getCollection(request, env);
+}
+
+/* ---------- last wheel selection ---------- */
+
+// Until migration 0006 is applied the column is missing; report that instead of failing.
+const noWheelColumn = e => /no such column: wheel/i.test(String(e && e.message));
+
+async function getWheel(request, env) {
+  const u = await requireUser(request, env);
+  try {
+    const r = await env.DB.prepare('SELECT wheel FROM users WHERE id = ?').bind(u.id).first();
+    let wheel = null;
+    try { wheel = r && r.wheel ? JSON.parse(r.wheel) : null; } catch { wheel = null; }
+    return json({ wheel });
+  } catch (e) {
+    if (noWheelColumn(e)) return json({ wheel: null, unavailable: true });
+    throw e;
+  }
+}
+
+async function putWheel(request, env) {
+  const u = await requireUser(request, env);
+  const b = await body(request);
+  const t = Number(b.t);
+  if (!Number.isFinite(t) || t <= 0) throw new HttpError(400, 'Missing time');
+  const g = Array.isArray(b.g) ? [...new Set(b.g.filter(x => typeof x === 'string' && x.length === 1))].slice(0, 100) : [];
+  const wheel = { t: Math.min(t, Date.now() + 60000), g, k: paintKeys(b.k, 3000) };
+  try {
+    await env.DB.prepare('UPDATE users SET wheel = ? WHERE id = ?').bind(JSON.stringify(wheel), u.id).run();
+    return json({ wheel });
+  } catch (e) {
+    if (noWheelColumn(e)) return json({ wheel: null, unavailable: true });
+    throw e;
+  }
 }
 
 /* ---------- recipes & tutorials ---------- */
