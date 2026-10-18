@@ -112,6 +112,7 @@ async function route(request, env, url) {
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/vote$/)) && m === 'PUT') return setVote(request, env, r[1]);
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/save$/)) && m === 'PUT') return setSave(request, env, r[1]);
   if ((r = p.match(/^\/api\/comments\/([\w-]+)$/)) && m === 'DELETE') return deleteComment(request, env, r[1]);
+  if (p === '/api/feedback' && m === 'POST') return sendFeedback(request, env);
   if (p === '/api/images' && m === 'POST') return uploadImage(request, env);
   if ((r = p.match(/^\/api\/images\/([\w-]+)$/)) && m === 'GET') return getImage(env, r[1]);
   return json({ error: 'Not found' }, 404);
@@ -904,6 +905,66 @@ async function setSave(request, env, recipeId) {
   const v = await loadRecipe(env, recipeId, u.id);
   return json({ saved: b.on !== false, votes: v?.vote_count || 0, voted: !!v?.voted });
 }
+
+/* ---------- feedback ---------- */
+
+// The Feedback button on every page. Saved to D1 and emailed to FEEDBACK_TO (else the first ADMIN_EMAILS address).
+// A hidden "website" field catches form-filling bots; each sender (by IP) can post 5 an hour.
+const FEEDBACK_KINDS = { bug: 'Bug', suggestion: 'Suggestion', other: 'Other' }, FEEDBACK_PER_HOUR = 5;
+
+async function sendFeedback(request, env) {
+  const b = await body(request);
+  if (b.website) return json({ ok: true });
+  const kind = FEEDBACK_KINDS[b.kind] ? b.kind : 'other';
+  const message = str(b.message, 4000, 'Message', { required: true });
+  const email = b.email ? cleanEmail(b.email) : '';
+  const page = str(b.page, 200, 'Page');
+  const u = await currentUser(request, env);
+  const ip = await sha256('feedback:' + (request.headers.get('CF-Connecting-IP') || ''));
+  const t = now();
+  let saved = true;
+  try {
+    const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM feedback WHERE ip_hash = ? AND created_at > ?').bind(ip, t - 3600000).first();
+    if (c.n >= FEEDBACK_PER_HOUR) throw new HttpError(429, "Thanks! You've sent a lot of feedback this hour, please try again later");
+    await env.DB.prepare('INSERT INTO feedback (id, kind, message, email, user_id, page, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), kind, message, email, u?.id || null, page, ip, t).run();
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    // The feedback table may not exist yet (migration 0007 not applied); the email still goes out.
+    console.error('Feedback save failed', e);
+    saved = false;
+  }
+  const to = env.FEEDBACK_TO || adminEmails(env)[0];
+  let mailed = false;
+  if (to && env.MAIL_FROM && (env.EMAIL || env.RESEND_API_KEY)) {
+    const who = u ? `${u.name} (signed in${u.email ? ', ' + u.email : ''})` : 'Not signed in';
+    const text = `${FEEDBACK_KINDS[kind]} from ${who}\nReply to: ${email || 'no email given'}\nPage: ${page || '/'}\n\n${message}`;
+    const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1b1b1b;max-width:560px">
+<p style="font-size:20px;font-weight:700;margin:0 0 12px">The Painters Desk: ${FEEDBACK_KINDS[kind]}</p>
+<p style="color:#666;font-size:13px;margin:0 0 12px">${htmlEsc(who)}<br>Reply to: ${htmlEsc(email || 'no email given')}<br>Page: ${htmlEsc(page || '/')}</p>
+<p style="white-space:pre-wrap;border:3px solid #1b1b1b;border-radius:14px;padding:12px">${htmlEsc(message)}</p></div>`;
+    const subject = `[Painters Desk] ${FEEDBACK_KINDS[kind]}: ${message.replace(/\s+/g, ' ').slice(0, 60)}`;
+    try {
+      if (env.EMAIL) await env.EMAIL.send({ from: env.MAIL_FROM, to, subject, text, html, ...(email ? { replyTo: email } : {}) });
+      else {
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text, html, ...(email ? { reply_to: email } : {}) }),
+        });
+        if (!r.ok) throw new Error('Resend ' + r.status);
+      }
+      mailed = true;
+    } catch (e) { console.error('Feedback email failed', e); }
+  } else if (env.DEV_LOGIN === '1') {
+    console.log(`[dev feedback] ${kind} from ${email || 'anonymous'}: ${message}`);
+    mailed = true;
+  }
+  if (!saved && !mailed) throw new HttpError(503, "Sorry, feedback couldn't be sent right now. Please try again later");
+  return json({ ok: true });
+}
+
+const htmlEsc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function wwwRetireWorker(target) {
   return `self.addEventListener('install', () => self.skipWaiting());

@@ -13,3 +13,5 @@ GITHUB_CLIENT_SECRET=
 # Optional: confirmation and password-reset emails via Resend. Without them (and with DEV_LOGIN=1) emails print to the console.
 RESEND_API_KEY=
 MAIL_FROM=
+# Optional: where Feedback button messages are emailed (defaults to the first ADMIN_EMAILS address). Needs MAIL_FROM.
+FEEDBACK_TO=
