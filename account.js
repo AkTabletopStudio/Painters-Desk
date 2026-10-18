@@ -152,7 +152,9 @@ function mixHTML(mix){
 
 /* ---------- views & upvotes ---------- */
 const plural=(n,w)=>`${n.toLocaleString()} ${w}${n===1?'':'s'}`;
-const statsHTML=r=>`<span title="Upvotes">▲ ${r.votes.toLocaleString()}</span> · ${plural(r.views,'view')}`;
+// Upvote icon: a dropper paint bottle that fills with paint (the "full" ones are filled from the start).
+const bottle=full=>`<svg class="pb${full?' full':''}" viewBox="0 0 20 30" aria-hidden="true"><path class="tip" d="M8.5 1.5h3l1 5h-5z"/><rect class="cap" x="5" y="6.5" width="10" height="7" rx="1.5"/><path class="body" d="M4 14.5h12a1.5 1.5 0 0 1 1.5 1.5v10.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V16a1.5 1.5 0 0 1 1.5-1.5z"/><rect class="paint" x="4.2" y="16" width="11.6" height="10.7" rx="1"/><rect class="lbl" x="5.5" y="19" width="9" height="4.5" rx=".6"/></svg>`;
+const statsHTML=r=>`<span title="Upvotes">${bottle(1)} ${r.votes.toLocaleString()}</span> · ${plural(r.views,'view')}`;
 // Count a view once per browser session; the server ignores the author's own visits.
 function countView(r){
  if(r.visibility!=='public'||(ME&&ME.id===r.author.id))return;
@@ -161,9 +163,9 @@ function countView(r){
 function voteHTML(r,mine){
  if(r.visibility!=='public')return'';
  const n=r.votes.toLocaleString();
- const btn=mine?`<span class="btn vote" title="Upvotes from other painters" aria-disabled="true">▲ ${n}</span>`
-  :ME?`<button class="btn vote${r.voted?' on':''}" id="rVote" type="button" aria-pressed="${r.voted}">▲ ${r.voted?'Upvoted':'Upvote'} · ${n}</button>`
-  :`<a class="btn vote" href="#/account" title="Sign in to upvote">▲ Upvote · ${n}</a>`;
+ const btn=mine?`<span class="btn vote" title="Upvotes from other painters" aria-disabled="true">${bottle(1)} ${n}</span>`
+  :ME?`<button class="btn vote${r.voted?' on':''}" id="rVote" type="button" aria-pressed="${r.voted}">${bottle()}<span id="rVoteT">${r.voted?'Upvoted':'Upvote'} · ${n}</span></button>`
+  :`<a class="btn vote" href="#/account" title="Sign in to upvote">${bottle()}Upvote · ${n}</a>`;
  return `<div class="row">${btn}<span class="n">${plural(r.views,'view')}</span></div>`}
 
 /* ---------- one recipe / tutorial + comments ---------- */
@@ -192,7 +194,7 @@ async function renderRecipe(id){
  countView(r);
  if($('rVote'))$('rVote').onclick=async()=>{const b=$('rVote');b.disabled=true;
   try{const v=await api(`/recipes/${r.id}/vote`,{method:'PUT',body:{on:!r.voted}});r.voted=v.voted;r.votes=v.votes;
-   b.classList.toggle('on',r.voted);b.setAttribute('aria-pressed',r.voted);b.textContent=`▲ ${r.voted?'Upvoted':'Upvote'} · ${r.votes.toLocaleString()}`}
+   b.classList.toggle('on',r.voted);b.setAttribute('aria-pressed',r.voted);$('rVoteT').textContent=`${r.voted?'Upvoted':'Upvote'} · ${r.votes.toLocaleString()}`}
   catch(e){b.title=e.message}b.disabled=false};
  if($('rDel'))$('rDel').onclick=async()=>{if($('rDel').dataset.c){await api('/recipes/'+r.id,{method:'DELETE'});location.hash='#/recipes'}else{$('rDel').dataset.c=1;$('rDel').textContent='Click again to delete for good'}};
  const wireDel=()=>el.querySelectorAll('[data-dc]').forEach(b=>b.onclick=async()=>{await api('/comments/'+b.dataset.dc,{method:'DELETE'});b.closest('.cm').remove()});
