@@ -90,5 +90,15 @@ works as before. Locally, with `DEV_LOGIN=1` and no key, emails are printed in t
    - `MAIL_FROM`: the sender, e.g. `The Painters Desk <hello@paintersdesk.com>`.
 5. Needs migration `0005_email_tokens.sql`.
 
+### Or Cloudflare Email Sending (Workers Paid plan)
+
+Cloudflare only sends to arbitrary addresses on Workers Paid ($5 a month, which includes 3,000 emails a month).
+When the Worker has an `EMAIL` binding it is used instead of Resend:
+
+1. In the Cloudflare dashboard open **Compute > Email Service > Email Sending > Onboard Domain** and pick
+   paintersdesk.com (Cloudflare adds the DNS records itself).
+2. Add `"send_email": [{ "name": "EMAIL" }]` to `wrangler.jsonc` (only after step 1, or the deploy can fail).
+3. Keep the `MAIL_FROM` secret; `RESEND_API_KEY` is then not needed.
+
 Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
 tutorials. Uploaded icons go to the R2 bucket like tutorial photos. Needs migration `0004_profiles_passwords.sql`.

@@ -432,9 +432,10 @@ async function setPassword(request, env) {
 
 /* ---------- emails: confirm address, reset password ---------- */
 
-// Sent through Resend (resend.com) using the RESEND_API_KEY and MAIL_FROM secrets. With DEV_LOGIN=1 and no key,
-// emails are printed to the wrangler dev console instead.
-const mailReady = env => !!(env.RESEND_API_KEY && env.MAIL_FROM) || env.DEV_LOGIN === '1';
+// Sent from MAIL_FROM through Cloudflare Email Sending when the Worker has an EMAIL send_email binding
+// (Workers Paid plan), else through Resend (resend.com) with the RESEND_API_KEY secret.
+// With DEV_LOGIN=1 and neither, emails are printed to the wrangler dev console instead.
+const mailReady = env => !!((env.EMAIL || env.RESEND_API_KEY) && env.MAIL_FROM) || env.DEV_LOGIN === '1';
 const VERIFY_HOURS = 48, RESET_MINUTES = 60, RESEND_WAIT = 60000;
 
 async function sendMail(env, to, subject, text, link, button) {
@@ -443,6 +444,11 @@ async function sendMail(env, to, subject, text, link, button) {
 ${text.split('\n\n').map(p => `<p>${p.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</p>`).join('')}
 <p><a href="${link}" style="display:inline-block;background:#ffd23f;color:#1b1b1b;font-weight:700;text-decoration:none;padding:10px 18px;border:3px solid #1b1b1b;border-radius:14px">${button}</a></p>
 <p style="color:#666;font-size:13px">Or copy this link: ${link}</p></div>`;
+  if (env.EMAIL && env.MAIL_FROM) {
+    try { await env.EMAIL.send({ from: env.MAIL_FROM, to, subject, text: `${text}\n\n${button}: ${link}`, html }); }
+    catch (e) { console.error('Email Sending error', e); throw new HttpError(502, "Couldn't send the email, please try again later"); }
+    return;
+  }
   if (!env.RESEND_API_KEY) {
     if (env.DEV_LOGIN !== '1') throw new HttpError(503, 'Email is not set up on this server yet');
     console.log(`[dev email] to ${to}: ${subject}\n${link}`);
