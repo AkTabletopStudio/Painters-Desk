@@ -214,7 +214,10 @@ function renderPaints(){
 
 // Wheel page buttons for signed-in users.
 $('useMine').onclick=()=>{if(OWN)showOnWheel([...OWN])};
-$('addMine').onclick=()=>{const ks=P.filter(p=>p.on).map(p=>p.k);if(OWN&&ks.length){setOwned(ks,true);$('addMine').textContent=`Added ${ks.length} paints ✓`;renderNeu();draw();setTimeout(()=>$('addMine').textContent='Add ticked paints to my collection',2500)}};
+const addLbl=t=>{$('addMine').textContent=t;setTimeout(()=>$('addMine').textContent='Add ticked paints to my collection',2500)};
+$('addMine').onclick=()=>{if(!OWN)return;const ks=P.filter(p=>p.on).map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));if(!ks.length)return;if(!nw.length)return addLbl('Already in your collection ✓');
+ const d=$('addDlg'),n=nw.length,had=ks.length-n;$('addDlgM').textContent=`This adds ${n} paint${n===1?'':'s'} to your collection`+(had?` (${had} ticked already in it).`:'.');d.returnValue='';
+ d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(nw,true);addLbl(`Added ${n} paint${n===1?'':'s'} ✓`);renderNeu();draw()};d.showModal();$('addNo').focus()};
 $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel)draw()};
 
 /* ---------- recipes list ---------- */

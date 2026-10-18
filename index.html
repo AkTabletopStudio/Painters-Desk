@@ -75,6 +75,7 @@ nav.top .sp{flex:1}
 nav.top #acct{background:var(--pur);color:#fff;box-shadow:4px 4px 0 var(--ink)}nav.top #acct.on,nav.top #acct:hover{background:#6a22d0}
 nav.top img,.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;border:2px solid var(--ink);box-sizing:border-box}
 .btn.pri{background:var(--yel);color:#1b1b1b}.btn.dan{background:var(--red);color:#1b1b1b}
+dialog.pd{background:var(--card);color:var(--fg);border:3px solid var(--ink);border-radius:20px;box-shadow:6px 6px 0 var(--ink);padding:20px;max-width:min(420px,calc(100vw - 32px));box-sizing:border-box}dialog.pd::backdrop{background:rgba(27,27,27,.45)}dialog.pd h2{font-family:'Archivo Black',sans-serif;font-weight:400;font-size:20px;margin:0 0 8px}dialog.pd p{margin:0 0 16px;color:var(--mut)}dialog.pd .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .btn:disabled{opacity:.5;cursor:default;transform:none;box-shadow:none}
 .btn.vote{display:inline-flex;align-items:center;gap:7px}.btn.vote.on,.btn.save.on{background:var(--yel);color:#1b1b1b}span.btn.vote{cursor:default}span.btn.vote:hover{transform:none;box-shadow:3px 3px 0 var(--ink)}
 .pb{display:inline-block;width:16px;height:24px;vertical-align:-5px;overflow:visible}.pb .tip,.pb .cap{fill:var(--ink)}.pb .body{fill:var(--card);stroke:var(--ink);stroke-width:2}.pb .lbl{fill:#fff;stroke:#1b1b1b;stroke-width:1}
@@ -157,7 +158,7 @@ nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 <div class="bar"><input id="q" type="search" placeholder="Search paints (name or code)"> <button id="clr" type="button">Clear all</button></div>
 <p class="s">Tick a whole range, or open it and tick individual paints. Selections from different ranges and brands show on the wheel together. While searching, a range checkbox selects only the matches.</p>
 <div id="tree"></div>
-<div class="row" id="mine" hidden><button class="btn" type="button" id="useMine">Show my collection</button><button class="btn" type="button" id="addMine">Add ticked paints to my collection</button><label><input type="checkbox" id="onlyMine"> Matches from my paints only</label></div></details>
+<div class="row" id="mine" hidden><button class="btn" type="button" id="useMine">Show my collection</button><button class="btn" type="button" id="addMine">Add ticked paints to my collection</button><label><input type="checkbox" id="onlyMine"> Matches from my paints only</label></div><dialog class="pd" id="addDlg" aria-labelledby="addDlgT"><form method="dialog"><h2 id="addDlgT">Add to your collection?</h2><p id="addDlgM"></p><div class="row"><button class="btn" value="cancel" id="addNo" autofocus>Cancel</button><button class="btn pri" value="ok">Add paints</button></div></form></dialog></details>
 <label><input type="checkbox" id="lab" checked> Show labels</label>
 <div class="stage">
 <svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
