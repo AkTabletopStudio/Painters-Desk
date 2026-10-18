@@ -144,7 +144,7 @@ nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 .nmode{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:8px 0}
 .seg{display:inline-flex;gap:8px}.seg .btn{padding:6px 14px;font-size:14px}
 #nmmOpt{display:inline-flex;flex-wrap:wrap;gap:10px 16px;align-items:center}#nmmOpt[hidden]{display:none}
-#nSteps{font:inherit;font-weight:700;border:2px solid var(--ink);border-radius:10px;background:var(--card);color:var(--fg);padding:2px 6px}
+#nmmOpt .nsel{font:inherit;font-weight:700;border:2px solid var(--ink);border-radius:10px;background:var(--card);color:var(--fg);padding:2px 6px}
 .nrows{display:grid;gap:4px;margin:8px 0}
 .nrow{display:grid;grid-template-columns:88px 34px minmax(0,1fr) auto 30px;gap:8px;align-items:center;padding:5px 6px;border-radius:12px}
 .nrow.nbase{background:var(--bg);outline:2px solid var(--ink)}
@@ -158,6 +158,8 @@ nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 .nsk{font:inherit;font-weight:700;width:30px;height:30px;border:2px solid var(--ink);border-radius:50%;background:var(--card);color:var(--fg);cursor:pointer;padding:0}
 .nsk:hover{background:var(--yel);color:#1b1b1b}
 svg.blade{width:min(300px,100%);height:auto;display:block;margin:8px 0}
+.nwt{display:inline-block!important;margin-top:2px;font-size:11px!important;font-weight:700;border:2px solid var(--ink);border-radius:999px;padding:0 6px;background:#dff1fa;color:#1b1b1b!important}
+#nTintL[hidden]{display:none}
 </style></head><body><div class="wrap">
 <nav class="top" id="nav"><a href="#/welcome" data-v="welcome" class="home" title="Welcome"><img src="icons/icon-192.png" alt="">Painters Desk</a><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
 <section id="v-welcome" hidden>
@@ -175,13 +177,13 @@ svg.blade{width:min(300px,100%);height:auto;display:block;margin:8px 0}
 </section>
 <section id="v-wheel">
 <h1>The Painters Desk</h1>
-<p class="s">Hue runs around the wheel; paints nearer the rim are lighter, nearer the center darker. Tap a paint to see its complement and neighbors for underpainting, shading and glazing. Dashed outline = wash, glowing outline = fluorescent. Switch to <b>NMM</b> to build a non-metallic metal ramp from any paint, shadow to glint.</p>
+<p class="s">Hue runs around the wheel; paints nearer the rim are lighter, nearer the center darker. Tap a paint to see its complement and neighbors for underpainting, shading and glazing. Dashed outline = wash, glowing outline = fluorescent. Switch to <b>Ramps</b> to build a shadow-to-highlight ramp from any paint for non-metallic metal, object source lighting, gems, skin, zenithal highlights, edge highlights or glazing blends.</p>
 <details class="panel" id="pickd" open><summary><b>Choose paints</b> · <span id="cnt"></span></summary>
 <div class="bar"><input id="q" type="search" placeholder="Search paints (name or code)"> <button id="clr" type="button">Clear all</button></div>
 <p class="s">Tick a whole range, or open it and tick individual paints. Selections from different ranges and brands show on the wheel together. While searching, a range checkbox selects only the matches.</p>
 <div id="tree"></div>
 <div class="row" id="mine" hidden><button class="btn" type="button" id="useMine">Show my collection</button><button class="btn" type="button" id="addMine">Add ticked paints to my collection</button><label><input type="checkbox" id="onlyMine"> Matches from my paints only</label></div><dialog class="pd" id="addDlg" aria-labelledby="addDlgT"><form method="dialog"><h2 id="addDlgT">Add to your collection?</h2><p id="addDlgM"></p><div class="row"><button class="btn" value="cancel" id="addNo" autofocus>Cancel</button><button class="btn pri" value="ok">Add paints</button></div></form></dialog></details>
-<div class="row nmode"><span class="seg" role="group" aria-label="Wheel mode"><button class="btn pri" type="button" id="mCol" aria-pressed="true">Colours</button><button class="btn" type="button" id="mNmm" aria-pressed="false" title="Non-metallic metal: build a light ramp from one paint">NMM</button></span><label><input type="checkbox" id="lab" checked> Show labels</label><span id="nmmOpt" hidden><label>Steps <select id="nSteps"><option value="5">5</option><option value="7" selected>7</option></select></label> <label><input type="checkbox" id="nTint"> Tint the deepest shadow</label></span></div>
+<div class="row nmode"><span class="seg" role="group" aria-label="Wheel mode"><button class="btn pri" type="button" id="mCol" aria-pressed="true">Colours</button><button class="btn" type="button" id="mNmm" aria-pressed="false" title="Build a light-to-dark ramp from one paint for NMM, OSL, gems, skin, highlights or glazes">Ramps</button></span><label><input type="checkbox" id="lab" checked> Show labels</label><span id="nmmOpt" hidden><label>Technique <select id="nTech" class="nsel"></select></label><label>Steps <select id="nSteps" class="nsel"><option value="5">5</option><option value="7" selected>7</option></select></label> <label id="nTintL"><input type="checkbox" id="nTint"> <span id="nTintT">Tint the deepest shadow</span></label></span></div>
 <div class="stage">
 <svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
 <div class="panel" id="sel"><b>Tap a paint on the wheel.</b></div>
