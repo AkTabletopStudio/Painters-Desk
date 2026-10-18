@@ -5,7 +5,7 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BYKEY=new Map(P.map(p=>[p.k,p]));
-const VIEWS=['wheel','paints','recipes','recipe','edit','account'];
+const VIEWS=['wheel','paints','recipes','recipe','edit','account','profile'];
 let ME=null,INFO=null,API=false;
 
 async function api(path,{method='GET',body}={}){
@@ -14,18 +14,22 @@ async function api(path,{method='GET',body}={}){
  if(!r.ok){const e=new Error(d.error||'Something went wrong ('+r.status+')');e.status=r.status;throw e}
  return d}
 const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+const cardHTML=r=>`<a class="card" href="#/recipe/${esc(r.id)}">${r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} step${r.steps===1?'':'s'}</span>`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`;
 const swatch=p=>p?`<i style="background:${p.h}" title="${esc(p.n)}"></i>`:'<i title="Unknown paint"></i>';
 const pchip=(k,x)=>{const p=BYKEY.get(k);return p?`<span class="chip" data-k="${esc(k)}"><i style="background:${p.h}"></i>${star(p)}${esc(p.n)} <span style="color:var(--mut)">${esc(p.c)} · ${esc(GL[p.g])}</span>${x?' <span class="x" title="Remove">×</span>':''}</span>`:`<span class="chip" data-k="${esc(k)}"><i></i>Unknown paint${x?' <span class="x">×</span>':''}</span>`};
 const signInLink=(why)=>`<p class="s">${why} <a href="#/account">Sign in</a> to continue.</p>`;
+// A small round picture, or the first letter of the name when there isn't one.
+const avHTML=(u,cls='av')=>u.avatar?`<img class="${cls}" src="${esc(u.avatar)}" alt="">`:`<span class="${cls} ini" aria-hidden="true">${esc((u.name||'?').trim().charAt(0).toUpperCase())}</span>`;
+const who=a=>`<a class="plink" href="#/u/${esc(a.id)}">${avHTML(a)}${esc(a.name)}</a>`;
 function showOnWheel(keys){const s=new Set(keys);P.forEach(p=>p.on=s.has(p.k));sync();location.hash='#/'}
 
 /* ---------- session ---------- */
 async function loadMe(){
  // The extra tabs only show once there is a way to sign in (or someone is already signed in).
- try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length)}catch(e){API=false;ME=null}
+ try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
  if(ME){try{OWN=new Set((await api('/collection')).paints)}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
  document.querySelectorAll('#nav a[data-v]').forEach(a=>{if(a.dataset.v!=='wheel')a.hidden=!API});
- $('acct').innerHTML=ME?(ME.avatar?`<img src="${esc(ME.avatar)}" alt="">`:'')+esc(ME.name):'Sign in';
+ $('acct').innerHTML=ME?avHTML(ME)+esc(ME.name):'Sign in';
  $('mine').hidden=!ME;
  renderNeu();draw()}
 
@@ -33,7 +37,7 @@ async function loadMe(){
 function route(){
  const h=location.hash.replace(/^#\/?/,''),[v,id,sub]=h.split(/[/?]/);
  let view=v||'wheel';
- if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';
+ if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
  if(!VIEWS.includes(view)||(!API&&view!=='wheel'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
@@ -43,32 +47,97 @@ function route(){
  else if(view==='recipe')renderRecipe(id);
  else if(view==='edit')renderEdit(v==='new'?null:id);
  else if(view==='account')renderAccount();
+ else if(view==='profile')renderProfile(id);
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 $('footMore').onclick=()=>setTimeout(()=>$('foot').scrollIntoView({block:'end'}),50);
 
 /* ---------- account ---------- */
+const LOGIN_NAMES={email:'Email and password',google:'Google',discord:'Discord',github:'GitHub',dev:'Dev sign-in'};
+let authMode='in';
 function renderAccount(){
  const el=$('v-account'),ret=encodeURIComponent('/#/');
  const err=/error=/.test(location.hash)?'<p class="err">Sign-in was cancelled or failed. Please try again.</p>':'';
  if(!ME){
   const btns=INFO.providers.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${ret}">Continue with ${esc(p.label)}</a>`).join(' ');
-  el.innerHTML=`<h1>Sign in</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. Your first sign-in creates your account. See the <a href="privacy.html">privacy policy</a> for what we store.</p>
-  <div class="row">${btns||'<span class="s">No sign-in methods are set up on this server yet.</span>'}</div>
+  const up=authMode==='up';
+  el.innerHTML=`<h1>${up?'Create an account':'Sign in'}</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. See the <a href="privacy.html">privacy policy</a> for what we store.</p>
+  ${btns?`<div class="row">${btns}</div><p class="s">Your first sign-in with one of these creates your account.</p><p class="or"><span>or use your email</span></p>`:''}
+  <div class="row"><button class="btn${up?'':' pri'}" type="button" data-m="in">Sign in</button><button class="btn${up?' pri':''}" type="button" data-m="up">Create account</button></div>
+  <form id="pwForm">${up?'<label class="f"><span>Display name</span><input type="text" id="aName" maxlength="40" autocomplete="nickname" required></label>':''}
+  <label class="f"><span>Email</span><input type="email" class="inp" id="aEmail" maxlength="200" autocomplete="email" required></label>
+  <label class="f"><span>Password${up?' (at least 8 characters)':''}</span><input type="password" class="inp" id="aPw" minlength="${up?8:1}" maxlength="200" autocomplete="${up?'new-password':'current-password'}" required></label>
+  <div class="row"><button class="btn pri" type="submit" id="aGo">${up?'Create account':'Sign in'}</button><span class="err" id="aErr"></span></div></form>
+  <p class="s">${up?'We can\'t email you yet, so there is no password reset link. Keep your password safe, or link Google from your account page as a backup way in.':'Forgot your password? There is no email reset yet. If you linked Google to your account, sign in with that and set a new password from your account page.'}</p>
   ${INFO.devLogin?`<div class="row"><input class="inp" id="devName" placeholder="Test user name" value="Test Painter" style="max-width:220px"><button class="btn" id="devGo" type="button">Dev sign-in</button><span class="s">Local testing only.</span></div>`:''}</div>`;
+  el.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{authMode=b.dataset.m;renderAccount()});
+  $('pwForm').onsubmit=async e=>{e.preventDefault();$('aGo').disabled=true;$('aErr').textContent='';
+   try{await api(up?'/auth/register':'/auth/password',{method:'POST',body:{email:$('aEmail').value,password:$('aPw').value,name:up?$('aName').value:undefined}});
+    await loadMe();if(up){history.replaceState(null,'','#/account');renderAccount()}else location.hash='#/'}
+   catch(e){$('aErr').textContent=e.message;$('aGo').disabled=false}};
   if(INFO.devLogin)$('devGo').onclick=()=>location.href=`/api/auth/dev?name=${encodeURIComponent($('devName').value)}&return=${ret}`;
   return}
- const linked=new Set(INFO.logins),more=INFO.providers.filter(p=>!linked.has(p.id));
- el.innerHTML=`<h1>${ME.avatar?`<img class="av" src="${esc(ME.avatar)}" alt="">`:''}${esc(ME.name)}</h1>
- <div class="panel"><p>${ME.email?esc(ME.email):'<span class="s">No email on file</span>'}${ME.admin?' <span class="tag">admin</span>':''}</p>
- <p class="s">Signed in with: ${INFO.logins.map(esc).join(', ')}</p>
+ const linked=new Set(INFO.logins),more=INFO.providers.filter(p=>!linked.has(p.id)),hasPw=linked.has('email');
+ let fav=[...ME.favourites],icon=ME.avatar_image,busy=0;
+ el.innerHTML=`<h1>${avHTML(ME)}${esc(ME.name)}</h1>
+ <p><a href="#/u/${esc(ME.id)}">View your public profile →</a></p>
+ <div class="panel"><h2>Your profile</h2><p class="s">Everything here is public: anyone can see your icon, name, about text, link, favourite paints and your public recipes and tutorials. Your email is never shown.</p>
+ <div class="f"><span>Icon</span><div id="pIcon"></div></div>
+ <label class="f"><span>Display name</span><input type="text" id="pName" maxlength="40"></label>
+ <label class="f"><span>About you</span><textarea id="pBio" maxlength="500" style="min-height:80px" placeholder="What you paint, your favourite armies, how long you've been painting…"></textarea></label>
+ <label class="f"><span>Link (optional, e.g. your Instagram or YouTube)</span><input type="url" id="pLink" maxlength="300" placeholder="https://"></label>
+ <div class="f"><span>Favourite paints (up to 24)</span><div id="pFav"></div></div>
+ <div class="row"><button class="btn pri" id="pSave" type="button">Save profile</button><span class="s" id="pMsg"></span></div></div>
+ <div class="panel"><h2>Signing in</h2>
+ <p>${ME.email?esc(ME.email)+(ME.email_verified?'':' <span class="tag" title="Typed in at sign-up. Sign in with Google using this email to confirm it.">not confirmed</span>'):'<span class="s">No email on file</span>'}${ME.admin?' <span class="tag">admin</span>':''}</p>
+ <p class="s">Signed in with: ${INFO.logins.map(l=>esc(LOGIN_NAMES[l]||l)).join(', ')}</p>
  ${more.length?`<div class="row"><span class="s">Link another sign-in:</span>${more.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${encodeURIComponent('/#/account')}">${esc(p.label)}</a>`).join(' ')}</div>`:''}
- <p class="s">${OWN.size} paints in your collection.</p>
+ <form id="pwSet"><h3>${hasPw?'Change password':'Add a password'}</h3>${hasPw?'':`<p class="s">Then you can also sign in with ${ME.email?'your email':'an email'} and password.</p>`}
+ ${ME.email?'':'<label class="f"><span>Email</span><input type="email" class="inp" id="sEmail" maxlength="200" autocomplete="email" required></label>'}
+ ${hasPw?'<label class="f"><span>Current password</span><input type="password" class="inp" id="sCur" maxlength="200" autocomplete="current-password" required></label>':''}
+ <label class="f"><span>New password (at least 8 characters)</span><input type="password" class="inp" id="sPw" minlength="8" maxlength="200" autocomplete="new-password" required></label>
+ <div class="row"><button class="btn" type="submit" id="sGo">${hasPw?'Change password':'Add password'}</button><span class="s" id="sMsg"></span></div></form></div>
+ <div class="panel"><p class="s">${OWN.size} paints in your collection.</p>
  <div class="row"><button class="btn" id="out" type="button">Sign out</button><button class="btn dan" id="del" type="button">Delete my account</button></div>
- <div id="delc" hidden class="row"><span class="err">This deletes your collection, recipes and comments for good.</span><button class="btn dan" id="del2" type="button">Yes, delete everything</button></div></div>`;
+ <div id="delc" hidden class="row"><span class="err">This deletes your profile, collection, recipes and comments for good.</span><button class="btn dan" id="del2" type="button">Yes, delete everything</button></div></div>`;
+ $('pName').value=ME.name;$('pBio').value=ME.bio;$('pLink').value=ME.link;
+ const drawIcon=()=>{const box=$('pIcon');
+  box.innerHTML=`<div class="row">${avHTML({name:ME.name,avatar:icon?imgURL(icon):ME.provider_avatar},'av big')}<label class="btn">Upload a picture<input type="file" accept="image/*" hidden></label>${icon?'<button class="btn" type="button" data-rm>Remove</button>':''}<span class="s" data-st></span></div>${icon?'':'<p class="s">Without an upload, your picture from Google, Discord or GitHub is used (or your first letter).</p>'}`;
+  box.querySelector('input').onchange=async e=>{const f=e.target.files[0];if(!f)return;const st=box.querySelector('[data-st]');st.textContent='Uploading…';busy++;
+   try{icon=await uploadPhoto(f,true);drawIcon();$('pMsg').textContent='Press Save profile to keep the new icon.'}catch(err){st.textContent=err.message;st.className='err'}busy--};
+  const rm=box.querySelector('[data-rm]');if(rm)rm.onclick=()=>{icon='';drawIcon()}};
+ drawIcon();
+ const drawFav=()=>{const box=$('pFav');box.innerHTML=`<div class="chips">${fav.map(k=>pchip(k,1)).join('')}</div>${fav.length<24?'<div></div>':''}`;
+  box.querySelectorAll('.x').forEach(x=>x.onclick=()=>{fav=fav.filter(k=>k!==x.closest('.chip').dataset.k);drawFav()});
+  if(fav.length<24)paintSearch(box.lastElementChild,()=>fav,k=>{if(fav.length<24)fav.push(k);drawFav();box.querySelector('input[type=search]')?.focus()})};
+ drawFav();
+ $('pSave').onclick=async()=>{if(busy){$('pMsg').textContent='Please wait for the picture to finish uploading.';return}
+  $('pSave').disabled=true;$('pMsg').className='s';$('pMsg').textContent='Saving…';
+  try{ME=(await api('/me/profile',{method:'PUT',body:{name:$('pName').value,bio:$('pBio').value,link:$('pLink').value.trim(),favourites:fav,icon}})).user;INFO.user=ME;
+   $('acct').innerHTML=avHTML(ME)+esc(ME.name);renderAccount();$('pMsg').textContent='Saved.'}
+  catch(e){$('pMsg').className='err';$('pMsg').textContent=e.message;$('pSave').disabled=false}};
+ $('pwSet').onsubmit=async e=>{e.preventDefault();$('sGo').disabled=true;$('sMsg').className='s';$('sMsg').textContent='';
+  try{await api('/me/password',{method:'PUT',body:{password:$('sPw').value,current:$('sCur')?.value,email:$('sEmail')?.value}});
+   INFO=await api('/me');ME=INFO.user;renderAccount();$('sMsg').textContent=hasPw?'Password changed.':'Password added.'}
+  catch(e){$('sMsg').className='err';$('sMsg').textContent=e.message;$('sGo').disabled=false}};
  $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
  $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});await loadMe();location.hash='#/'}}
+
+/* ---------- public profile ---------- */
+async function renderProfile(id){
+ const el=$('v-profile');el.innerHTML='<p class="s">Loading…</p>';
+ let d;try{d=await api('/users/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
+ const p=d.profile,mine=ME&&ME.id===p.id;
+ el.innerHTML=`<div class="prof">${avHTML(p,'av huge')}<div><h1>${esc(p.name)}</h1><p class="s">Painting with us since ${fmtDate(p.created_at)}</p>
+ ${p.link?`<p><a href="${esc(p.link)}" target="_blank" rel="noopener nofollow ugc">${esc(p.link.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,''))}</a></p>`:''}
+ ${mine?'<a class="btn" href="#/account">Edit profile</a>':''}</div></div>
+ ${p.bio?`<div class="panel"><div class="steps">${esc(p.bio)}</div></div>`:''}
+ <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
+ <h2>Public recipes &amp; tutorials</h2>
+ <div class="cards">${d.recipes.map(cardHTML).join('')||`<p class="s">${mine?'Nothing public yet. Make a recipe or tutorial public to show it here.':'Nothing shared yet.'}</p>`}</div>`;
+ el.querySelectorAll('#fp .chip').forEach(c=>c.onclick=()=>{const q=BYKEY.get(c.dataset.k);if(q){showOnWheel([q.k]);setTimeout(()=>showP(q),0)}});
+ if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites)}
 
 /* ---------- my paints ---------- */
 let pend={add:new Set(),remove:new Set()},saveT=0;
@@ -117,7 +186,7 @@ async function renderRecipes(){
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&q=${encodeURIComponent($('rq').value)}`);
-   L.innerHTML=d.recipes.length?d.recipes.map(r=>`<a class="card" href="#/recipe/${esc(r.id)}">${r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} step${r.steps===1?'':'s'}</span>`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`).join('')
+   L.innerHTML=d.recipes.length?d.recipes.map(cardHTML).join('')
     :`<p class="s">${rScope==='mine'?'You have not written any recipes yet.':rScope==='saved'?'Nothing saved yet. Press ☆ Save on a tutorial or recipe to keep it here.':'No public recipes yet. Be the first to share one.'}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  load()}
@@ -125,11 +194,12 @@ async function renderRecipes(){
 /* ---------- photos & video ---------- */
 const imgURL=id=>'/api/images/'+encodeURIComponent(id);
 // Shrink a photo in the browser (long edge 1600px, JPEG) before uploading, so phone photos upload fast.
-async function uploadPhoto(file){
+// With icon set, crops the middle square and shrinks it to 256px for a profile icon.
+async function uploadPhoto(file,icon){
  if(!/^image\//.test(file.type))throw new Error('Please choose a photo');
- const bmp=await createImageBitmap(file),k=Math.min(1,1600/Math.max(bmp.width,bmp.height));
- const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
- c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+ const bmp=await createImageBitmap(file),c=document.createElement('canvas');
+ if(icon){const s=Math.min(bmp.width,bmp.height);c.width=c.height=Math.min(256,s);c.getContext('2d').drawImage(bmp,(bmp.width-s)/2,(bmp.height-s)/2,s,s,0,0,c.width,c.height)}
+ else{const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height)}
  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
  const r=await fetch('/api/images',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'image/jpeg'},body:blob});
  const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Upload failed');return d.id}
@@ -152,6 +222,16 @@ function mixHTML(mix){
  const ratio=mix.length>1?`<b>${mix.map(m=>m.parts).join(':')} mix</b> of `:'';
  const mc=mixColour(mix);
  return `<div class="mix">${ratio}${mix.map(m=>{const p=BYKEY.get(m.k);return `<span class="chip" data-k="${esc(m.k)}"><i style="background:${p?p.h:'#888'}"></i>${p?star(p)+esc(p.n):'Unknown paint'}${mix.length>1?` <em>×${m.parts}</em>`:''}${p?` <span style="color:var(--mut)">${esc(GL[p.g])}</span>`:''}</span>`}).join('')}${mc?`<span class="chip" title="Rough estimate from the swatch colours"><i style="background:${mc}"></i>≈ mixed</span>`:''}</div>`}
+
+// A paint search box; calls onPick(paintKey).
+function paintSearch(box,exclude,onPick){
+ box.innerHTML=`<input class="inp" type="search" placeholder="Add a paint (search name or code)">${OWN.size?'<label class="s"><input type="checkbox"> my paints only</label>':''}<div class="res" hidden></div>`;
+ const q=box.querySelector('input[type=search]'),mine=box.querySelector('input[type=checkbox]'),R=box.querySelector('.res');
+ const go=()=>{const t=q.value.trim().toLowerCase();if(!t){R.hidden=true;return}const ex=exclude();
+  const hits=P.filter(p=>(p.n+' '+p.c).toLowerCase().includes(t)&&!ex.includes(p.k)&&(!mine?.checked||OWN.has(p.k))).slice(0,30);
+  R.hidden=false;R.innerHTML=hits.map(p=>`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
+  R.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>onPick(d.dataset.k))};
+ q.oninput=go;if(mine)mine.onchange=go}
 
 /* ---------- views & upvotes ---------- */
 const plural=(n,w)=>`${n.toLocaleString()} ${w}${n===1?'':'s'}`;
@@ -179,7 +259,7 @@ async function renderRecipe(id){
  let d;try{d=await api('/recipes/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
  const r=d.recipe,mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
- <p class="s"><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>by ${r.author.avatar?`<img class="av" src="${esc(r.author.avatar)}" alt="">`:''}${esc(r.author.name)} · updated ${fmtDate(r.updated_at)}</p>
+ <p class="s"><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
  ${voteHTML(r,mine)}
  ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank"><img class="ph cover" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
  ${r.summary?`<p>${esc(r.summary)}</p>`:''}
@@ -211,7 +291,7 @@ async function renderRecipe(id){
  if($('cGo'))$('cGo').onclick=async()=>{const t=$('cBody').value.trim();if(!t)return;$('cGo').disabled=true;$('cErr').textContent='';
   try{const c=(await api(`/recipes/${r.id}/comments`,{method:'POST',body:{body:t}})).comment;$('nocm')?.remove();$('cms').insertAdjacentHTML('beforeend',cmHTML(c,true));$('cBody').value='';wireDel()}
   catch(e){$('cErr').textContent=e.message}$('cGo').disabled=false}}
-const cmHTML=(c,del)=>`<div class="cm"><div class="who">${c.author.avatar?`<img class="av" src="${esc(c.author.avatar)}" alt="">`:''}<b>${esc(c.author.name)}</b> · ${fmtDate(c.created_at)}${del?` <button class="lnk" data-dc="${esc(c.id)}" type="button">delete</button>`:''}</div><p>${esc(c.body)}</p></div>`;
+const cmHTML=(c,del)=>`<div class="cm"><div class="who"><b>${who(c.author)}</b> · ${fmtDate(c.created_at)}${del?` <button class="lnk" data-dc="${esc(c.id)}" type="button">delete</button>`:''}</div><p>${esc(c.body)}</p></div>`;
 
 /* ---------- create / edit ---------- */
 const STEP_NAMES=['Prime','Zenithal','Base coat','Wash / shade','Layer','Highlight','Edge highlight','Glaze','Drybrush','Details','Freehand','Weathering','Basing','Varnish'];
@@ -249,16 +329,6 @@ async function renderEdit(id){
    const rm=box.querySelector('[data-rm]');if(rm)rm.onclick=()=>{set('');draw()}};
   draw()}
  photoSlot($('eCover'),()=>cover,v=>cover=v,'Add main photo');
-
- // A paint search box; calls onPick(paintKey).
- function paintSearch(box,exclude,onPick){
-  box.innerHTML=`<input class="inp" type="search" placeholder="Add a paint (search name or code)">${OWN.size?'<label class="s"><input type="checkbox"> my paints only</label>':''}<div class="res" hidden></div>`;
-  const q=box.querySelector('input[type=search]'),mine=box.querySelector('input[type=checkbox]'),R=box.querySelector('.res');
-  const go=()=>{const t=q.value.trim().toLowerCase();if(!t){R.hidden=true;return}const ex=exclude();
-   const hits=P.filter(p=>(p.n+' '+p.c).toLowerCase().includes(t)&&!ex.includes(p.k)&&(!mine?.checked||OWN.has(p.k))).slice(0,30);
-   R.hidden=false;R.innerHTML=hits.map(p=>`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
-   R.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>onPick(d.dataset.k))};
-  q.oninput=go;if(mine)mine.onchange=go}
 
  function drawExtra(){const box=$('eX');box.innerHTML=`<div class="chips">${extra.map(k=>pchip(k,1)).join('')}</div><div></div>`;
   box.querySelectorAll('.x').forEach(x=>x.onclick=()=>{extra=extra.filter(k=>k!==x.closest('.chip').dataset.k);drawExtra()});

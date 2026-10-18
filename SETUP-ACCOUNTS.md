@@ -12,7 +12,9 @@ cp .dev.vars.example .dev.vars     # DEV_LOGIN=1 turns on the test sign-in butto
 npm run dev                        # applies the database migration locally, then serves http://localhost:8787
 ```
 
-Open http://localhost:8787, click **Sign in**, type any name and press **Dev sign-in**. Use two names (two browser
+Open http://localhost:8787, click **Sign in**, type any name and press **Dev sign-in**. You can also press **Create account** to
+make an email + password account. Adding `&email=you@example.com` to a `/api/auth/dev` link acts like a sign-in
+service that verified that email, to try account linking. Use two names (two browser
 profiles) to try comments between users.
 
 ## Before it can go live
@@ -59,3 +61,17 @@ renewed every six months.
   saved are not cleaned up yet.
 - Private recipes return "not found" to everyone except the owner. Comments are only allowed on public recipes,
   by signed-in users, with a 10-second gap between comments per user.
+
+## Email + password accounts and profiles
+
+Anyone can create an account with an email and password (no keys needed). Passwords are stored as salted
+PBKDF2-SHA256 hashes (20,000 rounds, so sign-in fits the Workers Free plan's 10 ms CPU limit; on the Paid plan raise
+`PBKDF2_ITER` in `worker/index.js` up to 100,000 and passwords upgrade as people sign in); ten wrong passwords lock that account's password sign-in
+for 15 minutes. There is no mail provider yet, so emails typed at sign-up are **not confirmed** and there is no
+password-reset email. Until confirmed, such an email never grants admin rights, and if someone later signs in with
+Google (or another service) that verifies the same email, that person gets the account and the unconfirmed password
+is removed. A signed-in user who links a service with the same email keeps their password and the email becomes
+confirmed.
+
+Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
+tutorials. Uploaded icons go to the R2 bucket like tutorial photos. Needs migration `0004_profiles_passwords.sql`.

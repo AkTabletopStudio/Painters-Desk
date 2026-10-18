@@ -107,6 +107,14 @@ nav.top img,.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;m
 .mrow .x{cursor:pointer;color:var(--mut);font-weight:700;padding:0 4px}
 .step h2{font-size:18px}
 .lnk{background:none;border:none;color:var(--mut);cursor:pointer;font:inherit;font-size:13px;padding:0 4px;text-decoration:underline}
+.av.ini{display:inline-flex;align-items:center;justify-content:center;background:var(--yel);color:#1b1b1b;font:400 12px/1 'Archivo Black',sans-serif}
+.av.big{width:64px;height:64px;border-width:3px;font-size:28px}.av.huge{width:112px;height:112px;border-width:3px;font-size:48px;box-shadow:5px 5px 0 var(--ink);flex:none;object-fit:cover;margin:0}
+img.av{object-fit:cover}
+.prof{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:8px 0 14px}.prof h1{margin:0 0 4px}
+.plink{color:inherit;font-weight:700;text-decoration:none}.plink:hover{text-decoration:underline}
+.or{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:13px;font-weight:700;margin:14px 0 4px}.or::before,.or::after{content:'';flex:1;border-top:3px dashed var(--ink)}
+.panel h3{font-size:15px;margin:16px 0 4px}
+.f input[type=email],.f input[type=password]{width:100%;box-sizing:border-box}
 :focus-visible{outline:3px solid var(--blu);outline-offset:2px}
 </style></head><body><div class="wrap">
 <nav class="top" id="nav"><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
@@ -131,6 +139,7 @@ nav.top img,.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;m
 <section id="v-recipe" hidden></section>
 <section id="v-edit" hidden></section>
 <section id="v-account" hidden></section>
+<section id="v-profile" hidden></section>
 <footer id="foot">
 <p class="s" id="footFull"><b>The Painters Desk</b> is created by AK Tabletop Studio. © 2026 AK Tabletop Studio. AK Tabletop Studio is not affiliated with AK Interactive. Swatch colours are estimates and will differ from the real paints. Many Vallejo Game Color swatches and some Pro Acryl and AK 3rd Gen swatches are sampled from Antinea's photo databases of airbrushed bottle caps. Cross-brand matches are close, never exact; they draw on the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart, plus a nearest-colour calculation. This tool is unofficial and not affiliated with or endorsed by Games Workshop, The Army Painter, Monument Hobbies, Vallejo, AK Interactive or Two Thin Coats. Paint names are trademarks of their owners. <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
 <p class="s" id="footShort" hidden>© 2026 AK Tabletop Studio. Swatch colours are estimates. Unofficial, not affiliated with any paint brand. <a href="#/" id="footMore" style="color:inherit">Full notice</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>

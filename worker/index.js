@@ -83,6 +83,11 @@ async function route(request, env, url) {
   let r;
   if (p === '/api/me' && m === 'GET') return me(request, env);
   if (p === '/api/me' && m === 'DELETE') return deleteAccount(request, env);
+  if (p === '/api/me/profile' && m === 'PUT') return saveProfile(request, env);
+  if (p === '/api/me/password' && m === 'PUT') return setPassword(request, env);
+  if ((r = p.match(/^\/api\/users\/([\w-]+)$/)) && m === 'GET') return getProfile(request, env, r[1]);
+  if (p === '/api/auth/register' && m === 'POST') return register(request, env, url);
+  if (p === '/api/auth/password' && m === 'POST') return passwordLogin(request, env, url);
   if ((r = p.match(/^\/api\/auth\/login\/(\w+)$/)) && m === 'GET') return oauthStart(request, env, url, r[1]);
   if ((r = p.match(/^\/api\/auth\/callback\/(\w+)$/)) && m === 'GET') return oauthCallback(request, env, url, r[1]);
   if (p === '/api/auth/dev' && m === 'GET') return devLogin(request, env, url);
@@ -145,14 +150,21 @@ async function sha256(s) {
 
 const adminEmails = env => (env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
 
+// A user's picture: their uploaded icon if they chose one, else the picture from their sign-in service.
+const AVATAR = "CASE WHEN u.avatar_image != '' THEN '/api/images/' || u.avatar_image ELSE u.avatar END";
+
 async function currentUser(request, env) {
   const token = cookies(request)[SESSION_COOKIE];
   if (!token) return null;
   const row = await env.DB.prepare(
-    'SELECT u.id, u.name, u.email, u.avatar FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.created_at
+     FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now()).first();
   if (!row) return null;
-  row.admin = !!row.email && adminEmails(env).includes(row.email.toLowerCase());
+  // Only a verified email can grant admin rights, so typing someone's address at sign-up gains nothing.
+  row.admin = !!row.email && !!row.email_verified && adminEmails(env).includes(row.email.toLowerCase());
+  row.email_verified = !!row.email_verified;
+  row.favourites = JSON.parse(row.favourites || '[]');
   return row;
 }
 
@@ -190,15 +202,20 @@ async function me(request, env) {
   const providers = Object.entries(PROVIDERS).filter(([, p]) => p.id(env) && p.secret(env)).map(([k, p]) => ({ id: k, label: p.label }));
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
-  return json({ user, logins, providers, devLogin: env.DEV_LOGIN === '1' });
+  // Email + password sign-up is always available; logins includes 'email' once a password is set.
+  return json({ user, logins, providers, passwords: true, devLogin: env.DEV_LOGIN === '1' });
 }
 
-async function startSession(env, url, userId, returnTo) {
+async function sessionCookie(env, url, userId) {
   const token = randomToken();
   await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
     .bind(await sha256(token), userId, now() + SESSION_DAYS * 864e5).run();
+  return setCookie(url, SESSION_COOKIE, token, { maxAge: SESSION_DAYS * 86400 });
+}
+
+async function startSession(env, url, userId, returnTo) {
   const headers = new Headers({ Location: safeReturn(returnTo) });
-  headers.append('Set-Cookie', setCookie(url, SESSION_COOKIE, token, { maxAge: SESSION_DAYS * 86400 }));
+  headers.append('Set-Cookie', await sessionCookie(env, url, userId));
   headers.append('Set-Cookie', setCookie(url, OAUTH_COOKIE, '', { maxAge: 0, path: '/api/auth' }));
   return new Response(null, { status: 302, headers });
 }
@@ -211,12 +228,23 @@ async function upsertIdentity(env, request, provider, prof) {
     await env.DB.prepare('UPDATE users SET avatar = COALESCE(?, avatar) WHERE id = ?').bind(prof.avatar, ident.user_id).run();
     return ident.user_id;
   }
-  let userId = (await currentUser(request, env))?.id;
-  if (!userId && prof.email) {
-    const byEmail = await env.DB.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').bind(prof.email).first();
-    userId = byEmail?.id;
-  }
   const t = now(), stmts = [];
+  const signedIn = await currentUser(request, env);
+  let userId = signedIn?.id;
+  if (!userId && prof.email) {
+    const byEmail = await env.DB.prepare('SELECT id, email_verified FROM users WHERE email = ? COLLATE NOCASE').bind(prof.email).first();
+    userId = byEmail?.id;
+    // The account's email was typed in at sign-up and never confirmed, so whoever set its password may not own
+    // that address. The verified owner gets the account: the old password and its sessions are removed,
+    // and they can set a new password from the account page.
+    if (byEmail && !byEmail.email_verified) stmts.push(
+      env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(userId),
+      env.DB.prepare("DELETE FROM identities WHERE user_id = ? AND provider = 'email'").bind(userId),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+    );
+  }
+  // A sign-in service confirming the account's own email marks it verified.
+  if (userId && prof.email) stmts.push(env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ? AND email = ? COLLATE NOCASE').bind(userId, prof.email));
   if (!userId) {
     userId = crypto.randomUUID();
     stmts.push(env.DB.prepare('INSERT INTO users (id, name, email, avatar, created_at) VALUES (?, ?, ?, ?, ?)')
@@ -268,10 +296,11 @@ async function oauthCallback(request, env, url, name) {
 }
 
 // Local development only: sign in as a named test user without any OAuth keys. Enabled by DEV_LOGIN=1 in .dev.vars.
+// &email=… acts like a sign-in service that verified that email, to try account linking.
 async function devLogin(request, env, url) {
   if (env.DEV_LOGIN !== '1') throw new HttpError(404, 'Not found');
   const name = str(url.searchParams.get('name') || 'Test Painter', 60, 'Name');
-  const userId = await upsertIdentity(env, request, 'dev', { id: name.toLowerCase(), name, email: null, avatar: null });
+  const userId = await upsertIdentity(env, request, 'dev', { id: name.toLowerCase(), name, email: url.searchParams.get('email') || null, avatar: null });
   return startSession(env, url, userId, url.searchParams.get('return'));
 }
 
@@ -279,6 +308,151 @@ async function logout(request, env, url) {
   const token = cookies(request)[SESSION_COOKIE];
   if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
   return json({ ok: true }, 200, { 'Set-Cookie': setCookie(url, SESSION_COOKIE, '', { maxAge: 0 }) });
+}
+
+/* ---------- email + password accounts ---------- */
+
+// PBKDF2 via Web Crypto. 20,000 rounds keeps a sign-in inside the Workers Free plan's 10 ms CPU limit
+// (100,000 is the most Workers allow and needs the Paid plan). The count is stored with each hash, and a sign-in
+// re-hashes older passwords at the current count, so raising it later upgrades accounts as people sign in.
+const PBKDF2_ITER = 20000;
+const MAX_FAILED = 10, LOCK_MINUTES = 15;
+const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function pbkdf2(password, salt, iter) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, key, 256));
+}
+
+async function hashPassword(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return `pbkdf2-sha256$${PBKDF2_ITER}$${b64(salt)}$${b64(await pbkdf2(password, salt, PBKDF2_ITER))}`;
+}
+
+async function checkPassword(password, stored) {
+  const [, iter, salt, hash] = stored.split('$');
+  const got = await pbkdf2(password, unb64(salt), +iter), want = unb64(hash);
+  let diff = got.length ^ want.length;
+  for (let i = 0; i < got.length; i++) diff |= got[i] ^ want[i];
+  return diff === 0;
+}
+
+function cleanEmail(v) {
+  const e = str(v, 200, 'Email', { required: true }).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new HttpError(400, 'Please enter a valid email address');
+  return e;
+}
+
+function cleanPassword(v) {
+  const pw = typeof v === 'string' ? v : '';
+  if (pw.length < 8) throw new HttpError(400, 'Password must be at least 8 characters');
+  if (pw.length > 200) throw new HttpError(400, 'Password is too long (max 200 characters)');
+  return pw;
+}
+
+function cleanName(v) {
+  const n = str(v, 40, 'Display name', { required: true }).replace(/\s+/g, ' ');
+  if (n.length < 2) throw new HttpError(400, 'Display name must be at least 2 characters');
+  return n;
+}
+
+const emailTaken = (env, email, exceptId = '') =>
+  env.DB.prepare('SELECT 1 FROM users WHERE email = ? COLLATE NOCASE AND id != ?').bind(email, exceptId).first();
+
+// Create an account with email + password. There is no confirmation email yet, so the email stays unverified
+// until a sign-in service such as Google confirms it.
+async function register(request, env, url) {
+  const b = await body(request);
+  const email = cleanEmail(b.email), password = cleanPassword(b.password), name = cleanName(b.name);
+  if (await emailTaken(env, email)) throw new HttpError(409, 'An account already uses this email. Sign in instead; if you used Google, sign in with it and add a password from your account page.');
+  const userId = crypto.randomUUID(), t = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO users (id, name, email, avatar, created_at, email_verified) VALUES (?, ?, ?, NULL, ?, 0)').bind(userId, name, email, t),
+    env.DB.prepare("INSERT INTO identities (provider, provider_id, user_id, email, created_at) VALUES ('email', ?, ?, ?, ?)").bind(email, userId, email, t),
+    env.DB.prepare('INSERT INTO passwords (user_id, hash, updated_at) VALUES (?, ?, ?)').bind(userId, await hashPassword(password), t),
+  ]);
+  return json({ ok: true }, 201, { 'Set-Cookie': await sessionCookie(env, url, userId) });
+}
+
+async function passwordLogin(request, env, url) {
+  const b = await body(request);
+  const email = cleanEmail(b.email), password = typeof b.password === 'string' ? b.password.slice(0, 200) : '';
+  const row = await env.DB.prepare(
+    "SELECT p.user_id, p.hash, p.failed, p.locked_until FROM identities i JOIN passwords p ON p.user_id = i.user_id WHERE i.provider = 'email' AND i.provider_id = ?"
+  ).bind(email).first();
+  if (row && row.locked_until > now()) throw new HttpError(429, `Too many wrong passwords. Please try again in ${LOCK_MINUTES} minutes.`);
+  // Hash even when there is no such account, so the response time doesn't reveal which emails exist.
+  const ok = row ? await checkPassword(password, row.hash) : (await hashPassword(password), false);
+  if (!ok) {
+    if (row) {
+      const failed = row.failed + 1, lock = failed >= MAX_FAILED;
+      await env.DB.prepare('UPDATE passwords SET failed = ?, locked_until = ? WHERE user_id = ?')
+        .bind(lock ? 0 : failed, lock ? now() + LOCK_MINUTES * 60000 : 0, row.user_id).run();
+    }
+    throw new HttpError(401, 'Wrong email or password');
+  }
+  if (+row.hash.split('$')[1] !== PBKDF2_ITER)
+    await env.DB.prepare('UPDATE passwords SET hash = ?, failed = 0 WHERE user_id = ?').bind(await hashPassword(password), row.user_id).run();
+  else if (row.failed) await env.DB.prepare('UPDATE passwords SET failed = 0 WHERE user_id = ?').bind(row.user_id).run();
+  return json({ ok: true }, 200, { 'Set-Cookie': await sessionCookie(env, url, row.user_id) });
+}
+
+// Add a password to an account (e.g. one made with Google), or change it. Changing needs the current password.
+// Accounts with no email on file give one here.
+async function setPassword(request, env) {
+  const u = await requireUser(request, env), b = await body(request);
+  const password = cleanPassword(b.password), t = now();
+  const old = await env.DB.prepare('SELECT hash FROM passwords WHERE user_id = ?').bind(u.id).first();
+  if (old && !(await checkPassword(typeof b.current === 'string' ? b.current : '', old.hash))) throw new HttpError(400, 'Current password is wrong');
+  const stmts = [env.DB.prepare('INSERT INTO passwords (user_id, hash, updated_at) VALUES (?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET hash = excluded.hash, failed = 0, locked_until = 0, updated_at = excluded.updated_at')
+    .bind(u.id, await hashPassword(password), t)];
+  let email = u.email?.toLowerCase();
+  if (!email) {
+    email = cleanEmail(b.email);
+    if (await emailTaken(env, email, u.id)) throw new HttpError(409, 'Another account already uses this email');
+    stmts.push(env.DB.prepare('UPDATE users SET email = ?, email_verified = 0 WHERE id = ?').bind(email, u.id));
+  }
+  if (await env.DB.prepare("SELECT 1 FROM identities WHERE provider = 'email' AND provider_id = ? AND user_id != ?").bind(email, u.id).first())
+    throw new HttpError(409, 'Another account already uses this email');
+  stmts.push(env.DB.prepare("DELETE FROM identities WHERE user_id = ? AND provider = 'email'").bind(u.id),
+    env.DB.prepare("INSERT INTO identities (provider, provider_id, user_id, email, created_at) VALUES ('email', ?, ?, ?, ?)").bind(email, u.id, email, t));
+  await env.DB.batch(stmts);
+  return json({ ok: true });
+}
+
+/* ---------- profiles ---------- */
+
+async function saveProfile(request, env) {
+  const u = await requireUser(request, env), b = await body(request);
+  const name = cleanName(b.name), bio = str(b.bio, 500, 'About you'), link = str(b.link, 300, 'Link');
+  if (link && !/^https?:\/\//i.test(link)) throw new HttpError(400, 'Link must start with http:// or https://');
+  const favourites = paintKeys(b.favourites, 24);
+  // icon: an uploaded image id, '' to go back to the sign-in picture, or left out to keep the current one.
+  let icon = u.avatar_image;
+  if (typeof b.icon === 'string' && b.icon !== icon) {
+    if (b.icon && !IMAGE_ID.test(b.icon)) throw new HttpError(400, 'Bad icon');
+    if (b.icon) await checkImagesOwned(env, u, [b.icon]);
+    icon = b.icon;
+  }
+  await env.DB.prepare('UPDATE users SET name = ?, bio = ?, link = ?, favourites = ?, avatar_image = ? WHERE id = ?')
+    .bind(name, bio, link, JSON.stringify(favourites), icon, u.id).run();
+  if (u.avatar_image && u.avatar_image !== icon) await deleteImages(env, [u.avatar_image]);
+  return json({ user: await currentUser(request, env) });
+}
+
+// Anyone can see a profile: icon, name, bio, link, favourite paints and public recipes & tutorials. Never the email.
+async function getProfile(request, env, id) {
+  const p = await env.DB.prepare(`SELECT u.id, u.name, ${AVATAR} AS avatar, u.bio, u.link, u.favourites, u.created_at FROM users u WHERE u.id = ?`).bind(id).first();
+  if (!p) throw new HttpError(404, 'Painter not found');
+  p.favourites = JSON.parse(p.favourites || '[]');
+  const rows = (await env.DB.prepare(
+    `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
+       (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
+       (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
+     FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' ORDER BY r.updated_at DESC LIMIT 100`
+  ).bind(id).all()).results;
+  return json({ profile: p, recipes: rows.map(listItem) });
 }
 
 async function deleteAccount(request, env) {
@@ -294,6 +468,7 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
+    env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM identities WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id),
   ]);
@@ -344,23 +519,25 @@ async function listRecipes(request, env, url) {
   else where.push("r.visibility = 'public'");
   if (q) { where.push('(r.title LIKE ? OR r.summary LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
   const rows = (await env.DB.prepare(
-    `SELECT r.*, u.name AS author_name, u.avatar AS author_avatar,
+    `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
      FROM ${from} JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT 100`
   ).bind(...args).all()).results;
-  // The list only needs a picture: the main photo, else the last step photo (usually the finished model).
-  return json({ recipes: rows.map(r => {
-    const o = recipeOut(r);
-    o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
-    o.steps = o.steps.length; o.saved = scope === 'saved'; delete o.body;
-    return o;
-  }) });
+  return json({ recipes: rows.map(r => ({ ...listItem(r), saved: scope === 'saved' })) });
+}
+
+// The list only needs a picture: the main photo, else the last step photo (usually the finished model).
+function listItem(r) {
+  const o = recipeOut(r);
+  o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
+  o.steps = o.steps.length; o.saved = false; delete o.body;
+  return o;
 }
 
 async function loadRecipe(env, id, viewer = null) {
   return env.DB.prepare(
-    `SELECT r.*, u.name AS author_name, u.avatar AS author_avatar,
+    `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count,
        EXISTS (SELECT 1 FROM votes v WHERE v.recipe_id = r.id AND v.user_id = ?1) AS voted,
        EXISTS (SELECT 1 FROM saves s WHERE s.recipe_id = r.id AND s.user_id = ?1) AS saved
@@ -375,7 +552,7 @@ async function getRecipe(request, env, id) {
   let comments = [];
   if (r.visibility === 'public') {
     comments = (await env.DB.prepare(
-      'SELECT c.id, c.body, c.created_at, c.user_id, u.name, u.avatar FROM comments c JOIN users u ON u.id = c.user_id WHERE c.recipe_id = ? ORDER BY c.created_at'
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.name, ${AVATAR} AS avatar FROM comments c JOIN users u ON u.id = c.user_id WHERE c.recipe_id = ? ORDER BY c.created_at`
     ).bind(id).all()).results.map(c => ({ id: c.id, body: c.body, created_at: c.created_at, author: { id: c.user_id, name: c.name, avatar: c.avatar } }));
   }
   return json({ recipe: recipeOut(r), comments });
