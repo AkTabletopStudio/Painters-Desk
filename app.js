@@ -181,10 +181,11 @@ const GL={A:'Warpaints Fanatic',C:'John Blanche Vol. 1-4',R:'Warpaints Air',S:'S
 const BRANDS=[['Army Painter',['A','C','R','S']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z','L']],['AK Interactive',['K','e','g','j','m','n','o','v','y']],['Two Thin Coats',['H','N','O','J','q','z','r','k']]];
 
 const BR_OF={};BRANDS.forEach(([bn,gs],bi)=>gs.forEach(g=>BR_OF[g]=bi));
-(function(){const f=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92};
-P.forEach(p=>{const r=f(parseInt(p.h.slice(1,3),16)),g=f(parseInt(p.h.slice(3,5),16)),b=f(parseInt(p.h.slice(5,7),16));
+function hexLab(h){const f=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92};
+const r=f(parseInt(h.slice(1,3),16)),g=f(parseInt(h.slice(3,5),16)),b=f(parseInt(h.slice(5,7),16));
 let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.1192*g+.9505*b)/1.08883;const t=v=>v>.008856?Math.cbrt(v):7.787*v+16/116;
-p.lab=[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]})})();
+return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
+P.forEach(p=>p.lab=hexLab(p.h));
 const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
 const MSRC={t:'Two Thin Coats comparison chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart'};
 function matchData(p){const i=P.indexOf(p),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
@@ -230,4 +231,49 @@ document.getElementById('q').oninput=()=>{const q=qv();
  tree.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=!!q&&!v;d.open=!!q&&v});
  tree.querySelectorAll('details.br').forEach(d=>{d.hidden=!!q&&!d.querySelector('details.rg:not([hidden])');if(q)d.open=true});boxes()};
 boxes();refresh();
+/* ---------- Suggested paints (My paints page) ----------
+   Finds holes in a collection two ways: technique ramps (the Ramps targets above, at 7 steps with no tint) whose steps have
+   no owned paint near them, and colour areas (hue × lightness, plus greys) with no owned paint at all. A greedy pass then picks
+   the paints that close the most gaps, from the brands already owned first, then other brands for what's left. Swatches are estimates. */
+const SG_FIX=[['nmm','Gold','#b08a3a'],['nmm','Steel','#8c9196'],['osl','Green glow','#3fbf4a'],['osl','Fire glow','#f07a1a'],['osl','Blue glow','#3a8fe0'],
+['gem','Red gem','#b01e24'],['gem','Green gem','#1f8a3a'],['gem','Blue gem','#1f4fb0'],['skin','Pale skin','#e8b89a'],['skin','Mid skin','#c08060'],['skin','Dark skin','#6a4030']];
+// Wheel hues split where paint names change (HSL degrees), so 'blue' means what painters call blue.
+const SG_HUE=['red','orange','yellow','lime','green','teal','sky blue','blue','violet','purple','pink'],SG_CUT=[15,40,70,95,150,185,215,250,285,320,345],SG_BAND=['dark','mid','light'],SG_GREY=['black','dark grey','mid grey','light grey','white'];
+const SG_NAME={c1_0:'brown',c1_2:'peach',c2_0:'olive',c2_1:'ochre'},sgHue=H=>{const i=SG_CUT.findIndex(c=>H<c);return i<0?0:i};
+const d76=(a,c)=>Math.hypot(a[0]-c[0],a[1]-c[1],a[2]-c[2]),sgOK=p=>nmmOK(p)&&p.g!=='B'&&!/\bclear\b/i.test(p.n);
+// Colour area a paint falls in: 11 wheel hues × dark/mid/light, or one of five greys for low-saturation paints.
+function sgCell(p){const L=p.lab[0];if(p.S>=.14&&Math.hypot(p.lab[1],p.lab[2])>=10)return'c'+sgHue(p.H)+'_'+(L<38?0:L<62?1:2);return'n'+(L<20?0:L<40?1:L<60?2:L<85?3:4)}
+const sgCellName=c=>SG_NAME[c]||(c[0]==='n'?SG_GREY[+c[1]]:SG_BAND[+c.split('_')[1]]+' '+SG_HUE[+c.slice(1).split('_')[0]]);
+// Owned paints for each step of a ramp, nearest first by the same lightness-weighted distance the wheel uses, no repeats.
+function sgFit(T,own){const used=new Set(),w=(a,c)=>Math.hypot(1.6*(a[0]-c[0]),a[1]-c[1],a[2]-c[2]);
+return T.map(x=>{let m=null,md=1e9;own.forEach(q=>{if(used.has(q))return;const d=w(q.lab,x.t);if(d<md){md=d;m=q}});if(m)used.add(m);return{...x,p:m,d:m?d76(m.lab,x.t):99}})}
+function sgTargets(q,b){const o={...NMO};NMO.n=7;NMO.t=false;try{return TQ[q].targets(b)}finally{NMO.n=o.n;NMO.t=o.t}}
+function suggestPaints(ownSet){const all=P.filter(sgOK),own=all.filter(p=>ownSet.has(p.k));if(!own.length)return null;
+// Ramps: fixed bases for NMM, OSL, gems and skin; zenithal and edge highlights on the most saturated owned mid/dark paint of each hue.
+const bases=SG_FIX.map(([q,n,h])=>({q,n,b:{lab:hexLab(h),h}})),pk={};
+own.forEach(p=>{const[L,C]=lch(p);if(L<25||L>62||C<20||p.S<.14)return;const s=Math.round(p.H/45)%8;if(!pk[s]||C>lch(pk[s])[1])pk[s]=p});
+Object.values(pk).forEach(p=>{bases.push({q:'zen',n:p.n,b:p,own:1});bases.push({q:'edge',n:p.n,b:p,own:1})});
+// Grade: weak with 3+ loose steps (ΔE 12+), fair with one or two, otherwise good. Only loose steps count as gaps.
+const ramps=bases.map(x=>{const R=sgFit(sgTargets(x.q,x.b),own),loose=R.filter(s=>s.d>=12).length,fair=R.filter(s=>s.d>=6&&s.d<12).length;
+ return{...x,tech:TQ[x.q],R,loose,fair,grade:loose>=3?'weak':loose?'fair':'good'}});
+const gaps=[];ramps.forEach(r=>r.R.forEach(s=>{if(s.d>=12)gaps.push({kind:'ramp',g:r.tech.name+' · '+r.n,role:s.r,t:s.t,d:s.d})}));
+// Colour areas: the database's opaque paints say which areas exist (4+ paints) and give each a typical colour (median Lab).
+const cells={};all.forEach(p=>{const c=sgCell(p);(cells[c]=cells[c]||{c,ps:[],own:[]}).ps.push(p);if(ownSet.has(p.k))cells[c].own.push(p)});
+const med=a=>{a=[...a].sort((x,y)=>x-y);return a[a.length>>1]};
+Object.values(cells).forEach(c=>{c.ok=c.ps.length>=4;c.t=[0,1,2].map(i=>med(c.ps.map(p=>p.lab[i])));c.name=sgCellName(c.c);
+ c.best=c.own.slice().sort((a,b)=>d76(a.lab,c.t)-d76(b.lab,c.t))[0]||null;if(c.ok&&!c.own.length)gaps.push({kind:'cov',g:'Colour gap',role:c.name,cell:c.c,t:c.t})});
+// How much a candidate closes a gap: a ramp step counts if it lands close (ΔE under 7) and clearly beats what's owned; a colour area counts if the paint is in it.
+const gain=(p,x,c)=>x.kind==='cov'?(c===x.cell?12+Math.max(0,8-d76(p.lab,x.t))/2:0):(()=>{const d=d76(p.lab,x.t);return d<7&&d<x.d-4?Math.min(x.d,25)-d:0})();
+// Paints from a range the user already has get a small lead, and a paint name is only suggested once (some ranges repeat names).
+const myG=new Set(own.map(p=>p.g)),taken=new Set(own.map(p=>p.n.trim().toLowerCase()));
+function pick(gs,cands,n){const out=[];for(let r=0;r<n;r++){let best=null,bs=0,bf=[];
+ cands.forEach(p=>{if(taken.has(p.n.trim().toLowerCase()))return;const c=sgCell(p);let s=0,f=[];gs.forEach(x=>{if(x.done)return;const v=gain(p,x,c);if(v){s+=v;f.push(x)}});if(myG.has(p.g))s*=1.25;if(s>bs){bs=s;best=p;bf=f}});
+ if(!best||bs<5)break;bf.forEach(x=>x.done=1);taken.add(best.n.trim().toLowerCase());
+ // A couple of alternatives that close most of the same gaps.
+ const an=new Set(),alt=cands.filter(p=>!taken.has(p.n.trim().toLowerCase())).map(p=>{const c=sgCell(p);return{p,s:bf.reduce((a,x)=>a+gain(p,x,c),0)}}).filter(a=>a.s>=bs*.6).sort((a,b)=>b.s-a.s).filter(a=>{const k=a.p.n.trim().toLowerCase();return!an.has(k)&&an.add(k)}).slice(0,2).map(a=>a.p);
+ const by={};bf.forEach(x=>(by[x.g]=by[x.g]||[]).push(x.role));out.push({p:best,fills:Object.entries(by).map(([g,r])=>({g,r:[...new Set(r)]})),alt})}
+ return out}
+const myB=new Set(own.map(p=>BR_OF[p.g])),cand=all.filter(p=>!ownSet.has(p.k));
+const mine=pick(gaps,cand.filter(p=>myB.has(BR_OF[p.g])),10),other=pick(gaps,cand.filter(p=>!myB.has(BR_OF[p.g])),5);
+return{ramps,cells,mine,other,left:gaps.filter(x=>!x.done).length,brands:[...myB].map(i=>BRANDS[i][0])}}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
