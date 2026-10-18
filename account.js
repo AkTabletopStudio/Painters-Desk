@@ -114,7 +114,7 @@ async function renderRecipes(){
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&q=${encodeURIComponent($('rq').value)}`);
-   L.innerHTML=d.recipes.length?d.recipes.map(r=>`<a class="card" href="#/recipe/${esc(r.id)}">${r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} step${r.steps===1?'':'s'}</span>`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div></a>`).join('')
+   L.innerHTML=d.recipes.length?d.recipes.map(r=>`<a class="card" href="#/recipe/${esc(r.id)}">${r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<h3>${esc(r.title)}</h3><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} step${r.steps===1?'':'s'}</span>`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`).join('')
     :`<p class="s">${rScope==='mine'?'You have not saved any recipes yet.':'No public recipes yet. Be the first to share one.'}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  load()}
@@ -150,6 +150,22 @@ function mixHTML(mix){
  const mc=mixColour(mix);
  return `<div class="mix">${ratio}${mix.map(m=>{const p=BYKEY.get(m.k);return `<span class="chip" data-k="${esc(m.k)}"><i style="background:${p?p.h:'#888'}"></i>${p?star(p)+esc(p.n):'Unknown paint'}${mix.length>1?` <em>×${m.parts}</em>`:''}${p?` <span style="color:var(--mut)">${esc(GL[p.g])}</span>`:''}</span>`}).join('')}${mc?`<span class="chip" title="Rough estimate from the swatch colours"><i style="background:${mc}"></i>≈ mixed</span>`:''}</div>`}
 
+/* ---------- views & upvotes ---------- */
+const plural=(n,w)=>`${n.toLocaleString()} ${w}${n===1?'':'s'}`;
+const statsHTML=r=>`<span title="Upvotes">▲ ${r.votes.toLocaleString()}</span> · ${plural(r.views,'view')}`;
+// Count a view once per browser session; the server ignores the author's own visits.
+function countView(r){
+ if(r.visibility!=='public'||(ME&&ME.id===r.author.id))return;
+ const k='pd_seen_'+r.id;try{if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,'1')}catch(e){}
+ api(`/recipes/${encodeURIComponent(r.id)}/view`,{method:'POST'}).catch(()=>{})}
+function voteHTML(r,mine){
+ if(r.visibility!=='public')return'';
+ const n=r.votes.toLocaleString();
+ const btn=mine?`<span class="btn vote" title="Upvotes from other painters" aria-disabled="true">▲ ${n}</span>`
+  :ME?`<button class="btn vote${r.voted?' on':''}" id="rVote" type="button" aria-pressed="${r.voted}">▲ ${r.voted?'Upvoted':'Upvote'} · ${n}</button>`
+  :`<a class="btn vote" href="#/account" title="Sign in to upvote">▲ Upvote · ${n}</a>`;
+ return `<div class="row">${btn}<span class="n">${plural(r.views,'view')}</span></div>`}
+
 /* ---------- one recipe / tutorial + comments ---------- */
 async function renderRecipe(id){
  const el=$('v-recipe');el.innerHTML='<p class="s">Loading…</p>';
@@ -157,6 +173,7 @@ async function renderRecipe(id){
  const r=d.recipe,mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
  <p class="s"><span class="tag">${r.kind==='tutorial'?'Tutorial':'Recipe'}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>by ${r.author.avatar?`<img class="av" src="${esc(r.author.avatar)}" alt="">`:''}${esc(r.author.name)} · updated ${fmtDate(r.updated_at)}</p>
+ ${voteHTML(r,mine)}
  ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank"><img class="ph cover" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
  ${r.summary?`<p>${esc(r.summary)}</p>`:''}
  ${r.link?videoEmbed(r.link):''}
@@ -172,6 +189,11 @@ async function renderRecipe(id){
   :(mine?'<p class="s">This is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
  el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
+ countView(r);
+ if($('rVote'))$('rVote').onclick=async()=>{const b=$('rVote');b.disabled=true;
+  try{const v=await api(`/recipes/${r.id}/vote`,{method:'PUT',body:{on:!r.voted}});r.voted=v.voted;r.votes=v.votes;
+   b.classList.toggle('on',r.voted);b.setAttribute('aria-pressed',r.voted);b.textContent=`▲ ${r.voted?'Upvoted':'Upvote'} · ${r.votes.toLocaleString()}`}
+  catch(e){b.title=e.message}b.disabled=false};
  if($('rDel'))$('rDel').onclick=async()=>{if($('rDel').dataset.c){await api('/recipes/'+r.id,{method:'DELETE'});location.hash='#/recipes'}else{$('rDel').dataset.c=1;$('rDel').textContent='Click again to delete for good'}};
  const wireDel=()=>el.querySelectorAll('[data-dc]').forEach(b=>b.onclick=async()=>{await api('/comments/'+b.dataset.dc,{method:'DELETE'});b.closest('.cm').remove()});
  wireDel();
