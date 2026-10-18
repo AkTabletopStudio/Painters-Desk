@@ -5,7 +5,7 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BYKEY=new Map(P.map(p=>[p.k,p]));
-const VIEWS=['wheel','paints','recipes','recipe','edit','account','profile'];
+const VIEWS=['wheel','paints','recipes','recipe','edit','account','profile','reset'];
 let ME=null,INFO=null,API=false;
 
 async function api(path,{method='GET',body}={}){
@@ -48,6 +48,7 @@ function route(){
  else if(view==='edit')renderEdit(v==='new'?null:id);
  else if(view==='account')renderAccount();
  else if(view==='profile')renderProfile(id);
+ else if(view==='reset')renderReset(id);
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 $('footMore').onclick=()=>setTimeout(()=>$('foot').scrollIntoView({block:'end'}),50);
@@ -60,6 +61,15 @@ function renderAccount(){
  const err=/error=/.test(location.hash)?'<p class="err">Sign-in was cancelled or failed. Please try again.</p>':'';
  if(!ME){
   const btns=INFO.providers.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${ret}">Continue with ${esc(p.label)}</a>`).join(' ');
+  if(authMode==='forgot'){
+   el.innerHTML=`<h1>Reset your password</h1><div class="panel"><p class="s">Enter the email on your account and we'll send you a link to choose a new password.</p>
+   <form id="fgForm"><label class="f"><span>Email</span><input type="email" class="inp" id="fEmail" maxlength="200" autocomplete="email" required></label>
+   <div class="row"><button class="btn pri" type="submit" id="fGo">Send reset link</button><button class="btn" type="button" data-m="in">Back to sign in</button><span class="s" id="fMsg"></span></div></form></div>`;
+   el.querySelector('[data-m]').onclick=()=>{authMode='in';renderAccount()};
+   $('fgForm').onsubmit=async e=>{e.preventDefault();$('fGo').disabled=true;$('fMsg').className='s';$('fMsg').textContent='Sending…';
+    try{await api('/auth/forgot',{method:'POST',body:{email:$('fEmail').value}});$('fMsg').textContent='If that email has an account, a reset link is on its way. Check your inbox (and spam folder).'}
+    catch(e){$('fMsg').className='err';$('fMsg').textContent=e.message;$('fGo').disabled=false}};
+   return}
   const up=authMode==='up';
   el.innerHTML=`<h1>${up?'Create an account':'Sign in'}</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. See the <a href="privacy.html">privacy policy</a> for what we store.</p>
   ${btns?`<div class="row">${btns}</div><p class="s">Your first sign-in with one of these creates your account.</p><p class="or"><span>or use your email</span></p>`:''}
@@ -68,18 +78,20 @@ function renderAccount(){
   <label class="f"><span>Email</span><input type="email" class="inp" id="aEmail" maxlength="200" autocomplete="email" required></label>
   <label class="f"><span>Password${up?' (at least 8 characters)':''}</span><input type="password" class="inp" id="aPw" minlength="${up?8:1}" maxlength="200" autocomplete="${up?'new-password':'current-password'}" required></label>
   <div class="row"><button class="btn pri" type="submit" id="aGo">${up?'Create account':'Sign in'}</button><span class="err" id="aErr"></span></div></form>
-  <p class="s">${up?'We can\'t email you yet, so there is no password reset link. Keep your password safe, or link Google from your account page as a backup way in.':'Forgot your password? There is no email reset yet. If you linked Google to your account, sign in with that and set a new password from your account page.'}</p>
+  ${INFO.mail?(up?'<p class="s">We\'ll email you a link to confirm your address.</p>':'<p><button class="lnk" type="button" data-m="forgot" style="font-size:14px;padding:0">Forgot your password?</button></p>')
+   :`<p class="s">${up?'We can\'t email you yet, so there is no password reset link. Keep your password safe, or link Google from your account page as a backup way in.':'Forgot your password? There is no email reset yet. If you linked Google to your account, sign in with that and set a new password from your account page.'}</p>`}
   ${INFO.devLogin?`<div class="row"><input class="inp" id="devName" placeholder="Test user name" value="Test Painter" style="max-width:220px"><button class="btn" id="devGo" type="button">Dev sign-in</button><span class="s">Local testing only.</span></div>`:''}</div>`;
   el.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{authMode=b.dataset.m;renderAccount()});
   $('pwForm').onsubmit=async e=>{e.preventDefault();$('aGo').disabled=true;$('aErr').textContent='';
    try{await api(up?'/auth/register':'/auth/password',{method:'POST',body:{email:$('aEmail').value,password:$('aPw').value,name:up?$('aName').value:undefined}});
-    await loadMe();if(up){history.replaceState(null,'','#/account');renderAccount()}else location.hash='#/'}
+    authMode='in';await loadMe();if(up){history.replaceState(null,'','#/account?welcome');renderAccount()}else location.hash='#/'}
    catch(e){$('aErr').textContent=e.message;$('aGo').disabled=false}};
   if(INFO.devLogin)$('devGo').onclick=()=>location.href=`/api/auth/dev?name=${encodeURIComponent($('devName').value)}&return=${ret}`;
   return}
  const linked=new Set(INFO.logins),more=INFO.providers.filter(p=>!linked.has(p.id)),hasPw=linked.has('email');
  let fav=[...ME.favourites],icon=ME.avatar_image,busy=0;
- el.innerHTML=`<h1>${avHTML(ME)}${esc(ME.name)}</h1>
+ const h=location.hash,note=/verify=done/.test(h)?'<p class="ok">Thanks, your email is confirmed.</p>':/verify=expired/.test(h)?'<p class="err">That confirmation link has expired or was already used. Send a new one below.</p>':/welcome/.test(h)&&INFO.mail&&!ME.email_verified?`<p class="ok">Welcome! We've sent a confirmation link to ${esc(ME.email)}.</p>`:'';
+ el.innerHTML=`<h1>${avHTML(ME)}${esc(ME.name)}</h1>${note}
  <p><a href="#/u/${esc(ME.id)}">View your public profile →</a></p>
  <div class="panel"><h2>Your profile</h2><p class="s">Everything here is public: anyone can see your icon, name, about text, link, favourite paints and your public recipes and tutorials. Your email is never shown.</p>
  <div class="f"><span>Icon</span><div id="pIcon"></div></div>
@@ -89,7 +101,7 @@ function renderAccount(){
  <div class="f"><span>Favourite paints (up to 24)</span><div id="pFav"></div></div>
  <div class="row"><button class="btn pri" id="pSave" type="button">Save profile</button><span class="s" id="pMsg"></span></div></div>
  <div class="panel"><h2>Signing in</h2>
- <p>${ME.email?esc(ME.email)+(ME.email_verified?'':' <span class="tag" title="Typed in at sign-up. Sign in with Google using this email to confirm it.">not confirmed</span>'):'<span class="s">No email on file</span>'}${ME.admin?' <span class="tag">admin</span>':''}</p>
+ <p>${ME.email?esc(ME.email)+(ME.email_verified?'':' <span class="tag" title="Not confirmed yet">not confirmed</span>'+(INFO.mail?' <button class="btn" type="button" id="vSend">Send confirmation email</button> <span class="s" id="vMsg"></span>':'')):'<span class="s">No email on file</span>'}${ME.admin?' <span class="tag">admin</span>':''}</p>
  <p class="s">Signed in with: ${INFO.logins.map(l=>esc(LOGIN_NAMES[l]||l)).join(', ')}</p>
  ${more.length?`<div class="row"><span class="s">Link another sign-in:</span>${more.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${encodeURIComponent('/#/account')}">${esc(p.label)}</a>`).join(' ')}</div>`:''}
  <form id="pwSet"><h3>${hasPw?'Change password':'Add a password'}</h3>${hasPw?'':`<p class="s">Then you can also sign in with ${ME.email?'your email':'an email'} and password.</p>`}
@@ -120,9 +132,21 @@ function renderAccount(){
   try{await api('/me/password',{method:'PUT',body:{password:$('sPw').value,current:$('sCur')?.value,email:$('sEmail')?.value}});
    INFO=await api('/me');ME=INFO.user;renderAccount();$('sMsg').textContent=hasPw?'Password changed.':'Password added.'}
   catch(e){$('sMsg').className='err';$('sMsg').textContent=e.message;$('sGo').disabled=false}};
+ if($('vSend'))$('vSend').onclick=async()=>{$('vSend').disabled=true;$('vMsg').className='s';
+  try{await api('/me/verify-email',{method:'POST'});$('vMsg').textContent='Sent. Check your inbox (and spam folder).'}catch(e){$('vMsg').className='err';$('vMsg').textContent=e.message;$('vSend').disabled=false}};
  $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
  $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});await loadMe();location.hash='#/'}}
+
+/* ---------- password reset (link from email) ---------- */
+function renderReset(token){
+ const el=$('v-reset');
+ el.innerHTML=`<h1>Choose a new password</h1><div class="panel"><form id="rsForm"><p class="s">This also signs you out everywhere else.</p>
+ <label class="f"><span>New password (at least 8 characters)</span><input type="password" class="inp" id="rsPw" minlength="8" maxlength="200" autocomplete="new-password" required></label>
+ <div class="row"><button class="btn pri" type="submit" id="rsGo">Save new password</button><span class="err" id="rsErr"></span></div></form></div>`;
+ $('rsForm').onsubmit=async e=>{e.preventDefault();$('rsGo').disabled=true;$('rsErr').textContent='';
+  try{await api('/auth/reset',{method:'POST',body:{token,password:$('rsPw').value}});await loadMe();history.replaceState(null,'','#/account?verify=done');route()}
+  catch(e){$('rsErr').textContent=e.message;$('rsGo').disabled=false}}}
 
 /* ---------- public profile ---------- */
 async function renderProfile(id){

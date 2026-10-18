@@ -88,6 +88,10 @@ async function route(request, env, url) {
   if ((r = p.match(/^\/api\/users\/([\w-]+)$/)) && m === 'GET') return getProfile(request, env, r[1]);
   if (p === '/api/auth/register' && m === 'POST') return register(request, env, url);
   if (p === '/api/auth/password' && m === 'POST') return passwordLogin(request, env, url);
+  if (p === '/api/auth/forgot' && m === 'POST') return forgotPassword(request, env, url);
+  if (p === '/api/auth/reset' && m === 'POST') return resetPassword(request, env, url);
+  if (p === '/api/auth/verify' && m === 'GET') return verifyEmail(env, url);
+  if (p === '/api/me/verify-email' && m === 'POST') return resendVerify(request, env, url);
   if ((r = p.match(/^\/api\/auth\/login\/(\w+)$/)) && m === 'GET') return oauthStart(request, env, url, r[1]);
   if ((r = p.match(/^\/api\/auth\/callback\/(\w+)$/)) && m === 'GET') return oauthCallback(request, env, url, r[1]);
   if (p === '/api/auth/dev' && m === 'GET') return devLogin(request, env, url);
@@ -203,7 +207,8 @@ async function me(request, env) {
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
-  return json({ user, logins, providers, passwords: true, devLogin: env.DEV_LOGIN === '1' });
+  // mail: confirmation and password-reset emails can be sent.
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), devLogin: env.DEV_LOGIN === '1' });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -372,7 +377,8 @@ async function register(request, env, url) {
     env.DB.prepare("INSERT INTO identities (provider, provider_id, user_id, email, created_at) VALUES ('email', ?, ?, ?, ?)").bind(email, userId, email, t),
     env.DB.prepare('INSERT INTO passwords (user_id, hash, updated_at) VALUES (?, ?, ?)').bind(userId, await hashPassword(password), t),
   ]);
-  return json({ ok: true }, 201, { 'Set-Cookie': await sessionCookie(env, url, userId) });
+  const sent = await sendVerify(env, url, userId, email).then(() => true, e => (console.error(e), false));
+  return json({ ok: true, verifySent: sent }, 201, { 'Set-Cookie': await sessionCookie(env, url, userId) });
 }
 
 async function passwordLogin(request, env, url) {
@@ -408,17 +414,134 @@ async function setPassword(request, env) {
   const stmts = [env.DB.prepare('INSERT INTO passwords (user_id, hash, updated_at) VALUES (?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET hash = excluded.hash, failed = 0, locked_until = 0, updated_at = excluded.updated_at')
     .bind(u.id, await hashPassword(password), t)];
   let email = u.email?.toLowerCase();
+  let newEmail = false;
   if (!email) {
     email = cleanEmail(b.email);
     if (await emailTaken(env, email, u.id)) throw new HttpError(409, 'Another account already uses this email');
     stmts.push(env.DB.prepare('UPDATE users SET email = ?, email_verified = 0 WHERE id = ?').bind(email, u.id));
+    newEmail = true;
   }
   if (await env.DB.prepare("SELECT 1 FROM identities WHERE provider = 'email' AND provider_id = ? AND user_id != ?").bind(email, u.id).first())
     throw new HttpError(409, 'Another account already uses this email');
   stmts.push(env.DB.prepare("DELETE FROM identities WHERE user_id = ? AND provider = 'email'").bind(u.id),
     env.DB.prepare("INSERT INTO identities (provider, provider_id, user_id, email, created_at) VALUES ('email', ?, ?, ?, ?)").bind(email, u.id, email, t));
   await env.DB.batch(stmts);
+  if (newEmail) await sendVerify(env, new URL(request.url), u.id, email).catch(e => console.error(e));
   return json({ ok: true });
+}
+
+/* ---------- emails: confirm address, reset password ---------- */
+
+// Sent through Resend (resend.com) using the RESEND_API_KEY and MAIL_FROM secrets. With DEV_LOGIN=1 and no key,
+// emails are printed to the wrangler dev console instead.
+const mailReady = env => !!(env.RESEND_API_KEY && env.MAIL_FROM) || env.DEV_LOGIN === '1';
+const VERIFY_HOURS = 48, RESET_MINUTES = 60, RESEND_WAIT = 60000;
+
+async function sendMail(env, to, subject, text, link, button) {
+  const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1b1b1b;max-width:520px">
+<p style="font-size:20px;font-weight:700;margin:0 0 12px">The Painters Desk</p>
+${text.split('\n\n').map(p => `<p>${p.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</p>`).join('')}
+<p><a href="${link}" style="display:inline-block;background:#ffd23f;color:#1b1b1b;font-weight:700;text-decoration:none;padding:10px 18px;border:3px solid #1b1b1b;border-radius:14px">${button}</a></p>
+<p style="color:#666;font-size:13px">Or copy this link: ${link}</p></div>`;
+  if (!env.RESEND_API_KEY) {
+    if (env.DEV_LOGIN !== '1') throw new HttpError(503, 'Email is not set up on this server yet');
+    console.log(`[dev email] to ${to}: ${subject}\n${link}`);
+    return;
+  }
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text: `${text}\n\n${button}: ${link}`, html }),
+  });
+  if (!r.ok) {
+    console.error('Resend error', r.status, await r.text().catch(() => ''));
+    throw new HttpError(502, "Couldn't send the email, please try again later");
+  }
+}
+
+// Make a one-time link token, replacing any earlier one of the same kind. Returns null if one was made under a minute ago.
+async function newToken(env, userId, kind, email, ms) {
+  const last = await env.DB.prepare('SELECT MAX(created_at) AS t FROM email_tokens WHERE user_id = ? AND kind = ?').bind(userId, kind).first();
+  if (last?.t && now() - last.t < RESEND_WAIT) return null;
+  const token = randomToken(), t = now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM email_tokens WHERE user_id = ? AND kind = ?').bind(userId, kind),
+    env.DB.prepare('INSERT INTO email_tokens (token_hash, user_id, kind, email, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(await sha256(token), userId, kind, email, t + ms, t),
+  ]);
+  return token;
+}
+
+async function sendVerify(env, url, userId, email) {
+  if (!mailReady(env)) return false;
+  const token = await newToken(env, userId, 'verify', email, VERIFY_HOURS * 3600000);
+  if (!token) throw new HttpError(429, 'We just sent one. Please wait a minute before asking again.');
+  await sendMail(env, email, 'Confirm your email for The Painters Desk',
+    `Welcome to The Painters Desk! Please confirm this is your email address.\n\nThe link works for ${VERIFY_HOURS} hours. If you didn't create an account, you can ignore this email.`,
+    `${url.origin}/api/auth/verify?t=${token}`, 'Confirm my email');
+  return true;
+}
+
+async function resendVerify(request, env, url) {
+  const u = await requireUser(request, env);
+  if (!u.email) throw new HttpError(400, 'There is no email on your account');
+  if (u.email_verified) return json({ ok: true, already: true });
+  if (!mailReady(env)) throw new HttpError(503, 'Email is not set up on this server yet');
+  await sendVerify(env, url, u.id, u.email.toLowerCase());
+  return json({ ok: true });
+}
+
+async function useToken(env, token, kind) {
+  if (typeof token !== 'string' || !token || token.length > 100) return null;
+  const row = await env.DB.prepare('SELECT user_id, email, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?').bind(await sha256(token), kind).first();
+  if (!row || row.expires_at < now()) return null;
+  return row;
+}
+
+// The link in the confirmation email. Opens the account page with a message either way.
+async function verifyEmail(env, url) {
+  const row = await useToken(env, url.searchParams.get('t'), 'verify');
+  if (!row) return Response.redirect(`${url.origin}/#/account?verify=expired`, 302);
+  await env.DB.batch([
+    env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ? AND email = ? COLLATE NOCASE').bind(row.user_id, row.email),
+    env.DB.prepare("DELETE FROM email_tokens WHERE user_id = ? AND kind = 'verify'").bind(row.user_id),
+  ]);
+  return Response.redirect(`${url.origin}/#/account?verify=done`, 302);
+}
+
+// Always answers the same way, so it can't be used to find out which emails have accounts.
+async function forgotPassword(request, env, url) {
+  const email = cleanEmail((await body(request)).email);
+  if (!mailReady(env)) throw new HttpError(503, 'Password reset emails are not set up yet');
+  const u = await env.DB.prepare('SELECT id FROM users WHERE email = ? COLLATE NOCASE').bind(email).first();
+  if (u) {
+    const token = await newToken(env, u.id, 'reset', email, RESET_MINUTES * 60000);
+    if (token) await sendMail(env, email, 'Reset your Painters Desk password',
+      `Someone asked to reset the password for your Painters Desk account. If it was you, choose a new password with the button below.\n\nThe link works for ${RESET_MINUTES} minutes and only once. If you didn't ask for this, you can ignore this email and your password stays the same.`,
+      `${url.origin}/#/reset/${token}`, 'Choose a new password');
+  }
+  return json({ ok: true });
+}
+
+// Opening the reset link proves the person owns the email, so this also confirms it.
+// Every other session is signed out.
+async function resetPassword(request, env, url) {
+  const b = await body(request);
+  const row = await useToken(env, b.token, 'reset');
+  if (!row) throw new HttpError(400, 'This reset link has expired or was already used. Please ask for a new one.');
+  const password = cleanPassword(b.password), t = now();
+  const stmts = [
+    env.DB.prepare("DELETE FROM email_tokens WHERE user_id = ? AND kind = 'reset'").bind(row.user_id),
+    env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(row.user_id),
+    env.DB.prepare('INSERT INTO passwords (user_id, hash, updated_at) VALUES (?, ?, ?) ON CONFLICT (user_id) DO UPDATE SET hash = excluded.hash, failed = 0, locked_until = 0, updated_at = excluded.updated_at')
+      .bind(row.user_id, await hashPassword(password), t),
+    env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ? AND email = ? COLLATE NOCASE').bind(row.user_id, row.email),
+  ];
+  if (!(await env.DB.prepare("SELECT 1 FROM identities WHERE provider = 'email' AND provider_id = ? AND user_id != ?").bind(row.email, row.user_id).first()))
+    stmts.push(env.DB.prepare("DELETE FROM identities WHERE user_id = ? AND provider = 'email'").bind(row.user_id),
+      env.DB.prepare("INSERT INTO identities (provider, provider_id, user_id, email, created_at) VALUES ('email', ?, ?, ?, ?)").bind(row.email, row.user_id, row.email, t));
+  await env.DB.batch(stmts);
+  return json({ ok: true }, 200, { 'Set-Cookie': await sessionCookie(env, url, row.user_id) });
 }
 
 /* ---------- profiles ---------- */
@@ -469,6 +592,7 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(u.id),
+    env.DB.prepare('DELETE FROM email_tokens WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM identities WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(u.id),
   ]);

@@ -67,11 +67,28 @@ renewed every six months.
 Anyone can create an account with an email and password (no keys needed). Passwords are stored as salted
 PBKDF2-SHA256 hashes (20,000 rounds, so sign-in fits the Workers Free plan's 10 ms CPU limit; on the Paid plan raise
 `PBKDF2_ITER` in `worker/index.js` up to 100,000 and passwords upgrade as people sign in); ten wrong passwords lock that account's password sign-in
-for 15 minutes. There is no mail provider yet, so emails typed at sign-up are **not confirmed** and there is no
-password-reset email. Until confirmed, such an email never grants admin rights, and if someone later signs in with
+for 15 minutes. An email typed at sign-up stays **not confirmed** until its owner clicks the confirmation link (or
+signs in with a service that verifies it). Until then it never grants admin rights, and if someone later signs in with
 Google (or another service) that verifies the same email, that person gets the account and the unconfirmed password
 is removed. A signed-in user who links a service with the same email keeps their password and the email becomes
 confirmed.
+
+## Confirmation and password-reset emails (Resend)
+
+Emails go out through [Resend](https://resend.com) (free tier: 3,000 emails a month, 100 a day). Cloudflare's own
+Email Sending needs the Workers Paid plan. Until both secrets below are set, the site hides the email features and
+works as before. Locally, with `DEV_LOGIN=1` and no key, emails are printed in the `npm run dev` console instead.
+
+1. Sign up at resend.com, open **Domains > Add domain**, enter `paintersdesk.com` and pick a region.
+2. Add the DNS records Resend shows (a DKIM TXT record, plus MX and SPF TXT records on a `send` subdomain) in the
+   Cloudflare dashboard under the domain's **DNS > Records**, or use Resend's automatic Cloudflare setup. Press
+   **Verify** in Resend once they are in.
+3. In Resend open **API Keys > Create API key** with **Sending access** for paintersdesk.com.
+4. In the Cloudflare dashboard open **Workers & Pages > painters-desk > Settings > Variables and Secrets** (the runtime
+   one near Bindings, not the Builds one) and add two secrets:
+   - `RESEND_API_KEY`: the key from step 3.
+   - `MAIL_FROM`: the sender, e.g. `The Painters Desk <hello@paintersdesk.com>`.
+5. Needs migration `0005_email_tokens.sql`.
 
 Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
 tutorials. Uploaded icons go to the R2 bucket like tutorial photos. Needs migration `0004_profiles_passwords.sql`.
