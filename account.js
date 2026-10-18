@@ -198,7 +198,8 @@ function renderPaints(){
  el.innerHTML=`<h1>My paints</h1><p class="s">Tick the paints you own. Changes save automatically. Your paints get a ★ on the wheel and in matches.</p>
  <div class="panel"><div class="row"><button class="btn pri" id="pWheel" type="button">Show my collection on the wheel</button><span class="s" id="pcnt"></span> <span class="s" id="pmsg"></span></div>
  <div class="bar"><input id="pq" type="search" placeholder="Search paints (name or code)"><label style="align-self:center"><input type="checkbox" id="pOwned"> Only paints I own</label></div>
- <div id="ptree"></div></div>`;
+ <div id="ptree"></div></div>
+ <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>`;
  const tr=$('ptree');
  tr.innerHTML=BRANDS.map(([bn,gs])=>`<details class="br"><summary><b>${bn}</b> <span class="n" data-pb="${bn}"></span></summary>`+gs.map(g=>`<details class="rg" data-g="${g}"><summary><input type="checkbox" data-r="${g}"> ${GL[g]} <span class="n" data-pc="${g}"></span></summary><div class="pl">`+P.map((p,i)=>p.g===g?`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${esc(p.n)}${p.c?' <em>'+esc(p.c)+'</em>':''}</span></label>`:'').join('')+'</div></details>').join('')+'</details>').join('');
  const q=()=>$('pq').value.trim().toLowerCase(),only=()=>$('pOwned').checked,vis=p=>(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))&&(!only()||OWN.has(p.k));
@@ -212,6 +213,29 @@ function renderPaints(){
   if(t.dataset.r)setOwned(P.filter(p=>p.g===t.dataset.r&&(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))).map(p=>p.k),t.checked);
   else if(t.dataset.i!==undefined)setOwned([P[+t.dataset.i].k],t.checked);
   $('pmsg').textContent='Saving…';counts()});
+ // Suggested paints: worked out in app.js (suggestPaints), redrawn shortly after the collection changes.
+ {const d=$('sugd');try{d.open=localStorage.getItem('pd-sug')!=='0'}catch(e){d.open=true}d.ontoggle=()=>{try{localStorage.setItem('pd-sug',d.open?'1':'0')}catch(e){}}}
+ const sugGo=()=>{const box=$('sug');if(!box)return;const r=suggestPaints(OWN);
+  if(!r){box.innerHTML='<p class="s">Tick the paints you own below and suggestions for filling the gaps in your collection show up here.</p>';$('sugN').textContent='';return}
+  const fl=f=>`<span class="sgt">${esc(f.g)}: ${esc(f.r.join(', ').toLowerCase())}</span>`;
+  const row=o=>`<div class="sgr"><span class="nsw" style="background:${o.p.h}"></span><div class="nnm"><b>${esc(o.p.n)}</b><span>${esc(GL[o.p.g])}${o.p.c?' · '+esc(o.p.c):''}</span><div class="sgf">${o.fills.map(fl).join('')}</div>${o.alt.length?`<div class="sgo">Or: ${o.alt.map(a=>`<button type="button" class="lnk" data-sa="${esc(a.k)}" title="Add ${esc(a.n)} instead"><i style="background:${a.h}"></i>${esc(a.n)} <em>${esc(GL[a.g])}</em></button>`).join(' ')}</div>`:''}</div><button class="btn" type="button" data-sa="${esc(o.p.k)}" aria-label="Add ${esc(o.p.n)} to my collection">Add</button></div>`;
+  const gq={good:['close','Good'],fair:['fair','Fair'],weak:['loose','Weak']};
+  const tq=x=>`<div class="sgq"><span class="sgn"><b>${esc(x.tech.name)}</b> ${esc(x.n)}</span><span class="sgs">${x.R.map(st=>`<i style="background:${st.p?st.p.h:'transparent'}" title="${esc(st.r)}: ${st.p?esc(st.p.n)+' (ΔE '+st.d.toFixed(0)+')':'nothing close'}">${st.d>=12?`<u style="background:${labHex(st.t)}"></u>`:''}</i>`).join('')}</span><span class="nq ${gq[x.grade][0]}">${gq[x.grade][1]}</span></div>`;
+  const cl=c=>{const x=r.cells[c];if(!x||!x.ok)return'<i class="sgc none"></i>';return x.best?`<i class="sgc" style="background:${x.best.h}" title="${esc(x.name)}: ${x.own.length} owned, e.g. ${esc(x.best.n)}"></i>`:`<i class="sgc gap" style="--t:${labHex(x.t)}" title="${esc(x.name)}: nothing in your collection"></i>`};
+  const cs=Object.values(r.cells).filter(c=>c.ok),cov=cs.filter(c=>c.own.length).length,good=r.ramps.filter(x=>x.grade==='good').length,n=r.mine.length+r.other.length;
+  $('sugN').textContent=n?`(${n} idea${n===1?'':'s'})`:'';
+  box.innerHTML=`<p class="s">Paints that would fill gaps in your collection, from ${esc(r.brands.join(' and '))} first. Each one lists the ramps (as built in Ramps mode on the wheel) and the colour areas it helps with.</p>
+  ${r.mine.length?`<div class="sgl">${r.mine.map(row).join('')}</div>`:`<p class="s">Nothing more from ${esc(r.brands.join(' or '))} would close a gap.</p>`}
+  ${r.other.length?`<h3>From other brands</h3><p class="s">For gaps your brands don't cover.</p><div class="sgl">${r.other.map(row).join('')}</div>`:''}
+  <h3>Techniques your paints can build</h3><p class="s">${good} of ${r.ramps.length} ramps are a good fit. Each square is one step from your paints; a dashed dot marks a step with nothing close (ΔE 12+), shown in the colour it needs. Zenithal and edge highlights are checked on your most saturated mid or dark paint of each hue.</p>
+  <div class="sgqs">${r.ramps.map(tq).join('')}</div>
+  <h3>Colour coverage</h3><p class="s">You have paints in ${cov} of ${cs.length} colour areas. Columns go round the wheel from red to pink; rows are light, mid and dark, then greys from black to white. Striped squares are areas with nothing in your collection.</p>
+  <div class="sgg">${[2,1,0].map(b=>SG_HUE.map((_,h)=>cl('c'+h+'_'+b)).join('')).join('')}</div><div class="sgg sg5">${[0,1,2,3,4].map(i=>cl('n'+i)).join('')}</div>
+  <p class="s">Suggestions compare swatch colours, which are estimates, so treat them as a starting point and check paints in person.</p>`};
+ let sugT=0;const sugLater=()=>{clearTimeout(sugT);sugT=setTimeout(sugGo,600)};
+ $('sug').addEventListener('click',e=>{const b=e.target.closest('[data-sa]');if(!b)return;setOwned([b.dataset.sa],true);$('pmsg').textContent='Saving…';counts();filt();sugGo()});
+ tr.addEventListener('change',sugLater);
+ setTimeout(sugGo,0);
  $('pq').oninput=filt;$('pOwned').onchange=filt;
  $('pWheel').onclick=()=>showOnWheel([...OWN]);
  counts();filt()}
