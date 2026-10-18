@@ -43,6 +43,7 @@ async function loadMe(){
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+esc(ME.name):'Sign in';
  $('mine').hidden=!ME;
+ $('fbBtn').hidden=!API;
  renderNeu();draw()}
 
 /* ---------- router ---------- */
@@ -405,6 +406,18 @@ async function renderEdit(id){
   const b={kind:$('eKind').value,title:$('eTitle').value,summary:$('eSum').value,body:$('eBody').value,link:$('eLink').value.trim(),cover,steps,paints:extra,visibility:el.querySelector('input[name=eVis]:checked').value};
   try{const d=await api(id?'/recipes/'+id:'/recipes',{method:id?'PUT':'POST',body:b});location.hash='#/recipe/'+d.recipe.id}
   catch(e){$('eErr').textContent=e.message;$('eSave').disabled=false}}}
+
+/* ---------- feedback ---------- */
+// The floating Feedback button on every page opens this popup; messages go to /api/feedback.
+{const D=$('fbDlg'),F=$('fbForm');let sent=false;
+ const reset=()=>{sent=false;F.reset();$('fbErr').textContent='';$('fbBody').hidden=false;$('fbSend').hidden=false;$('fbSend').disabled=false;$('fbNo').textContent='Cancel';const m=D.querySelector('#fbDone');if(m)m.remove()};
+ $('fbBtn').onclick=()=>{if(sent)reset();if(ME&&!$('fbEmail').value)$('fbEmail').value=ME.email||'';D.showModal();$('fbMsg').focus()};
+ $('fbNo').onclick=()=>D.close();
+ F.onsubmit=async e=>{e.preventDefault();$('fbErr').textContent='';$('fbSend').disabled=true;
+  try{await api('/feedback',{method:'POST',body:{kind:F.fbKind.value,message:$('fbMsg').value,email:$('fbEmail').value.trim(),website:$('fbWeb').value,page:location.hash||'#/'}});
+   sent=true;$('fbBody').hidden=true;$('fbSend').hidden=true;$('fbNo').textContent='Close';
+   $('fbT').insertAdjacentHTML('afterend','<p class="ok" id="fbDone">Thanks! Your feedback has been sent.</p>');$('fbNo').focus()}
+  catch(err){$('fbErr').textContent=err.message;$('fbSend').disabled=false}}}
 
 if(FIRST)route();
 loadMe().then(route);

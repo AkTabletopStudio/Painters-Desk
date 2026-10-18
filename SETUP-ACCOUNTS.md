@@ -100,5 +100,13 @@ When the Worker has an `EMAIL` binding it is used instead of Resend:
 2. `wrangler.jsonc` has the `"send_email": [{ "name": "EMAIL" }]` binding (needs step 1 done, or the deploy can fail).
 3. Keep the `MAIL_FROM` secret; `RESEND_API_KEY` is then not needed.
 
+### Feedback button
+
+Every page has a **Feedback** button (bug, suggestion or other). Messages are saved in the `feedback` table
+(migration `0007_feedback.sql`) and emailed through the same mail setup to the `FEEDBACK_TO` variable, or to the first
+`ADMIN_EMAILS` address when that isn't set. Replying to the email goes to the sender when they gave an address.
+Each sender can post 5 an hour. Read saved feedback with
+`SELECT * FROM feedback ORDER BY created_at DESC` in the D1 console.
+
 Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
 tutorials. Uploaded icons go to the R2 bucket like tutorial photos. Needs migration `0004_profiles_passwords.sql`.
