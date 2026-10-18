@@ -46,6 +46,7 @@ input[type=checkbox]{accent-color:var(--pur);width:18px;height:18px;vertical-ali
 [hidden]{display:none!important}
 summary{cursor:pointer}
 #pickd>summary{font-size:17px}#pickd>summary b{font:400 20px 'Archivo Black',sans-serif}
+#neud>summary{padding:2px 0}#neud>summary b{font:400 17px/1.2 'Archivo Black',sans-serif}
 .bar{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}.bar input{flex:1 1 220px;min-width:0;font:inherit;padding:11px 14px;border:3px solid var(--ink);border-radius:14px;background:var(--bg);color:var(--fg)}
 .bar button,.btn,.mt button{font:inherit;font-weight:700;font-size:15px;padding:9px 16px;border:3px solid var(--ink);border-radius:14px;background:var(--card);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block;box-shadow:3px 3px 0 var(--ink);transition:transform .08s,box-shadow .08s}
 .bar button:hover,.btn:hover,.mt button:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
@@ -167,8 +168,8 @@ nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 <div class="stage">
 <svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
 <div class="panel" id="sel"><b>Tap a paint on the wheel.</b></div>
-<div class="panel" id="neup"><h2>Neutrals, greys &amp; whites (tap to inspect)</h2><div class="strip" id="neu"></div>
-<p class="s" style="margin-top:8px">Use the Choose paints panel to show any mix of paints from any brand. Basing textures appear in this list only, when selected.</p></div>
+<div class="panel" id="neup"><details id="neud"><summary><b>Neutrals, greys &amp; whites</b> <span class="s" id="neuN"></span></summary><p class="s" style="margin:8px 0">Tap a paint to inspect it.</p><div class="strip" id="neu"></div>
+<p class="s" style="margin-top:8px">Use the Choose paints panel to show any mix of paints from any brand. Basing textures appear in this list only, when selected.</p></details></div>
 </div>
 </section>
 <section id="v-paints" hidden></section>
