@@ -29,11 +29,11 @@ if(sel){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.fi
 ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hd(a.H,sel.H)-hd(b.H,sel.H)).slice(0,6);
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
-// Centre disc: gradient from the complements, through the selected paint, out to its neighbours, laid along the complement→selected axis.
-// Each group is ordered by how close its lightness is to the selected paint, so the blend ramps outward instead of striping.
-if(sel){const byL=(a,b)=>Math.abs(a.L-sel.L)-Math.abs(b.L-sel.L),st=[...[...comp].sort(byL).reverse(),sel,...[...ana].sort(byL)],ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2,mid=comp.length/Math.max(1,st.length-1);
-const off=i=>st.length<2?0:i<comp.length?i/Math.max(1,comp.length)*mid*.9:i===comp.length?mid:mid+(1-mid)*(.1+.9*(i-comp.length)/Math.max(1,ana.length));
-s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${st.map((p,i)=>`<stop offset="${off(i).toFixed(3)}" stop-color="${p.h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
+// Centre disc: the selected paint, its complements and neighbours blended darkest (bottom) to lightest (top),
+// by perceived lightness (CIE L*), with the selected paint pinned in the middle: darker paints fill the lower half, lighter ones the upper half.
+if(sel){const V=p=>p.lab[0],o=[...comp,...ana].sort((a,b)=>V(a)-V(b)),dk=o.filter(p=>V(p)<=V(sel)),lt=o.filter(p=>V(p)>V(sel));
+const st=[...dk.map((p,k)=>[p,.45*k/Math.max(1,dk.length-1)]),[sel,.5],...lt.map((p,k)=>[p,1-.45*(lt.length-1-k)/Math.max(1,lt.length-1)])];
+s+=`<defs><linearGradient id="cg" x1="0" y1="1" x2="0" y2="0">${st.map(([p,f])=>`<stop offset="${f.toFixed(3)}" stop-color="${p.h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Darkest → ${sel.n} → lightest</title></circle>`}
 const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,kk=R0/26;
 CH.forEach(p=>{const on=!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
 const st=(p.g==='W'||p.g==='s')?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
