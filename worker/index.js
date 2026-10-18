@@ -317,10 +317,9 @@ async function logout(request, env, url) {
 
 /* ---------- email + password accounts ---------- */
 
-// PBKDF2 via Web Crypto. 20,000 rounds keeps a sign-in inside the Workers Free plan's 10 ms CPU limit
-// (100,000 is the most Workers allow and needs the Paid plan). The count is stored with each hash, and a sign-in
-// re-hashes older passwords at the current count, so raising it later upgrades accounts as people sign in.
-const PBKDF2_ITER = 20000;
+// PBKDF2 via Web Crypto at 100,000 rounds, the most Workers allow (about 20 ms of CPU, fine on the Workers Paid plan).
+// The count is stored with each hash, and a sign-in re-hashes older passwords at the current count.
+const PBKDF2_ITER = 100000;
 const MAX_FAILED = 10, LOCK_MINUTES = 15;
 const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));

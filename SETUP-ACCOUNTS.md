@@ -65,8 +65,8 @@ renewed every six months.
 ## Email + password accounts and profiles
 
 Anyone can create an account with an email and password (no keys needed). Passwords are stored as salted
-PBKDF2-SHA256 hashes (20,000 rounds, so sign-in fits the Workers Free plan's 10 ms CPU limit; on the Paid plan raise
-`PBKDF2_ITER` in `worker/index.js` up to 100,000 and passwords upgrade as people sign in); ten wrong passwords lock that account's password sign-in
+PBKDF2-SHA256 hashes (100,000 rounds, the Workers maximum, which needs the Workers Paid plan's CPU allowance;
+older 20,000-round hashes upgrade when their owners sign in); ten wrong passwords lock that account's password sign-in
 for 15 minutes. An email typed at sign-up stays **not confirmed** until its owner clicks the confirmation link (or
 signs in with a service that verifies it). Until then it never grants admin rights, and if someone later signs in with
 Google (or another service) that verifies the same email, that person gets the account and the unconfirmed password
@@ -97,7 +97,7 @@ When the Worker has an `EMAIL` binding it is used instead of Resend:
 
 1. In the Cloudflare dashboard open **Compute > Email Service > Email Sending > Onboard Domain** and pick
    paintersdesk.com (Cloudflare adds the DNS records itself).
-2. Add `"send_email": [{ "name": "EMAIL" }]` to `wrangler.jsonc` (only after step 1, or the deploy can fail).
+2. `wrangler.jsonc` has the `"send_email": [{ "name": "EMAIL" }]` binding (needs step 1 done, or the deploy can fail).
 3. Keep the `MAIL_FROM` secret; `RESEND_API_KEY` is then not needed.
 
 Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
