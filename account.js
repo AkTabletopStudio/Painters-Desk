@@ -187,13 +187,15 @@ async function renderProfile(id){
  if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites)}
 
 /* ---------- my paints ---------- */
-// Guards against unticking lots of paints by accident: a confirm dialog for big range unticks, and an Undo bar after any removal.
-const BULK=5;let paintsRedraw=null,undoK=[],undoTm=0;
-function askRemove(keys,what){const d=$('remDlg'),n=keys.length;$('remDlgM').textContent=`This removes ${n} paint${n===1?'':'s'}${what?' ('+what+')':''} from your collection.`;d.returnValue='';
- d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,false);undoBar(keys);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
-function undoBar(keys){undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`Removed ${n} paint${n===1?'':'s'} from your collection.`;$('undoT').hidden=false;
+// Guards against ticking or unticking lots of paints by accident: a confirm dialog for big range changes, and an Undo bar after them.
+const BULK=5;let paintsRedraw=null,undoK=[],undoOn=false,undoTm=0;
+function askBulk(keys,what,on){const d=$('remDlg'),n=keys.length,s=n===1?'':'s';
+ $('remDlgT').textContent=on?'Add to your collection?':'Remove from your collection?';$('remOk').textContent=on?'Add paints':'Remove paints';$('remOk').className='btn '+(on?'pri':'dan');
+ $('remDlgM').textContent=`This ${on?'adds':'removes'} ${n} paint${s}${what?' ('+what+')':''} ${on?'to':'from'} your collection.`;d.returnValue='';
+ d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,on);undoBar(keys,on);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
+function undoBar(keys,on=false){if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`${on?'Added':'Removed'} ${n} paint${n===1?'':'s'} ${on?'to':'from'} your collection.`;$('undoT').hidden=false;
  clearTimeout(undoTm);undoTm=setTimeout(()=>{$('undoT').hidden=true;undoK=[]},10000)}
-$('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,true);if(paintsRedraw)paintsRedraw()};
+$('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
 let pend={add:new Set(),remove:new Set()},saveT=0;
 function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
  clearTimeout(saveT);saveT=setTimeout(flush,500)}
@@ -218,11 +220,10 @@ function renderPaints(){
   tr.querySelectorAll('details.br').forEach(d=>{d.hidden=f&&!d.querySelector('details.rg:not([hidden])');if(f)d.open=true})};
  tr.addEventListener('change',e=>{const t=e.target;
   if(t.dataset.r){const ks=P.filter(p=>p.g===t.dataset.r&&(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))).map(p=>p.k);
-   if(t.checked)setOwned(ks,true);
-   else{const rm=ks.filter(k=>OWN.has(k));
-    // Unticking a whole range asks first when it would take out BULK or more paints; Cancel leaves the collection as it was.
-    if(rm.length>=BULK){counts();askRemove(rm,GL[t.dataset.r]);return}
-    if(rm.length){setOwned(rm,false);undoBar(rm)}}}
+   // Ticking or unticking a whole range asks first when it would change BULK or more paints; Cancel leaves the collection as it was.
+   const on=t.checked,ch=ks.filter(k=>OWN.has(k)!==on);
+   if(ch.length>=BULK){counts();askBulk(ch,GL[t.dataset.r],on);return}
+   if(ch.length){setOwned(ch,on);undoBar(ch,on)}}
   else if(t.dataset.i!==undefined){const k=P[+t.dataset.i].k;setOwned([k],t.checked);if(!t.checked)undoBar([k])}
   $('pmsg').textContent='Saving…';counts()});
  paintsRedraw=()=>{if(!$('ptree'))return;$('pmsg').textContent='Saving…';counts();filt();sugLater()};
