@@ -187,6 +187,13 @@ async function renderProfile(id){
  if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites)}
 
 /* ---------- my paints ---------- */
+// Guards against unticking lots of paints by accident: a confirm dialog for big range unticks, and an Undo bar after any removal.
+const BULK=5;let paintsRedraw=null,undoK=[],undoTm=0;
+function askRemove(keys,what){const d=$('remDlg'),n=keys.length;$('remDlgM').textContent=`This removes ${n} paint${n===1?'':'s'}${what?' ('+what+')':''} from your collection.`;d.returnValue='';
+ d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,false);undoBar(keys);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
+function undoBar(keys){undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`Removed ${n} paint${n===1?'':'s'} from your collection.`;$('undoT').hidden=false;
+ clearTimeout(undoTm);undoTm=setTimeout(()=>{$('undoT').hidden=true;undoK=[]},10000)}
+$('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,true);if(paintsRedraw)paintsRedraw()};
 let pend={add:new Set(),remove:new Set()},saveT=0;
 function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
  clearTimeout(saveT);saveT=setTimeout(flush,500)}
@@ -210,9 +217,15 @@ function renderPaints(){
   tr.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=f&&!v;if(f)d.open=v});
   tr.querySelectorAll('details.br').forEach(d=>{d.hidden=f&&!d.querySelector('details.rg:not([hidden])');if(f)d.open=true})};
  tr.addEventListener('change',e=>{const t=e.target;
-  if(t.dataset.r)setOwned(P.filter(p=>p.g===t.dataset.r&&(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))).map(p=>p.k),t.checked);
-  else if(t.dataset.i!==undefined)setOwned([P[+t.dataset.i].k],t.checked);
+  if(t.dataset.r){const ks=P.filter(p=>p.g===t.dataset.r&&(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))).map(p=>p.k);
+   if(t.checked)setOwned(ks,true);
+   else{const rm=ks.filter(k=>OWN.has(k));
+    // Unticking a whole range asks first when it would take out BULK or more paints; Cancel leaves the collection as it was.
+    if(rm.length>=BULK){counts();askRemove(rm,GL[t.dataset.r]);return}
+    if(rm.length){setOwned(rm,false);undoBar(rm)}}}
+  else if(t.dataset.i!==undefined){const k=P[+t.dataset.i].k;setOwned([k],t.checked);if(!t.checked)undoBar([k])}
   $('pmsg').textContent='Saving…';counts()});
+ paintsRedraw=()=>{if(!$('ptree'))return;$('pmsg').textContent='Saving…';counts();filt();sugLater()};
  // Suggested paints: worked out in app.js (suggestPaints), redrawn shortly after the collection changes.
  {const d=$('sugd');try{d.open=localStorage.getItem('pd-sug')!=='0'}catch(e){d.open=true}d.ontoggle=()=>{try{localStorage.setItem('pd-sug',d.open?'1':'0')}catch(e){}}}
  const sugGo=()=>{const box=$('sug');if(!box)return;const r=suggestPaints(OWN);
