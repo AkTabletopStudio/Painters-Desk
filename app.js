@@ -100,11 +100,24 @@ function autoPicks(b){if(!CH.includes(b))return{comp:[],ana:[]};const th=(b.H+18
 return{comp:c.filter(p=>hd(p.H,th)<=22).sort((x,y)=>hd(x.H,th)-hd(y.H,th)).slice(0,6),ana:c.filter(p=>hd(p.H,b.H)<=25).sort((x,y)=>hd(x.H,b.H)-hd(y.H,b.H)).slice(0,6)}}
 function blendSeed(b){const {comp,ana}=autoPicks(b),m=q=>!ONLY_MINE||own(q),byL=(x,y)=>Math.abs(x.L-b.L)-Math.abs(y.L-b.L);
 const c=comp.filter(m).slice(0,2).sort(byL).reverse(),a=ana.filter(m).slice(0,2).sort(byL);
-BL={b,s:[...c.map(p=>({p,m:0})),{p:b,base:1},...a.map(p=>({p,m:0}))]};ACT=null}
+BL={b,s:[...c.map(p=>({p,sp:p,m:0})),{p:b,base:1},...a.map(p=>({p,sp:p,m:0}))]};ACT=null}
+// Steps the painter didn't pick (auto) are refilled on every draw. Between two fixed steps (the base or a pick) an auto step
+// aims at the colour part-way between them; past the outermost pick it carries on the same way (clamped). A side with no
+// picks keeps the wheel's own seed paints. Each target takes the nearest unused ticked opaque paint, lightness weighted like ramps.
+function blendAuto(){const st=BL.s,fx=x=>x.base||x.man,A=st.map((x,i)=>fx(x)?i:-1).filter(i=>i>=0),used=new Set(st.filter(fx).map(x=>x.p)),
+pool=P.filter(p=>p.on&&nmmOK(p)&&(!ONLY_MINE||own(p))),todo=[];
+const near=t=>{let b=null,bd=1e9;for(const q of pool){if(used.has(q))continue;const d=Math.hypot(1.6*(q.lab[0]-t[0]),q.lab[1]-t[1],q.lab[2]-t[2]);if(d<bd){bd=d;b=q}}return b};
+st.forEach((x,i)=>{if(fx(x))return;const lo=A.filter(a=>a<i).pop(),hi=A.find(a=>a>i);
+ if(!((lo!=null&&st[lo].man)||(hi!=null&&st[hi].man))){x.p=used.has(x.sp)?near(x.sp.lab)||x.sp:x.sp;used.add(x.p);return}
+ let t;if(lo!=null&&hi!=null){const L=mixLab(st[lo]),H=mixLab(st[hi]),f=(i-lo)/(hi-lo);t=L.map((v,k)=>v+(H[k]-v)*f)}
+ else{const a=lo!=null?lo:hi,b2=lo!=null?A.filter(z=>z<a).pop():A.find(z=>z>a),Aa=mixLab(st[a]),Ab=mixLab(st[b2]),k=Math.abs(i-a)/Math.abs(a-b2);
+  t=Aa.map((v,j)=>v+(v-Ab[j])*k);t[0]=Math.max(4,Math.min(97,t[0]))}
+ todo.push([x,t])});
+todo.forEach(([x,t])=>{const q=near(t);if(q){x.p=q;used.add(q)}x.t=t})}
 const mixLab=x=>{if(x.base||!x.m)return x.p.lab;const[r0,r1]=MXR[x.m],b=BL.b.lab;return x.p.lab.map((v,i)=>(v*r0+b[i]*r1)/(r0+r1))};
 const mixHex=x=>x.base||!x.m?x.p.h:labHex(mixLab(x));
-const blendTag=p=>{const b=BL.b;if(!CH.includes(b)||!CH.includes(p))return'Neutral';if(hd(p.H,(b.H+180)%360)<=30)return'Complement';if(hd(p.H,b.H)<=30)return'Neighbour';return'Your pick'};
-function blendFill(p){if(!ACT||!BL)return false;if(p!==BL.b){if(ACT.ins)BL.s.splice(ACT.i,0,{p,m:0});else BL.s[ACT.i]={...BL.s[ACT.i],p}}ACT=null;draw();return true}
+const blendTag=p=>{const b=BL.b;if(!CH.includes(b)||!CH.includes(p))return'Neutral';if(hd(p.H,(b.H+180)%360)<=30)return'Complement';if(hd(p.H,b.H)<=30)return'Neighbour';return'Other hue'};
+function blendFill(p){if(!ACT||!BL)return false;if(p!==BL.b){if(ACT.ins)BL.s.splice(ACT.i,0,{p,sp:p,m:0,man:1});else BL.s[ACT.i]={...BL.s[ACT.i],p,man:1}}ACT=null;draw();return true}
 // Wheel overlay: the blend as a path through its paints on the wheel, and the centre disc as the blend in the painter's order.
 function blendWheel(){const st=BL.s,on=st.filter(x=>CH.includes(x.p));let s='';
 if(on.length>1)s+=`<polyline points="${on.map(x=>x.p.x+','+x.p.y).join(' ')}" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" opacity=".6"/>`;
@@ -114,10 +127,10 @@ function blendPanel(){const el=document.getElementById('sel'),b=BL.b,st=BL.s,i0=
 const add=(i,t)=>`<button type="button" class="badd${ACT&&ACT.ins&&ACT.i===i?' on':''}" data-ma="${i}">${ACT&&ACT.ins&&ACT.i===i?'Now tap a paint on the wheel…':t}</button>`;
 const rows=st.map((x,i)=>{const act=ACT&&!ACT.ins&&ACT.i===i;
  if(x.base)return`<div class="nrow brow nbase"><div class="nrole">Base</div><span class="nsw" style="background:${b.h}"></span><div class="nnm"><b>${star(b)}${esc(b.n)}</b><span>${esc(GL[b.g])}${b.c?' · '+esc(b.c):''}</span></div><span></span><span></span></div>`;
- return`<div class="nrow brow${act?' bact':''}"><div class="nrole">${i<i0?'Shadow side':'Light side'}</div><button type="button" class="nsw bsw" data-mr="${i}" style="background:${mixHex(x)}" title="Replace this paint" aria-label="Replace ${esc(x.p.n)}">${x.m?`<i style="background:${x.p.h}" title="${esc(x.p.n)} before mixing"></i>`:''}</button><div class="nnm"><b>${act?'Now tap a paint on the wheel…':star(x.p)+esc(x.p.n)+(x.p.c?' <em>'+esc(x.p.c)+'</em>':'')}</b><span>${blendTag(x.p)} · ${esc(GL[x.p.g])}</span></div><select class="nsel bmx" data-mm="${i}" aria-label="Mix with base">${MXN.map((t,k)=>`<option value="${k}"${k===x.m?' selected':''}>${t}</option>`).join('')}</select><span class="bbt"><button type="button" class="nsk" data-mu="${i}" title="Move toward the shadow end" aria-label="Move up"${i?'':' disabled'}>↑</button><button type="button" class="nsk" data-md="${i}" title="Move toward the light end" aria-label="Move down"${i<st.length-1?'':' disabled'}>↓</button><button type="button" class="nsk" data-mx="${i}" title="Remove this step" aria-label="Remove">×</button></span></div>`}).join('');
+ return`<div class="nrow brow${act?' bact':''}"><div class="nrole">${i<i0?'Shadow side':'Light side'}</div><button type="button" class="nsw bsw" data-mr="${i}" style="background:${mixHex(x)}" title="Replace this paint" aria-label="Replace ${esc(x.p.n)}">${x.m?`<i style="background:${x.p.h}" title="${esc(x.p.n)} before mixing"></i>`:''}</button><div class="nnm"><b>${act?'Now tap a paint on the wheel…':star(x.p)+esc(x.p.n)+(x.p.c?' <em>'+esc(x.p.c)+'</em>':'')}</b><span>${x.man?'<u class="bpin">Your pick</u>':'Auto'} · ${blendTag(x.p)} · ${esc(GL[x.p.g])}</span></div><select class="nsel bmx" data-mm="${i}" aria-label="Mix with base">${MXN.map((t,k)=>`<option value="${k}"${k===x.m?' selected':''}>${t}</option>`).join('')}</select><span class="bbt"><button type="button" class="nsk bpk${x.man?' on':''}" data-mp="${i}" aria-pressed="${!!x.man}" title="${x.man?'Pinned: tap to let the wheel choose this step again':'Pin this paint so it stops changing'}" aria-label="Pin">📌</button><button type="button" class="nsk" data-mu="${i}" title="Move toward the shadow end" aria-label="Move up"${i?'':' disabled'}>↑</button><button type="button" class="nsk" data-md="${i}" title="Move toward the light end" aria-label="Move down"${i<st.length-1?'':' disabled'}>↓</button><button type="button" class="nsk" data-mx="${i}" title="Remove this step" aria-label="Remove">×</button></span></div>`}).join('');
 const w=292/st.length;
 el.innerHTML=`<b>Your blend from:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${esc(b.n)} <span style="color:var(--mut)">${esc(b.c)}</span></span></div>
-<p class="s">It starts with the wheel's own complements and neighbours. Tap a swatch, then any paint on the wheel or in the neutrals, to swap it. ↑ ↓ reorder, × removes.${ONLY_MINE?' Starting picks come from your collection.':''}</p>
+<p class="s">It starts with the wheel's own complements and neighbours. Tap a swatch, then any paint on the wheel or in the neutrals, to swap it in. Steps marked Auto then recalculate to blend smoothly around your picks. 📌 pins or unpins a step, ↑ ↓ reorder, × removes.${ONLY_MINE?' Starting picks come from your collection.':''}</p>
 ${add(0,'+ Add a step on the shadow side')}<div class="nrows">${rows}</div>${add(st.length,'+ Add a step on the light side')}
 <svg class="blade" viewBox="0 0 300 96" role="img" aria-label="Blend preview"><defs><linearGradient id="bp" x1="0" x2="1">${st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${mixHex(x)}"/>`).join('')}</linearGradient></defs>${st.map((x,i)=>`<rect x="${(4+i*w).toFixed(1)}" y="6" width="${w.toFixed(1)}" height="40" fill="${mixHex(x)}"/>`).join('')}<rect x="4" y="6" width="292" height="40" rx="6" fill="none" stroke="#1b1b1b" stroke-width="3"/><rect x="4" y="54" width="292" height="36" rx="18" fill="url(#bp)" stroke="#1b1b1b" stroke-width="3"/></svg>
 <p class="s">Top: each step as painted. Bottom: how they blend. Mixed colours and swatches are estimates, so test the blend on the model.</p>
@@ -125,6 +138,7 @@ ${add(0,'+ Add a step on the shadow side')}<div class="nrows">${rows}</div>${add
 el.querySelectorAll('[data-ma]').forEach(e=>e.onclick=()=>{const i=+e.dataset.ma;ACT=ACT&&ACT.ins&&ACT.i===i?null:{i,ins:1};draw()});
 el.querySelectorAll('[data-mr]').forEach(e=>e.onclick=()=>{const i=+e.dataset.mr;ACT=ACT&&!ACT.ins&&ACT.i===i?null:{i};draw()});
 el.querySelectorAll('[data-mu],[data-md]').forEach(e=>e.onclick=()=>{const i=+(e.dataset.mu??e.dataset.md),j=e.dataset.mu!=null?i-1:i+1;[st[i],st[j]]=[st[j],st[i]];ACT=null;draw()});
+el.querySelectorAll('[data-mp]').forEach(e=>e.onclick=()=>{const x=st[+e.dataset.mp];x.man=x.man?0:1;if(!x.man&&!x.sp)x.sp=x.p;ACT=null;draw()});
 el.querySelectorAll('[data-mx]').forEach(e=>e.onclick=()=>{st.splice(+e.dataset.mx,1);ACT=null;draw()});
 el.querySelectorAll('[data-mm]').forEach(e=>e.onchange=()=>{st[+e.dataset.mm].m=+e.value;draw()});
 document.getElementById('blReset').onclick=()=>{blendSeed(b);draw()};
@@ -190,7 +204,7 @@ if(!sel)s+=`<text x="${CX}" y="${CY-8}" text-anchor="middle" fill="currentColor"
 const hn={0:'Red',30:'Orange',60:'Yellow',120:'Green',180:'Cyan',240:'Blue',280:'Violet',320:'Magenta'};
 for(const h in hn){const a=U(+h)*Math.PI/180-Math.PI/2;s+=`<text x="${CX+492*Math.cos(a)}" y="${CY+492*Math.sin(a)+4}" text-anchor="middle" font-size="13" fill="currentColor" opacity=".6">${hn[h]}</text>`}
 let comp=[],ana=[];const NBp=MODE==='nmm'?NB:null,R=NBp?nmmRamp(NBp):null,MB=MODE==='mix'?NB:null;
-if(MB&&(!BL||BL.b!==MB))blendSeed(MB);const MX=MB?BL.s.map(x=>x.p):null;
+if(MB&&(!BL||BL.b!==MB))blendSeed(MB);if(MB)blendAuto();const MX=MB?BL.s.map(x=>x.p):null;
 if(sel&&!R&&!MX){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.filter(p=>hd(p.H,th)<=22).sort((a,b)=>hd(a.H,th)-hd(b.H,th)).slice(0,6);
 ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hd(a.H,sel.H)-hd(b.H,sel.H)).slice(0,6);
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
