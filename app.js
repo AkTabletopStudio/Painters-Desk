@@ -8,7 +8,12 @@ P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n})});
 // Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
 let OWN=null,ONLY_MINE=false;const own=p=>!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
 let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
-function layout(){CH=P.filter(p=>p.on&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);NE=P.filter(p=>p.on&&!CH.includes(p)).sort((a,b)=>a.L-b.L);
+// Metallics: the metallic ranges (incl. Vallejo TMM, Turbo Dork, AK 3rd Gen), anything labelled Met./Metallic, and metal names
+// in other ranges unless the name is a pigment colour (Chrome Oxide Green, Steel Legion Drab, Bronze Green...).
+const MET_G=new Set(['D','I','Q','X','u','m','L','q']),MET_RX=/metal|\bgold\b|silver|bronze|brass|copper|steel|\biron\b|chrome|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|pewter|platinum|nickel/i;
+const isMet=p=>MET_G.has(p.g)||/\bmet(al|allic)?\b/i.test(p.n+' '+p.c)||/gunmetal/i.test(p.n)||p.c==='70.877'||MET_RX.test(p.n)&&!/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n);
+let HIDE_MET=false;try{HIDE_MET=localStorage.getItem('pd-met')==='1'}catch(e){}
+function layout(){const vis=p=>p.on&&!(HIDE_MET&&isMet(p));CH=P.filter(p=>vis(p)&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);NE=P.filter(p=>vis(p)&&!CH.includes(p)).sort((a,b)=>a.L-b.L);
 const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
 CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
@@ -235,6 +240,9 @@ document.getElementById('lab').onchange=draw;
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${P.indexOf(p)}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
 document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));
 document.getElementById('neuN').textContent=NE.length===1?'(1 paint)':`(${NE.length} paints)`}
+function metUI(){const b=document.getElementById('hMet');b.textContent=HIDE_MET?'Show metallics':'Hide metallics';b.setAttribute('aria-pressed',HIDE_MET)}
+document.getElementById('hMet').onclick=()=>{HIDE_MET=!HIDE_MET;try{localStorage.setItem('pd-met',HIDE_MET?'1':'0')}catch(e){}metUI();
+if(HIDE_MET){if(sel&&isMet(sel))sel=null;if(NB&&isMet(NB))NB=null}layout();renderNeu();draw()};metUI();
 {const d=document.getElementById('neud');try{d.open=localStorage.getItem('pd-neu')==='1'}catch(e){}d.ontoggle=()=>{try{localStorage.setItem('pd-neu',d.open?'1':'0')}catch(e){}}}
 const GL={A:'Warpaints Fanatic',C:'John Blanche Vol. 1-4',R:'Warpaints Air',S:'Speedpaint 2.0',b:'Colour: Base',s:'Colour: Shade',l:'Colour: Layer',c:'Colour: Contrast',t:'Colour: Technical',a:'Colour: Air',d:'Colour: Dry',p:'Tone Pro',M:'Standard / Signature / AMP',W:'Washes',F:'Fluorescents',T:'Transparents',X:'Metallics','1':'1-Step',E:'Expert Acrylics',P:'Primers',G:'Weathering pigments',B:'Basing textures (list only)',K:'AK Quick Gen',e:'3rd Gen Standard',g:'3rd Gen Intense',j:'3rd Gen Pastel',m:'3rd Gen Metallic',n:'3rd Gen Ink',o:'3rd Gen AFV Series',v:'3rd Gen Figure Series',y:'3rd Gen Air Series',V:'Game Color',u:'Game Color Metallic',i:'Game Color Ink',f:'Game Color Special FX / Fluo',x:'Xpress Color',w:'Game Color Wash',L:'True Metallic Metal',Y:'Model Air',Z:'Model Color',H:'Color wheel: outer ring (highlights)',N:'Color wheel: middle ring (midtones)',O:'Color wheel: inner ring (shadows)',J:'Brights',q:'Metallics',z:'Washes',r:'Glazes',k:'Tonal families & flesh tones',D:'Metallic',I:'TurboShift',Q:'ZeniShift'};
 const BRANDS=[['Army Painter',['A','C','R','S']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z','L']],['AK Interactive',['K','e','g','j','m','n','o','v','y']],['Two Thin Coats',['H','N','O','J','q','z','r','k']],['Turbo Dork',['D','I','Q']]];
