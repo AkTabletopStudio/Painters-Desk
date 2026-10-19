@@ -41,7 +41,7 @@ Jade|021|#014a58
 Bright Jade|067|#2f9e8a
 Dark Turquoise|S34|#1b6e84
 Turquoise|054|#1aa0b8
-Dark Sea Blue|S13|#0f2e3a
+Dark Sea Ben|S13|#0f2e3a
 Payne’s Grey|S02|#3a4658
 Blue Black|056|#1f2a3a
 Dark Navy Blue|AMP-005|#1c1f3e
