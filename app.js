@@ -4,7 +4,7 @@ RAW.split('\n').forEach(l=>{if(l[0]==='#'){g=l[1];return}const[n,c,h]=l.split('|
 const mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;let H=0;
 if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
 const S=d?d/(1-Math.abs(2*L-1)):0;
-P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n})});
+P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n,i:P.length})});
 // Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
 let OWN=null,ONLY_MINE=false;const own=p=>!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
 let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
@@ -13,11 +13,14 @@ let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
 const MET_G=new Set(['D','I','Q','X','u','m','L','q']),MET_RX=/metal|\bgold\b|silver|bronze|brass|copper|steel|\biron\b|chrome|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|pewter|platinum|nickel/i;
 const isMet=p=>MET_G.has(p.g)||/\bmet(al|allic)?\b/i.test(p.n+' '+p.c)||/gunmetal/i.test(p.n)||p.c==='70.877'||MET_RX.test(p.n)&&!/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n);
 let HIDE_MET=false;try{HIDE_MET=localStorage.getItem('pd-met')==='1'}catch(e){}
-function layout(){const vis=p=>p.on&&!(HIDE_MET&&isMet(p));CH=P.filter(p=>vis(p)&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);NE=P.filter(p=>vis(p)&&!CH.includes(p)).sort((a,b)=>a.L-b.L);
+function layout(){const vis=p=>p.on&&!(HIDE_MET&&isMet(p));CH=P.filter(p=>vis(p)&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
 const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
 CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
-for(let it=0;it<500;it++){for(let i=0;i<CH.length;i++){const a=CH[i];for(let j=i+1;j<CH.length;j++){const b=CH[j];let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||.01;if(d<MD){const k=(MD-d)/2/d;a.x-=dx*k;a.y-=dy*k;b.x+=dx*k;b.y+=dy*k}}
+// Push-apart only checks dots in the same or neighbouring grid cells (cell = MD), so it scales with the number of dots, not its square.
+const G=Math.ceil(1000/MD)+3,cell=new Map(),ck=(x,y)=>(Math.floor(x/MD)+1)*G+Math.floor(y/MD)+1;
+for(let it=0;it<500;it++){cell.clear();CH.forEach((p,i)=>{const k=ck(p.x,p.y),c=cell.get(k);if(c)c.push(i);else cell.set(k,[i])});
+for(let i=0;i<CH.length;i++){const a=CH[i],k0=ck(a.x,a.y);for(let gx=-G;gx<=G;gx+=G)for(let gy=-1;gy<=1;gy++){const c=cell.get(k0+gx+gy);if(c)for(const j of c){if(j<=i)continue;const b=CH[j];let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||.01;if(d<MD){const k=(MD-d)/2/d;a.x-=dx*k;a.y-=dy*k;b.x+=dx*k;b.y+=dy*k}}}
 a.x+=(a.ox-a.x)*.008;a.y+=(a.oy-a.y)*.008;const dx=a.x-CX,dy=a.y-CY,d=Math.hypot(dx,dy);if(d>455||d<125){const t=Math.min(455,Math.max(125,d))/d;a.x=CX+dx*t;a.y=CY+dy*t}}}}
 function lines(n){let w=n.split(' ').map(x=>AB[x]||x);if(w.length===1)return w;let best=1,bm=1e9;for(let k=1;k<w.length;k++){const m=Math.max(w.slice(0,k).join(' ').length,w.slice(k).join(' ').length);if(m<bm){bm=m;best=k}}return[w.slice(0,best).join(' '),w.slice(best).join(' ')]}
 function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
@@ -225,7 +228,7 @@ const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,k
 CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
 const st=(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
 const sw=p===sel?5:comp.includes(p)?4:2;
-s+=`<g class="dot" data-i="${P.indexOf(p)}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))?' stroke="#fff" stroke-width="4"':''}/>`+
+s+=`<g class="dot" data-i="${p.i}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))?' stroke="#fff" stroke-width="4"':''}/>`+
 (show?`<g transform="translate(${p.x} ${p.y}) scale(${kk}) translate(${-p.x} ${-p.y})">`+ls.map((t,i)=>`<text x="${p.x}" y="${p.y-(ls.length*8-4)/1+i*8.5-2+4}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${p.x}" y="${p.y+20-(ls.length>1?1:-3)-(ls.length>1?0:0)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c})</title></g>`});
 svg.innerHTML=s;
 svg.querySelectorAll('.dot').forEach(e=>e.onclick=()=>pick(P[+e.dataset.i]));
@@ -237,7 +240,7 @@ if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to sta
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel)wireMatch(sel)}
 function pick(p){if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
-function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${P.indexOf(p)}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
+function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
 document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));
 document.getElementById('neuN').textContent=NE.length===1?'(1 paint)':`(${NE.length} paints)`}
 function metUI(){const b=document.getElementById('hMet');b.textContent=HIDE_MET?'Show metallics':'Hide metallics';b.setAttribute('aria-pressed',HIDE_MET)}
@@ -255,12 +258,12 @@ return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
 P.forEach(p=>p.lab=hexLab(p.h));
 const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
 const MSRC={t:'Two Thin Coats comparison chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart'};
-function matchData(p){const i=P.indexOf(p),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
+function matchData(p){const i=p.i,mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
 BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;const ch=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d);
 const have=new Set(ch.map(m=>m.p));const near=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d).slice(0,ch.length?2:3);
 out.push({bn,ch,near})});return out}
 function matchHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>';
-const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${P.indexOf(m.p)}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
+const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
 md.forEach(o=>{if(!o.ch.length&&!o.near.length)return;h+=`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o.ch.map(m=>c(m,1)).join('')}${o.near.map(m=>c(m,0)).join('')}</div></div>`});
 if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
 function addOn(list,p){list.forEach(q=>q.on=true);layout();renderNeu();boxes();showP(p);remember()}
