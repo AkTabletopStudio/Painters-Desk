@@ -5,10 +5,12 @@
 <meta name="theme-color" content="#fff4de" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1d1a15" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Painters Desk"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" href="icons/favicon-32.png" id="fav">
 <title>The Painters Desk</title>
 <meta name="author" content="AK Tabletop Studio"><meta name="application-name" content="The Painters Desk">
 <script>var l='cyber';try{var s=localStorage.getItem('pd-look');if(s!==null)l=s}catch(e){}if(/^(cyber|grim|forest|dwarf)$/.test(l))document.documentElement.dataset.look=l</script>
+<script>/* Each theme has its own main icon in icons/themes/<look>.svg; Paint Pot keeps the watercolour PNGs (data-def). */
+function pdIcon(){var l=document.documentElement.dataset.look,f=document.getElementById('fav');document.querySelectorAll('img.pdi').forEach(function(m){m.src=l?'icons/themes/'+l+'.svg':m.dataset.def});if(f){f.type=l?'image/svg+xml':'image/png';f.href=l?'icons/themes/'+l+'.svg':'icons/favicon-32.png'}}pdIcon()</script>
 <style>
 @font-face{font-family:'Archivo Black';src:url(fonts/archivo-black.woff2) format('woff2');font-weight:400;font-display:swap}
 @font-face{font-family:Rubik;src:url(fonts/rubik-400.woff2) format('woff2');font-weight:400;font-display:swap}
@@ -277,9 +279,9 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 .wth{margin:0 0 18px}.wth h2{margin:0 0 4px}.wth .thg{margin:12px 0 0}
 .tho small{display:block;padding:0 10px 10px;color:var(--mut);font-size:12px}
 </style></head><body><div class="wrap">
-<nav class="top" id="nav"><a href="#/welcome" data-v="welcome" class="home" title="Welcome"><img src="icons/icon-192.png" alt="">Painters Desk</a><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><button type="button" class="thb" id="thBtn" aria-haspopup="dialog" title="Change the site theme"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:inline;width:18px"><path fill="currentColor" d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A5.6 5.6 0 0 0 22 10c0-4.4-4.5-8-10-8zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Theme</button><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
+<nav class="top" id="nav"><a href="#/welcome" data-v="welcome" class="home" title="Welcome"><img src="icons/icon-192.png" alt="" class="pdi" data-def="icons/icon-192.png">Painters Desk</a><a href="#/" data-v="wheel">Colour wheel</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><button type="button" class="thb" id="thBtn" aria-haspopup="dialog" title="Change the site theme"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:inline;width:18px"><path fill="currentColor" d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A5.6 5.6 0 0 0 22 10c0-4.4-4.5-8-10-8zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Theme</button><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
 <section id="v-welcome" hidden>
-<div class="hero"><div class="logo" id="wLogo"><img src="icons/icon-512.png" alt="The Painters Desk icon"></div>
+<div class="hero"><div class="logo" id="wLogo"><img src="icons/icon-512.png" alt="The Painters Desk icon" class="pdi" data-def="icons/icon-512.png"><script>pdIcon()</script></div>
 <div><h1>Welcome to The Painters Desk</h1>
 <p class="lead">A free colour wheel for miniature painters. See <b id="wCount">2,638</b> paints from <span id="wBrands">the big hobby brands</span> laid out by hue and lightness, find what goes with what, and match paints across brands.</p>
 <a class="btn pri" href="#/">Open the colour wheel</a></div></div>
