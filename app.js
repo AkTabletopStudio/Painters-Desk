@@ -346,11 +346,14 @@ return{ramps,cells,mine,other,left:gaps.filter(x=>!x.done).length,brands:[...myB
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 // Site theme picker. The choice lives in localStorage pd-look; an inline script in index.html applies it before first paint.
-{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311'},dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
+// Neon 1984 (cyber) is the default for anyone who hasn't picked; Paint Pot is stored as ''. The welcome page gets its own copy of the choices.
+{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311'},DEF='cyber',dlg=document.getElementById('thDlg'),wt=document.getElementById('wThemes');
+if(wt){const g=dlg.querySelector('.thg').cloneNode(true);g.setAttribute('aria-labelledby','wThT');wt.append(g)}
+const opts=document.querySelectorAll('.tho');
 const metas=[...document.querySelectorAll('meta[name="theme-color"]')],orig=metas.map(m=>m.content);
 const apply=l=>{if(!(l in LOOKS))l='';if(l)document.documentElement.dataset.look=l;else delete document.documentElement.dataset.look;
  metas.forEach((m,i)=>m.content=LOOKS[l]||orig[i]);opts.forEach(o=>o.setAttribute('aria-checked',o.dataset.look===l?'true':'false'))};
-let cur='';try{cur=localStorage.getItem('pd-look')||''}catch(e){}apply(cur);
+let cur=DEF;try{const s=localStorage.getItem('pd-look');if(s!==null)cur=s}catch(e){}apply(cur);
 document.getElementById('thBtn').onclick=()=>{dlg.showModal();(dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).focus()};
 opts.forEach(o=>o.onclick=()=>{apply(o.dataset.look);try{localStorage.setItem('pd-look',o.dataset.look)}catch(e){}});
 document.getElementById('thOk').onclick=()=>dlg.close();
