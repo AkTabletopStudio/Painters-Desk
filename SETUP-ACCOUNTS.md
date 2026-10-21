@@ -108,5 +108,13 @@ Every page has a **Feedback** button (bug, suggestion or other). Messages are sa
 Each sender can post 5 an hour. Read saved feedback with
 `SELECT * FROM feedback ORDER BY created_at DESC` in the D1 console.
 
+### Update emails (new features)
+
+Opt-in only (migration `0008_update_emails.sql`). Users tick **Email me when new features go live** when signing up,
+on their account page, or on a one-time bar the site shows signed-in users. Admins (`ADMIN_EMAILS`, confirmed email)
+get a **Send an update email** panel on their account page: send a test to yourself first, then send to everyone who
+opted in with a confirmed address. Each email has an unsubscribe link (`/api/unsubscribe`, also sent as a one-click
+`List-Unsubscribe` header). Sends are logged in the `announcements` table, and the same subject can't go out twice in 24 hours.
+
 Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
 tutorials. Uploaded icons go to the R2 bucket like tutorial photos. Needs migration `0004_profiles_passwords.sql`.

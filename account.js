@@ -47,6 +47,7 @@ async function loadMe(){
  $('acct').innerHTML=ME?avHTML(ME)+esc(ME.name):'Sign in';
  $('mine').hidden=!ME;
  $('fbBtn').hidden=!API;
+ askUpdates();
  renderNeu();draw()}
 
 /* ---------- router ---------- */
@@ -100,13 +101,14 @@ function renderAccount(){
   <form id="pwForm">${up?'<label class="f"><span>Display name</span><input type="text" id="aName" maxlength="40" autocomplete="nickname" required></label>':''}
   <label class="f"><span>Email</span><input type="email" class="inp" id="aEmail" maxlength="200" autocomplete="email" required></label>
   <label class="f"><span>Password${up?' (at least 8 characters)':''}</span><input type="password" class="inp" id="aPw" minlength="${up?8:1}" maxlength="200" autocomplete="${up?'new-password':'current-password'}" required></label>
+  ${up&&INFO.mail?'<p><label><input type="checkbox" id="aUpd"> Email me when new features go live (a few times a year at most)</label></p>':''}
   <div class="row"><button class="btn pri" type="submit" id="aGo">${up?'Create account':'Sign in'}</button><span class="err" id="aErr"></span></div></form>
   ${INFO.mail?(up?'<p class="s">We\'ll email you a link to confirm your address.</p>':'<p><button class="lnk" type="button" data-m="forgot" style="font-size:14px;padding:0">Forgot your password?</button></p>')
    :`<p class="s">${up?'We can\'t email you yet, so there is no password reset link. Keep your password safe, or link Google from your account page as a backup way in.':'Forgot your password? There is no email reset yet. If you linked Google to your account, sign in with that and set a new password from your account page.'}</p>`}
   ${INFO.devLogin?`<div class="row"><input class="inp" id="devName" placeholder="Test user name" value="Test Painter" style="max-width:220px"><button class="btn" id="devGo" type="button">Dev sign-in</button><span class="s">Local testing only.</span></div>`:''}</div>`;
   el.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{authMode=b.dataset.m;renderAccount()});
   $('pwForm').onsubmit=async e=>{e.preventDefault();$('aGo').disabled=true;$('aErr').textContent='';
-   try{await api(up?'/auth/register':'/auth/password',{method:'POST',body:{email:$('aEmail').value,password:$('aPw').value,name:up?$('aName').value:undefined}});
+   try{await api(up?'/auth/register':'/auth/password',{method:'POST',body:{email:$('aEmail').value,password:$('aPw').value,name:up?$('aName').value:undefined,updates:up?!!$('aUpd')?.checked:undefined}});
     authMode='in';await loadMe();if(up){history.replaceState(null,'','#/account?welcome');renderAccount()}else location.hash='#/'}
    catch(e){$('aErr').textContent=e.message;$('aGo').disabled=false}};
   if(INFO.devLogin)$('devGo').onclick=()=>location.href=`/api/auth/dev?name=${encodeURIComponent($('devName').value)}&return=${ret}`;
@@ -132,6 +134,15 @@ function renderAccount(){
  ${hasPw?'<label class="f"><span>Current password</span><input type="password" class="inp" id="sCur" maxlength="200" autocomplete="current-password" required></label>':''}
  <label class="f"><span>New password (at least 8 characters)</span><input type="password" class="inp" id="sPw" minlength="8" maxlength="200" autocomplete="new-password" required></label>
  <div class="row"><button class="btn" type="submit" id="sGo">${hasPw?'Change password':'Add password'}</button><span class="s" id="sMsg"></span></div></form></div>
+ ${INFO.mail&&ME.email?`<div class="panel"><h2>Emails</h2>
+ <p><label><input type="checkbox" id="uOpt"${ME.updates?' checked':''}> Email me when new features go live</label> <span class="s" id="uMsg"></span></p>
+ <p class="s">A few times a year at most, with an unsubscribe link in every email.${ME.email_verified?'':' We only send these to confirmed addresses, so confirm yours above.'} Emails about your account, like password resets, come either way.</p></div>`:''}
+ ${ME.admin?`<div class="panel" id="annP"><h2>Send an update email <span class="tag">admin</span></h2>
+ <p class="s" id="annN">Checking who has opted in…</p>
+ <label class="f"><span>Subject</span><input type="text" id="annS" maxlength="150"></label>
+ <label class="f"><span>Message (blank line between paragraphs, "- " for a list, **bold**, {name} for their name; an unsubscribe link is added)</span><textarea id="annB" maxlength="10000" style="min-height:220px"></textarea></label>
+ <div class="row"><button class="btn" type="button" id="annT">Send me a test</button><button class="btn pri" type="button" id="annGo" disabled>Send to everyone opted in</button><span class="s" id="annM"></span></div>
+ <div id="annC" hidden class="row"><span class="err" id="annCT"></span><button class="btn pri" type="button" id="annGo2">Yes, send it</button><button class="btn" type="button" id="annX">Cancel</button></div></div>`:''}
  <div class="panel"><p class="s">${OWN.size} paints in your collection.</p>
  <div class="row"><button class="btn" id="out" type="button">Sign out</button><button class="btn dan" id="del" type="button">Delete my account</button></div>
  <div id="delc" hidden class="row"><span class="err">This deletes your profile, collection, recipes and comments for good.</span><button class="btn dan" id="del2" type="button">Yes, delete everything</button></div></div>`;
@@ -157,9 +168,35 @@ function renderAccount(){
   catch(e){$('sMsg').className='err';$('sMsg').textContent=e.message;$('sGo').disabled=false}};
  if($('vSend'))$('vSend').onclick=async()=>{$('vSend').disabled=true;$('vMsg').className='s';
   try{await api('/me/verify-email',{method:'POST'});$('vMsg').textContent='Sent. Check your inbox (and spam folder).'}catch(e){$('vMsg').className='err';$('vMsg').textContent=e.message;$('vSend').disabled=false}};
+ if($('uOpt'))$('uOpt').onchange=async()=>{const c=$('uOpt');c.disabled=true;$('uMsg').className='s';
+  try{ME=(await api('/me/updates',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('uMsg').textContent=c.checked?'Thanks, you\'re on the list.':'Turned off.';$('updAsk').hidden=true}
+  catch(e){c.checked=!c.checked;$('uMsg').className='err';$('uMsg').textContent=e.message}c.disabled=false};
+ if(ME.admin)annPanel();
  $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
  $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});await loadMe();location.hash='#/'}}
+
+// Admin: write an update email, send a test to yourself, then send it to everyone who opted in.
+async function annPanel(){let n=0;
+ const msg=(t,err)=>{$('annM').className=err?'err':'s';$('annM').textContent=t};
+ const info=async()=>{try{const d=await api('/admin/announce');n=d.recipients;
+  $('annN').textContent=`${n} ${n===1?'person has':'people have'} opted in with a confirmed email.`+(d.sent.length?` Last sent: "${d.sent[0].subject}" to ${d.sent[0].recipients} on ${fmtDate(d.sent[0].created_at)}.`:'');
+  $('annGo').disabled=!n;$('annGo').textContent=`Send to ${n} ${n===1?'person':'people'}`}catch(e){$('annN').textContent=e.message}};
+ const send=async test=>{msg(test?'Sending your test…':'Sending…');$('annT').disabled=$('annGo').disabled=true;
+  try{const d=await api('/admin/announce',{method:'POST',body:{subject:$('annS').value,text:$('annB').value,test}});
+   msg(test?(d.sent?'Test sent to your email.':'The test failed to send.'):`Sent to ${d.sent}${d.failed?`, ${d.failed} failed`:''}.`,!d.sent)}
+  catch(e){msg(e.message,1)}$('annT').disabled=false;await info()};
+ $('annT').onclick=()=>send(true);
+ $('annGo').onclick=()=>{if(!$('annS').value.trim()||!$('annB').value.trim()){msg('Add a subject and a message first.',1);return}
+  $('annCT').textContent=`Email "${$('annS').value.trim()}" to ${n} ${n===1?'person':'people'}? This can't be undone.`;$('annC').hidden=false;$('annGo2').focus()};
+ $('annX').onclick=()=>$('annC').hidden=true;
+ $('annGo2').onclick=()=>{$('annC').hidden=true;send(false)};
+ await info()}
+
+// Ask signed-in users once whether they'd like emails about new features. Either answer stops the question.
+function askUpdates(){const bar=$('updAsk');bar.hidden=!(ME&&INFO.mail&&ME.email&&!ME.updates_asked)}
+$('updYes').onclick=$('updNo').onclick=async e=>{const on=e.target.id==='updYes';$('updAsk').hidden=true;
+ try{ME=(await api('/me/updates',{method:'PUT',body:{on}})).user;INFO.user=ME;if(location.hash.startsWith('#/account'))renderAccount()}catch(err){}};
 
 /* ---------- password reset (link from email) ---------- */
 function renderReset(token){
