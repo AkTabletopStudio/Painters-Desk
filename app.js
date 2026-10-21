@@ -12,8 +12,14 @@ let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
 // in other ranges unless the name is a pigment colour (Chrome Oxide Green, Steel Legion Drab, Bronze Green...).
 const MET_G=new Set(['D','I','Q','X','u','m','L','q']),MET_RX=/metal|\bgold\b|silver|bronze|brass|copper|steel|\biron\b|chrome|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|pewter|platinum|nickel/i;
 const isMet=p=>MET_G.has(p.g)||/\bmet(al|allic)?\b/i.test(p.n+' '+p.c)||/gunmetal/i.test(p.n)||p.c==='70.877'||MET_RX.test(p.n)&&!/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n);
-let HIDE_MET=false;try{HIDE_MET=localStorage.getItem('pd-met')==='1'}catch(e){}
-function layout(){const vis=p=>p.on&&!(HIDE_MET&&isMet(p));CH=P.filter(p=>vis(p)&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
+// Paint types: everything that isn't an opaque base/layer/air paint. The ranges say most of it; mixed ranges are sorted by name or code.
+const PT_G={c:'con',S:'con',x:'con','1':'con',W:'wash',s:'wash',w:'wash',z:'wash',n:'ink',i:'ink',T:'ink',r:'ink',F:'fx',f:'fx',t:'tech',P:'tech',G:'tech',B:'tech'};
+const paintType=p=>p.pt||(p.pt=isMet(p)?'met':PT_G[p.g]||(/speedpaint|contrast/i.test(p.c)?'con':/\bwash$/i.test(p.c)||/\bwash\b|\bshade$/i.test(p.n)?'wash':/\bink$/i.test(p.n)?'ink':/fluo|^neon|effects$/i.test(p.n+'|'+p.c)?'fx':/^matt .*primer$|varnish$|^(shading|blending|chipping) medium$/i.test(p.n)?'tech':'op'));
+const PTYPES=[['met','Metallics','Metal paints, shifts and metallic effects'],['con','Contrast & speedpaints','Contrast, Speedpaint, Xpress and 1-Step one-coat paints'],['wash','Washes & shades','Recess shades, they only show over a basecoat'],['ink','Inks, glazes & transparents','Tint whatever is under them'],['fx','Fluorescents & special FX','Fluoro, blood, rust, corrosion and other effects'],['tech','Technical, primers & mediums','Texture, technical, primers, pigments, varnish and mediums']];
+// Hidden types live in pd-types; first visit hides the types that rarely help colour theory (metallics follow the old Hide metallics setting).
+let HIDE_T=new Set(['wash','ink','fx','tech']);try{const s=localStorage.getItem('pd-types');if(s!==null)HIDE_T=new Set(JSON.parse(s));else if(localStorage.getItem('pd-met')==='1')HIDE_T.add('met')}catch(e){}
+const shown=p=>!HIDE_T.has(paintType(p));
+function layout(){const vis=p=>p.on&&shown(p);CH=P.filter(p=>vis(p)&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
 const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
 CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
@@ -30,10 +36,9 @@ function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
    nearest ticked opaque paint by ΔE (lightness weighted, since value contrast is what sells a ramp). Swatches are estimates. */
 let MODE='col',NB=null,nmmSkip=[],NMM_DRAFT=null;const NMO={n:7,t:false,q:'nmm'};
 const nmmSave=()=>{try{localStorage.setItem('pd-nmm',JSON.stringify({m:MODE,n:NMO.n,t:NMO.t,q:NMO.q}))}catch(e){}};
-// Ramps are built with opaque layer paints: leave out metallics, washes, contrast/speed, inks, glazes, primers, fluoros, pigments, textures.
-const NMM_NO=new Set(['D','I','Q','X','u','m','L','q','W','s','w','z','n','i','c','S','T','r','t','P','G','B','F','f','1']);
+// Ramps are built with opaque layer paints (paintType 'op'); the name check also catches stray wash/glaze/filter/medium names.
 const NMM_RX=/metal|gold|silver|bronze|brass|copper|steel|iron\b|chrome|gunmetal|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|titanium|pewter|platinum|nickel|wash|glaze|\bink\b|contrast|speedpaint|filter|fluo|primer|pigment|texture|varnish|medium|transparent/i;
-const nmmOK=p=>!NMM_NO.has(p.g)&&!NMM_RX.test(p.n)&&!NMM_RX.test(p.c);
+const nmmOK=p=>paintType(p)==='op'&&!NMM_RX.test(p.n)&&!NMM_RX.test(p.c);
 const lch=p=>[p.lab[0],Math.hypot(p.lab[1],p.lab[2]),(Math.atan2(p.lab[2],p.lab[1])*180/Math.PI+360)%360];
 const lab3=(L,C,h)=>[L,C*Math.cos(h*Math.PI/180),C*Math.sin(h*Math.PI/180)];
 const hdS=(a,b)=>(b-a+540)%360-180;
@@ -243,9 +248,13 @@ document.getElementById('lab').onchange=draw;
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
 document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));
 document.getElementById('neuN').textContent=NE.length===1?'(1 paint)':`(${NE.length} paints)`}
-function metUI(){const b=document.getElementById('hMet');b.textContent=HIDE_MET?'Show metallics':'Hide metallics';b.setAttribute('aria-pressed',HIDE_MET)}
-document.getElementById('hMet').onclick=()=>{HIDE_MET=!HIDE_MET;try{localStorage.setItem('pd-met',HIDE_MET?'1':'0')}catch(e){}metUI();
-if(HIDE_MET){if(sel&&isMet(sel))sel=null;if(NB&&isMet(NB))NB=null}layout();renderNeu();draw()};metUI();
+function tyUI(){const b=document.getElementById('hTy'),n=HIDE_T.size;b.textContent=n?`Paint types (${n} hidden)`:'Paint types';b.setAttribute('aria-pressed',n>0)}
+(()=>{const d=document.getElementById('tyDlg'),cnt={};P.forEach(p=>{const t=paintType(p);cnt[t]=(cnt[t]||0)+1});
+document.getElementById('tyList').innerHTML=`<label class="tyr"><input type="checkbox" checked disabled><span><b>Base & layer paints</b> <em>${cnt.op}</em><small>Opaque paints, always shown</small></span></label>`+
+ PTYPES.map(([k,t,h])=>`<label class="tyr"><input type="checkbox" data-ty="${k}"${HIDE_T.has(k)?'':' checked'}><span><b>${t}</b> <em>${cnt[k]||0}</em><small>${h}</small></span></label>`).join('');
+document.getElementById('hTy').onclick=()=>d.showModal();
+d.addEventListener('change',e=>{const k=e.target.dataset.ty;if(!k)return;e.target.checked?HIDE_T.delete(k):HIDE_T.add(k);try{localStorage.setItem('pd-types',JSON.stringify([...HIDE_T]))}catch(e){}tyUI();
+ if(sel&&!shown(sel))sel=null;if(NB&&!shown(NB))NB=null;layout();renderNeu();draw()})})();tyUI();
 {const d=document.getElementById('neud');try{d.open=localStorage.getItem('pd-neu')==='1'}catch(e){}d.ontoggle=()=>{try{localStorage.setItem('pd-neu',d.open?'1':'0')}catch(e){}}}
 const GL={A:'Warpaints Fanatic',C:'John Blanche Vol. 1-4',R:'Warpaints Air',S:'Speedpaint 2.0',b:'Colour: Base',s:'Colour: Shade',l:'Colour: Layer',c:'Colour: Contrast',t:'Colour: Technical',a:'Colour: Air',d:'Colour: Dry',p:'Tone Pro',M:'Standard / Signature / AMP',W:'Washes',F:'Fluorescents',T:'Transparents',X:'Metallics','1':'1-Step',E:'Expert Acrylics',P:'Primers',G:'Weathering pigments',B:'Basing textures (list only)',K:'AK Quick Gen',e:'3rd Gen Standard',g:'3rd Gen Intense',j:'3rd Gen Pastel',m:'3rd Gen Metallic',n:'3rd Gen Ink',o:'3rd Gen AFV Series',v:'3rd Gen Figure Series',y:'3rd Gen Air Series',V:'Game Color',u:'Game Color Metallic',i:'Game Color Ink',f:'Game Color Special FX / Fluo',x:'Xpress Color',w:'Game Color Wash',L:'True Metallic Metal',Y:'Model Air',Z:'Model Color',H:'Color wheel: outer ring (highlights)',N:'Color wheel: middle ring (midtones)',O:'Color wheel: inner ring (shadows)',J:'Brights',q:'Metallics',z:'Washes',r:'Glazes',k:'Tonal families & flesh tones',D:'Metallic',I:'TurboShift',Q:'ZeniShift'};
 const BRANDS=[['Army Painter',['A','C','R','S']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z','L']],['AK Interactive',['K','e','g','j','m','n','o','v','y']],['Two Thin Coats',['H','N','O','J','q','z','r','k']],['Turbo Dork',['D','I','Q']]];
