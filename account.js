@@ -8,7 +8,7 @@ const BYKEY=new Map(P.map(p=>[p.k,p]));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','wheel','paints','recipes','recipe','edit','account','profile','reset'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset'];
 let ME=null,INFO=null,API=false;
 
 async function api(path,{method='GET',body}={}){
@@ -58,7 +58,7 @@ function route(){
  const h=location.hash.replace(/^#\/?/,''),[v,id,sub]=h.split(/[/?]/);
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
- if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'))view='wheel';
+ if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'))));

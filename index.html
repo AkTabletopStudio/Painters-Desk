@@ -144,6 +144,8 @@ nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 .feat ul{margin:0 0 12px;padding-left:18px;font-size:14px;color:var(--mut)}
 .feat .go{font-weight:700;font-size:15px}
 .feat:hover .go{text-decoration:underline}
+.cl ul{list-style:none;margin:0;padding:0}.cl li{padding:9px 0;border-top:2px dashed var(--line);font-size:15px;line-height:1.45}.cl li:first-child{border-top:0}.cl h2{font-size:20px;margin:2px 0 6px}
+.tg{display:inline-block;font:700 11px/1 Rubik,sans-serif;text-transform:uppercase;letter-spacing:.5px;padding:4px 7px;margin-right:8px;border:2px solid var(--ink);border-radius:999px;color:#1b1b1b;vertical-align:1px}.tg.nw{background:var(--yel)}.tg.up{background:var(--tea)}.tg.pt{background:var(--org)}.tg.fx{background:#ddd}
 @media (min-width:900px){.feats{grid-template-columns:repeat(3,1fr)}.feat.wide{grid-column:span 2}.feat.wide ul{columns:2;column-gap:28px}}
 .nmode{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:8px 0}
 .seg{display:inline-flex;gap:8px}.seg .btn,#hTy{padding:6px 14px;font-size:14px}
@@ -284,7 +286,7 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <div class="hero"><div class="logo" id="wLogo"><img src="icons/icon-512.png" alt="The Painters Desk icon" class="pdi" data-def="icons/icon-512.png"><script>pdIcon()</script></div>
 <div><h1>Welcome to The Painters Desk</h1>
 <p class="lead">A free colour wheel for miniature painters. See <b id="wCount">2,638</b> paints from <span id="wBrands">the big hobby brands</span> laid out by hue and lightness, find what goes with what, and match paints across brands.</p>
-<a class="btn pri" href="#/">Open the colour wheel</a></div></div>
+<a class="btn pri" href="#/">Open the colour wheel</a> <a class="btn" href="#/changelog">What's new</a></div></div>
 <div class="feats">
 <a class="feat wide" href="#/"><span class="band" style="background:var(--red)"></span><span class="in"><h3>Colour wheel</h3><p>Every paint placed by its hue around the wheel and its lightness from centre to rim. Tick whole ranges or single paints, from any mix of brands.</p><ul><li>Complements and neighbours for shading, highlights and glazes</li><li>A centre gradient that blends from the complement through your paint</li><li>Remembers the paints you last had open</li></ul><span class="go">Open the wheel →</span></span></a>
 <a class="feat" href="#/"><span class="band" style="background:var(--org)"></span><span class="in"><h3>Cross-brand matches</h3><p>Tap any paint to see its closest equivalents in the other ranges, so you can swap a paint you don't own for one you do.</p><ul><li>Matches from published conversion charts are ticked</li><li>Nearest-colour picks fill the gaps</li><li>Swatches are estimates, so check against the real pot</li></ul><span class="go">Find a match →</span></span></a>
@@ -292,6 +294,47 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <a class="feat" href="#/recipes" data-api><span class="band" style="background:var(--blu)"></span><span class="in"><h3>Recipes &amp; tutorials</h3><p>Share how you painted something, step by step, with the paints, photos and video for each stage.</p><ul><li>Browse what other painters have posted</li><li>Upvote and save the ones you like</li><li>Comment and ask questions</li></ul><span class="go">Browse recipes →</span></span></a>
 <a class="feat" href="#/account" data-api><span class="band" style="background:var(--pur)"></span><span class="in"><h3>Your account</h3><p>Sign in with Google, Discord, GitHub or an email and password to save your collection, recipes and wheel across devices.</p><ul><li>A public profile with your favourite paints</li><li>Your recipes and tutorials in one place</li></ul><span class="go">Sign in or create one →</span></span></a>
 </div>
+</section>
+<section id="v-changelog" hidden>
+<h1>What's new</h1>
+<p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>21 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Paint types.</b> Choose which kinds of paint show on the wheel and in the neutrals: metallics, contrast paints, washes, inks, effects and technicals. This replaces the Hide metallics button.</li>
+<li><span class="tg up">Better</span><b>Faster wheel.</b> The colour wheel is much quicker to draw and move around with big collections.</li>
+<li><span class="tg up">Better</span><b>Neon 1984 is the default look.</b> New visitors choose a theme when they first arrive, and you can change it any time with the Theme button.</li>
+<li><span class="tg up">Better</span><b>Theme icons.</b> Each theme has its own icon on the welcome page and in the nav.</li>
+</ul></div>
+<div class="panel cl"><h2>19 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Site themes.</b> Pick a look from the Theme button: Paint Pot, Neon 1984, Grimdark, Wildwood or Dwarven. Paint colours stay the same in every theme.</li>
+<li><span class="tg nw">New</span><b>Blends mode.</b> Build your own blend from complements and neighbours on the wheel. Pin the steps you like and the rest recalculate, then save it as a tutorial.</li>
+<li><span class="tg pt">Paints</span><b>Turbo Dork.</b> 80 paints: Metallic, TurboShift and ZeniShift. Colour-shift paints show their main colour only.</li>
+<li><span class="tg up">Better</span><b>Safer ticking on My paints.</b> Ticking or unticking a whole range now asks first, and an Undo bar lets you take it back.</li>
+<li><span class="tg fx">Fixed</span><b>Pro Acryl S13</b> now uses Monument's official name, Dark Sea Ben.</li>
+</ul></div>
+<div class="panel cl"><h2>18 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Ramps mode.</b> Build a shadow-to-highlight ramp from one paint for non-metallic metal, object source lighting, gems, skin, zenithal highlights, edge highlights or glazing.</li>
+<li><span class="tg nw">New</span><b>Suggested paints.</b> My paints suggests paints that fill the technique and colour gaps in your collection.</li>
+<li><span class="tg nw">New</span><b>Email and password accounts.</b> Sign up with an email as well as Google, Discord or GitHub, with confirmation and password-reset emails.</li>
+<li><span class="tg nw">New</span><b>Public profiles.</b> Show your favourite paints and your recipes and tutorials on your own profile page.</li>
+<li><span class="tg nw">New</span><b>Upvotes, views and saves.</b> Upvote recipes and tutorials with the paint bottle, see how many people viewed them, and keep the ones you like in your Saved tab.</li>
+<li><span class="tg nw">New</span><b>Welcome page.</b> A quick tour of each part of the site. Tap the Painters Desk logo to get back to it.</li>
+<li><span class="tg nw">New</span><b>Feedback button</b> on every page, for bugs and ideas.</li>
+<li><span class="tg up">Better</span><b>Wheel centre gradient.</b> Selecting a paint fills the centre of the wheel with a blend from its complements through to its neighbours.</li>
+<li><span class="tg up">Better</span><b>The wheel remembers.</b> It opens on the paints you last had selected, or on your collection if you're signed in.</li>
+<li><span class="tg up">Better</span><b>Water in tutorial steps</b>, so you can show thinning ratios.</li>
+<li><span class="tg up">Better</span><b>Tidier wheel.</b> The neutrals panel folds away, and adding ticked paints to your collection asks first.</li>
+<li><span class="tg pt">Paints</span><b>Vallejo True Metallic Metal</b> (80 paints) and the <b>Army Painter John Blanche</b> range (40 paints).</li>
+<li><span class="tg fx">Fixed</span><b>Pro Acryl Expert Acrylics</b> group renamed from Expert Artist, and Phthalo spelling corrected.</li>
+</ul></div>
+<div class="panel cl"><h2>17 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Accounts.</b> Sign in to save your paint collection and wheel across devices.</li>
+<li><span class="tg nw">New</span><b>My paints.</b> Keep a list of the paints on your shelf, show them on the wheel in one tap, and limit matches to paints you own.</li>
+<li><span class="tg nw">New</span><b>Recipes and tutorials.</b> Share how you painted something step by step, with paints, mix ratios, photos and comments.</li>
+<li><span class="tg up">Better</span><b>Paint Pot look</b> with a new icon, and the selected paint's details shown beside the wheel on wide screens.</li>
+<li><span class="tg pt">Paints</span><b>AK 3rd Generation Acrylics.</b> 470 paints from AK's 2021 equivalence chart.</li>
+<li><span class="tg up">Better</span><b>Swatch refresh.</b> 94 swatches, mostly Vallejo Game Color, updated from photos of airbrushed bottle caps. All swatches are still estimates.</li>
+<li><span class="tg nw">New</span><b>Privacy policy</b>, linked from the footer and the sign-in page.</li>
+</ul></div>
 </section>
 <section id="v-wheel">
 <h1>The Painters Desk</h1>
@@ -336,8 +379,8 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <button type="button" class="tho" role="radio" data-look="dwarf" aria-checked="false"><span class="pv" style="background:linear-gradient(rgba(11,19,17,.35),rgba(11,19,17,.35)),url(themes/dwarf-hall.svg) center 45%/cover,#0b1311"><i style="background:rgba(17,29,25,.93);border-color:#c99a45;border-radius:2px"></i><u style="left:12px;background:#e0b04f"></u><u style="left:32px;background:#3f9a86"></u><u style="left:52px;background:#b0432f"></u></span><b style="font-family:Cinzel,serif;font-weight:700;letter-spacing:1px">DWARVEN</b><small>Jade stone halls and gold inlay.</small></button>
 </div><div class="row"><button class="btn pri" type="button" id="thOk">Done</button></div></dialog>
 <footer id="foot">
-<p class="s" id="footFull"><b>The Painters Desk</b> is created by AK Tabletop Studio. © 2026 AK Tabletop Studio. AK Tabletop Studio is not affiliated with AK Interactive. Swatch colours are estimates and will differ from the real paints. Many Vallejo Game Color swatches and some Pro Acryl and AK 3rd Gen swatches are sampled from Antinea's photo databases of airbrushed bottle caps. Turbo Dork swatches are sampled from Turbo Dork's promotional colour image; colour-shift paints show only their main colour. Cross-brand matches are close, never exact; they draw on the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart, plus a nearest-colour calculation. This tool is unofficial and not affiliated with or endorsed by Games Workshop, The Army Painter, Monument Hobbies, Vallejo, AK Interactive, Two Thin Coats or Turbo Dork. Paint names are trademarks of their owners. <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
-<p class="s" id="footShort" hidden>© 2026 AK Tabletop Studio. Swatch colours are estimates. Unofficial, not affiliated with any paint brand. <a href="#/" id="footMore" style="color:inherit">Full notice</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
+<p class="s" id="footFull"><b>The Painters Desk</b> is created by AK Tabletop Studio. © 2026 AK Tabletop Studio. AK Tabletop Studio is not affiliated with AK Interactive. Swatch colours are estimates and will differ from the real paints. Many Vallejo Game Color swatches and some Pro Acryl and AK 3rd Gen swatches are sampled from Antinea's photo databases of airbrushed bottle caps. Turbo Dork swatches are sampled from Turbo Dork's promotional colour image; colour-shift paints show only their main colour. Cross-brand matches are close, never exact; they draw on the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart, plus a nearest-colour calculation. This tool is unofficial and not affiliated with or endorsed by Games Workshop, The Army Painter, Monument Hobbies, Vallejo, AK Interactive, Two Thin Coats or Turbo Dork. Paint names are trademarks of their owners. <a href="#/changelog" style="color:inherit">What's new</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
+<p class="s" id="footShort" hidden>© 2026 AK Tabletop Studio. Swatch colours are estimates. Unofficial, not affiliated with any paint brand. <a href="#/" id="footMore" style="color:inherit">Full notice</a> · <a href="#/changelog" style="color:inherit">What's new</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a>.</p>
 </footer>
 </div>
 <script src="data.js"></script>
