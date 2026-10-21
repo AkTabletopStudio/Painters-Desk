@@ -223,10 +223,10 @@ ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hd(a.H,sel.H)-hd(b.H,sel.H)).
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
 // Centre disc: gradient from the complements, through the selected paint, out to its neighbours, laid along the complement→selected axis.
-// Each group is ordered by how close its lightness is to the selected paint, so the blend ramps outward instead of striping.
+// Each group runs one way by perceived lightness (Lab L*), starting from the end nearest the selected paint, so a side never goes light, dark, light again.
 if(R)s+=nmmWheel(R);
 if(MX)s+=blendWheel();
-if(sel&&!R&&!MX){const byL=(a,b)=>Math.abs(a.L-sel.L)-Math.abs(b.L-sel.L),st=[...[...comp].sort(byL).reverse(),sel,...[...ana].sort(byL)],ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2,mid=comp.length/Math.max(1,st.length-1);
+if(sel&&!R&&!MX){const ramp=g=>{const up=[...g].sort((a,b)=>a.lab[0]-b.lab[0]);return up.length&&Math.abs(up[0].lab[0]-sel.lab[0])>Math.abs(up[up.length-1].lab[0]-sel.lab[0])?up.reverse():up},st=[...ramp(comp).reverse(),sel,...ramp(ana)],ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2,mid=comp.length/Math.max(1,st.length-1);
 const off=i=>st.length<2?0:i<comp.length?i/Math.max(1,comp.length)*mid*.9:i===comp.length?mid:mid+(1-mid)*(.1+.9*(i-comp.length)/Math.max(1,ana.length));
 s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${st.map((p,i)=>`<stop offset="${off(i).toFixed(3)}" stop-color="${p.h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
 const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,kk=R0/26;
