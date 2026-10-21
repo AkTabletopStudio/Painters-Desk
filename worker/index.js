@@ -448,12 +448,29 @@ async function setPassword(request, env) {
 const mailReady = env => !!((env.EMAIL || env.RESEND_API_KEY) && env.MAIL_FROM) || env.DEV_LOGIN === '1';
 const VERIFY_HOURS = 48, RESET_MINUTES = 60, RESEND_WAIT = 60000;
 
+// The site's default Neon 1984 look for emails: dark night-purple page, neon strip, card with a cyan outline and
+// hot pink offset shadow, yellow button. Tables and inline styles only, since many mail apps ignore <style> and web fonts.
+const MAIL_STRIP = ['#ff2a6d', '#b537f2', '#2de2e6', '#f9f871', '#ff2a6d'];
+const MAIL_HEAD = "Orbitron,'Arial Black',Arial,sans-serif", MAIL_BODY = "Rubik,'Segoe UI',Helvetica,Arial,sans-serif";
+const mailButton = (link, label) => `<a href="${link}" style="display:inline-block;background:#f9f871;color:#0b0224;font-family:${MAIL_HEAD};font-weight:700;font-size:14px;letter-spacing:1px;text-transform:uppercase;text-decoration:none;padding:12px 20px;border:2px solid #0b0224;border-radius:14px;box-shadow:3px 3px 0 #ff2a6d">${label}</a>`;
+function mailShell(origin, inner, foot = '') {
+  return `<!doctype html><html><head><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head><body style="margin:0;padding:0;background:#07011a">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#07011a" style="background:#07011a"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+<tr><td style="padding:0 0 16px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="padding-right:12px"><img src="${origin}/icons/email-neon.png" width="48" height="48" alt="" style="display:block"></td>
+<td style="font-family:${MAIL_HEAD};font-weight:700;font-size:20px;letter-spacing:2px;text-transform:uppercase;color:#ffffff;text-shadow:-2px 0 #2de2e6,2px 0 #ff2a6d">The Painters Desk</td></tr></table></td></tr>
+<tr><td bgcolor="#160736" style="background:#160736;border:2px solid #2de2e6;border-radius:18px;box-shadow:0 0 18px rgba(45,226,230,.45),6px 6px 0 #ff2a6d;overflow:hidden">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${MAIL_STRIP.map(c => `<td height="6" style="height:6px;line-height:6px;font-size:0;background:${c}">&nbsp;</td>`).join('')}</tr></table>
+<div style="padding:20px 24px 24px;font-family:${MAIL_BODY};font-size:16px;line-height:1.55;color:#f3ecff">${inner}</div></td></tr>
+<tr><td style="padding:18px 6px 0;font-family:${MAIL_BODY};font-size:12px;line-height:1.5;color:#b4a3df">${foot}${foot ? '<br>' : ''}© AK Tabletop Studio · <a href="${origin}" style="color:#2de2e6">paintersdesk.com</a></td></tr>
+</table></td></tr></table></body></html>`;
+}
+
 async function sendMail(env, to, subject, text, link, button) {
-  const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1b1b1b;max-width:520px">
-<p style="font-size:20px;font-weight:700;margin:0 0 12px">The Painters Desk</p>
-${text.split('\n\n').map(p => `<p>${p.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</p>`).join('')}
-<p><a href="${link}" style="display:inline-block;background:#ffd23f;color:#1b1b1b;font-weight:700;text-decoration:none;padding:10px 18px;border:3px solid #1b1b1b;border-radius:14px">${button}</a></p>
-<p style="color:#666;font-size:13px">Or copy this link: ${link}</p></div>`;
+  const html = mailShell(new URL(link).origin, `${text.split('\n\n').map(p => `<p style="margin:0 0 14px">${htmlEsc(p)}</p>`).join('')}
+<p style="margin:20px 0 16px">${mailButton(link, button)}</p>
+<p style="margin:0;color:#b4a3df;font-size:13px;word-break:break-all">Or copy this link: <a href="${link}" style="color:#2de2e6">${link}</a></p>`);
   if (env.EMAIL && env.MAIL_FROM) {
     try { await env.EMAIL.send({ from: env.MAIL_FROM, to, subject, text: `${text}\n\n${button}: ${link}`, html }); }
     catch (e) { console.error('Email Sending error', e); throw new HttpError(502, "Couldn't send the email, please try again later"); }
@@ -997,7 +1014,11 @@ async function unsubscribe(request, env, url) {
 
 function page(title, inner, status = 200) {
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEsc(title)} · The Painters Desk</title>
-<style>body{font-family:system-ui,sans-serif;background:#fff8ec;color:#1b1b1b;margin:0;padding:40px 16px;line-height:1.5}main{max-width:480px;margin:auto;background:#fff;border:3px solid #1b1b1b;border-radius:16px;box-shadow:5px 5px 0 #1b1b1b;padding:20px 24px}h1{font-size:22px;margin:0 0 8px}a{color:inherit}button{font:inherit;font-weight:700;background:#ffd23f;border:3px solid #1b1b1b;border-radius:14px;padding:10px 18px;cursor:pointer}</style></head>
+<style>@font-face{font-family:Orbitron;src:url(/fonts/orbitron-700.woff2) format('woff2');font-weight:700}@font-face{font-family:Rubik;src:url(/fonts/rubik-400.woff2) format('woff2')}
+body{font-family:Rubik,system-ui,sans-serif;background:#07011a;color:#f3ecff;margin:0;padding:40px 16px;line-height:1.5}body::before{content:"";position:fixed;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#ff2a6d,#b537f2,#2de2e6,#f9f871,#ff2a6d)}
+main{max-width:480px;margin:auto;background:#160736;border:2px solid #2de2e6;border-radius:16px;box-shadow:0 0 18px rgba(45,226,230,.45),6px 6px 0 #ff2a6d;padding:20px 24px}
+h1{font-family:Orbitron,sans-serif;font-size:22px;margin:0 0 8px;text-transform:uppercase;letter-spacing:2px;color:#fff;text-shadow:-2px 0 #2de2e6,2px 0 #ff2a6d}a{color:#2de2e6}
+button{font-family:Orbitron,sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:1px;background:#f9f871;color:#0b0224;border:2px solid #0b0224;border-radius:14px;box-shadow:3px 3px 0 #ff2a6d;padding:11px 18px;cursor:pointer}</style></head>
 <body><main><h1>${htmlEsc(title)}</h1>${inner}</main></body></html>`, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
 
@@ -1019,11 +1040,11 @@ async function announceInfo(request, env) {
 
 // Plain text with blank lines between paragraphs, "- " lines for a list and **bold**. {name} becomes the reader's name.
 function updateHTML(text) {
-  const inline = s => htmlEsc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:#1b1b1b">${u}</a>`);
+  const inline = s => htmlEsc(s).replace(/\*\*(.+?)\*\*/g, '<b style="color:#ffffff">$1</b>').replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:#2de2e6">${u}</a>`);
   return text.split(/\n\s*\n/).map(b => {
     const lines = b.trim().split('\n');
-    if (lines.every(l => /^\s*- /.test(l))) return `<ul style="padding-left:20px">${lines.map(l => `<li style="margin:4px 0">${inline(l.replace(/^\s*- /, ''))}</li>`).join('')}</ul>`;
-    return `<p>${lines.map(inline).join('<br>')}</p>`;
+    if (lines.every(l => /^\s*- /.test(l))) return `<ul style="margin:0 0 14px;padding-left:22px">${lines.map(l => `<li style="margin:0 0 8px">${inline(l.replace(/^\s*- /, ''))}</li>`).join('')}</ul>`;
+    return `<p style="margin:0 0 14px">${lines.map(inline).join('<br>')}</p>`;
   }).join('');
 }
 
@@ -1048,9 +1069,8 @@ async function announce(request, env, url) {
     const link = `${url.origin}/api/unsubscribe?u=${encodeURIComponent(r.id)}&t=${encodeURIComponent(r.unsub)}`;
     const mine = text.replace(/\{name\}/g, r.name);
     const foot = "You're getting this because you asked for emails about new features on The Painters Desk.";
-    const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1b1b1b;max-width:560px">
-<p style="font-size:20px;font-weight:700;margin:0 0 12px">The Painters Desk</p>${updateHTML(mine)}
-<p style="color:#666;font-size:13px;border-top:1px solid #ddd;padding-top:12px;margin-top:24px">${foot} <a href="${link}" style="color:#666">Unsubscribe</a></p></div>`;
+    const html = mailShell(url.origin, `${updateHTML(mine)}<p style="margin:22px 0 0">${mailButton(url.origin, 'Open The Painters Desk')}</p>`,
+      `${foot} <a href="${link}" style="color:#2de2e6">Unsubscribe</a>`);
     const msg = { from: env.MAIL_FROM, subject: (b.test === true ? '[Test] ' : '') + subject, text: `${mine.replace(/\*\*(.+?)\*\*/g, '$1')}\n\n--\n${foot}\nUnsubscribe: ${link}`, html,
       headers: { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } };
     try {
