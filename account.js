@@ -50,10 +50,10 @@ async function loadMe(){
  renderNeu();draw()}
 
 /* ---------- router ---------- */
-// First-time visitors (nothing remembered in this browser) land on the welcome page; everyone else on the wheel.
+// First-time visitors (nothing remembered in this browser) land on the welcome page and get the theme picker; everyone else on the wheel.
 let FIRST=false;try{FIRST=!localStorage.getItem('pd-seen')&&!localStorage.getItem(WK);localStorage.setItem('pd-seen','1')}catch(e){}
 function route(){
- if(FIRST){FIRST=false;if(!location.hash.replace(/^#\/?/,''))history.replaceState(null,'','#/welcome')}
+ if(FIRST){FIRST=false;if(!location.hash.replace(/^#\/?/,''))history.replaceState(null,'','#/welcome');window.pdThemeFirst&&pdThemeFirst()}
  const h=location.hash.replace(/^#\/?/,''),[v,id,sub]=h.split(/[/?]/);
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';

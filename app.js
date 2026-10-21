@@ -358,15 +358,19 @@ return{ramps,cells,mine,other,left:gaps.filter(x=>!x.done).length,brands:[...myB
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 // Site theme picker. The choice lives in localStorage pd-look; an inline script in index.html applies it before first paint.
-// Neon 1984 (cyber) is the default for anyone who hasn't picked; Paint Pot is stored as ''. The welcome page gets its own copy of the choices.
-{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311'},DEF='cyber',dlg=document.getElementById('thDlg'),wt=document.getElementById('wThemes');
-if(wt){const g=dlg.querySelector('.thg').cloneNode(true);g.setAttribute('aria-labelledby','wThT');wt.append(g)}
-const opts=document.querySelectorAll('.tho');
+// Neon 1984 (cyber) is the default for anyone who hasn't picked; Paint Pot is stored as ''.
+// On a first visit the same dialog opens as a picker: choices only preview until Confirm saves one.
+{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311'},DEF='cyber',dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
+const ttl=document.getElementById('thT'),txt=document.getElementById('thP'),ok=document.getElementById('thOk'),T0=[ttl.textContent,txt.textContent,ok.textContent];
 const metas=[...document.querySelectorAll('meta[name="theme-color"]')],orig=metas.map(m=>m.content);
 const apply=l=>{if(!(l in LOOKS))l='';if(l)document.documentElement.dataset.look=l;else delete document.documentElement.dataset.look;
  metas.forEach((m,i)=>m.content=LOOKS[l]||orig[i]);opts.forEach(o=>o.setAttribute('aria-checked',o.dataset.look===l?'true':'false'));pdIcon()};
-let cur=DEF;try{const s=localStorage.getItem('pd-look');if(s!==null)cur=s}catch(e){}apply(cur);
-document.getElementById('thBtn').onclick=()=>{dlg.showModal();(dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).focus()};
-opts.forEach(o=>o.onclick=()=>{apply(o.dataset.look);try{localStorage.setItem('pd-look',o.dataset.look)}catch(e){}});
-document.getElementById('thOk').onclick=()=>dlg.close();
-dlg.onclick=e=>{if(e.target===dlg)dlg.close()}}
+const saved=()=>{try{const s=localStorage.getItem('pd-look');if(s!==null)return s}catch(e){}return DEF},save=l=>{try{localStorage.setItem('pd-look',l)}catch(e){}};
+let FV=false;apply(saved());
+const open=()=>{dlg.showModal();(dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).focus()};
+document.getElementById('thBtn').onclick=open;
+opts.forEach(o=>o.onclick=()=>{apply(o.dataset.look);if(!FV)save(o.dataset.look)});
+ok.onclick=()=>{if(FV)save((dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).dataset.look);dlg.close()};
+dlg.onclose=()=>{if(!FV)return;FV=false;[ttl.textContent,txt.textContent,ok.textContent]=T0;apply(saved())};
+dlg.onclick=e=>{if(e.target===dlg)dlg.close()};
+window.pdThemeFirst=()=>{FV=true;ttl.textContent='Pick a look';txt.textContent='Tap a theme to preview it, then confirm. Paint colours stay the same, and you can change it any time with the Theme button at the top.';ok.textContent='Confirm';open()}}
