@@ -146,7 +146,7 @@ nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 .feat:hover .go{text-decoration:underline}
 @media (min-width:900px){.feats{grid-template-columns:repeat(3,1fr)}.feat.wide{grid-column:span 2}.feat.wide ul{columns:2;column-gap:28px}}
 .nmode{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:8px 0}
-.seg{display:inline-flex;gap:8px}.seg .btn,#hMet{padding:6px 14px;font-size:14px}
+.seg{display:inline-flex;gap:8px}.seg .btn,#hTy{padding:6px 14px;font-size:14px}
 #nmmOpt{display:inline-flex;flex-wrap:wrap;gap:10px 16px;align-items:center}#nmmOpt[hidden]{display:none}
 #nmmOpt .nsel{font:inherit;font-weight:700;border:2px solid var(--ink);border-radius:10px;background:var(--card);color:var(--fg);padding:2px 6px}
 .nrows{display:grid;gap:4px;margin:8px 0}
@@ -269,6 +269,7 @@ nav.top button.thb:hover{background:var(--yel);color:#1b1b1b}
 :root[data-look="grim"] nav.top button.thb{border-radius:3px;text-transform:uppercase;letter-spacing:1px;font-size:13px}
 :root[data-look="cyber"] nav.top button.thb{font-family:Orbitron,Rubik,sans-serif;text-transform:uppercase;font-size:13px}
 .thg{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:12px;margin:0 0 16px}
+.tyr{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--line);cursor:pointer}.tyr:first-child{border-top:0}.tyr input{margin-top:4px;width:18px;height:18px;flex:none}.tyr em{font-style:normal;font-size:12px;opacity:.7}.tyr small{display:block;font-size:13px;opacity:.8}
 dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 .tho{font:inherit;text-align:left;padding:0;border:3px solid var(--ink);border-radius:14px;overflow:hidden;cursor:pointer;background:var(--card);color:var(--fg)}
 .tho[aria-checked="true"]{outline:4px solid var(--yel);outline-offset:2px}
@@ -302,7 +303,7 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <p class="s">Tick a whole range, or open it and tick individual paints. Selections from different ranges and brands show on the wheel together. While searching, a range checkbox selects only the matches.</p>
 <div id="tree"></div>
 <div class="row" id="mine" hidden><button class="btn" type="button" id="useMine">Show my collection</button><button class="btn" type="button" id="addMine">Add ticked paints to my collection</button><label><input type="checkbox" id="onlyMine"> Matches from my paints only</label></div><dialog class="pd" id="addDlg" aria-labelledby="addDlgT"><form method="dialog"><h2 id="addDlgT">Add to your collection?</h2><p id="addDlgM"></p><div class="row"><button class="btn" value="cancel" id="addNo" autofocus>Cancel</button><button class="btn pri" value="ok">Add paints</button></div></form></dialog></details>
-<div class="row nmode"><span class="seg" role="group" aria-label="Wheel mode"><button class="btn pri" type="button" id="mCol" aria-pressed="true">Colours</button><button class="btn" type="button" id="mNmm" aria-pressed="false" title="Build a light-to-dark ramp from one paint for NMM, OSL, gems, skin, highlights or glazes">Ramps</button><button class="btn" type="button" id="mMix" aria-pressed="false" title="Build your own blend: pick the complements and neighbours yourself">Blends</button></span><button class="btn" type="button" id="hMet" aria-pressed="false" title="Hide or show metallic paints on the wheel and in the neutrals">Hide metallics</button><label><input type="checkbox" id="lab" checked> Show labels</label><span id="nmmOpt" hidden><label>Technique <select id="nTech" class="nsel"></select></label><label>Steps <select id="nSteps" class="nsel"><option value="5">5</option><option value="7" selected>7</option></select></label> <label id="nTintL"><input type="checkbox" id="nTint"> <span id="nTintT">Tint the deepest shadow</span></label></span></div>
+<div class="row nmode"><span class="seg" role="group" aria-label="Wheel mode"><button class="btn pri" type="button" id="mCol" aria-pressed="true">Colours</button><button class="btn" type="button" id="mNmm" aria-pressed="false" title="Build a light-to-dark ramp from one paint for NMM, OSL, gems, skin, highlights or glazes">Ramps</button><button class="btn" type="button" id="mMix" aria-pressed="false" title="Build your own blend: pick the complements and neighbours yourself">Blends</button></span><button class="btn" type="button" id="hTy" aria-pressed="false" aria-haspopup="dialog" title="Choose which kinds of paint show on the wheel and in the neutrals">Paint types</button><label><input type="checkbox" id="lab" checked> Show labels</label><span id="nmmOpt" hidden><label>Technique <select id="nTech" class="nsel"></select></label><label>Steps <select id="nSteps" class="nsel"><option value="5">5</option><option value="7" selected>7</option></select></label> <label id="nTintL"><input type="checkbox" id="nTint"> <span id="nTintT">Tint the deepest shadow</span></label></span></div>
 <div class="stage">
 <svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
 <div class="panel" id="sel"><b>Tap a paint on the wheel.</b></div>
@@ -317,6 +318,7 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <section id="v-account" hidden></section>
 <section id="v-profile" hidden></section>
 <section id="v-reset" hidden></section>
+<dialog class="pd" id="tyDlg" aria-labelledby="tyT"><form method="dialog"><h2 id="tyT">Paint types on the wheel</h2><p>Washes, inks and effect paints only show their colour over a basecoat, so they can crowd out better complements. Untick a type to hide it from the wheel and the neutrals.</p><div id="tyList"></div><div class="row"><button class="btn pri" value="ok" autofocus>Done</button></div></form></dialog>
 <dialog class="pd" id="remDlg" aria-labelledby="remDlgT"><form method="dialog"><h2 id="remDlgT">Remove from your collection?</h2><p id="remDlgM"></p><div class="row"><button class="btn" value="cancel" id="remNo" autofocus>Cancel</button><button class="btn dan" value="ok" id="remOk">Remove paints</button></div></form></dialog>
 <div class="undo" id="undoT" role="status" hidden><span id="undoM"></span><button class="btn" type="button" id="undoB">Undo</button></div>
 <button class="fbb" type="button" id="fbBtn" hidden aria-haspopup="dialog"><span aria-hidden="true">💬</span>Feedback</button>
