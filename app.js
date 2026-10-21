@@ -355,7 +355,7 @@ if(wt){const g=dlg.querySelector('.thg').cloneNode(true);g.setAttribute('aria-la
 const opts=document.querySelectorAll('.tho');
 const metas=[...document.querySelectorAll('meta[name="theme-color"]')],orig=metas.map(m=>m.content);
 const apply=l=>{if(!(l in LOOKS))l='';if(l)document.documentElement.dataset.look=l;else delete document.documentElement.dataset.look;
- metas.forEach((m,i)=>m.content=LOOKS[l]||orig[i]);opts.forEach(o=>o.setAttribute('aria-checked',o.dataset.look===l?'true':'false'))};
+ metas.forEach((m,i)=>m.content=LOOKS[l]||orig[i]);opts.forEach(o=>o.setAttribute('aria-checked',o.dataset.look===l?'true':'false'));pdIcon()};
 let cur=DEF;try{const s=localStorage.getItem('pd-look');if(s!==null)cur=s}catch(e){}apply(cur);
 document.getElementById('thBtn').onclick=()=>{dlg.showModal();(dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).focus()};
 opts.forEach(o=>o.onclick=()=>{apply(o.dataset.look);try{localStorage.setItem('pd-look',o.dataset.look)}catch(e){}});
