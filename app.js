@@ -208,6 +208,26 @@ document.getElementById('nTech').onchange=e=>{NMO.q=TQ[e.target.value]?e.target.
 document.getElementById('nSteps').onchange=e=>{NMO.n=+e.target.value;nmmSkip=[];nmmSave();draw()};
 document.getElementById('nTint').onchange=e=>{NMO.t=e.target.checked;nmmSkip=[];nmmSave();draw()};
 nmmUI();
+// Centre disc: two shade-matched ramps laid along the complement→selected axis. The complements are one ramp and the selected paint plus its
+// neighbours the other; each runs dark to light by the smoothest path through its paints, and the two meet where their shades are closest.
+// Colours are mixed in OKLab (like blended paint, not muddy RGB) and big colour changes get more room on the disc.
+const okLab=h=>{const n=parseInt(h.slice(1),16),l=[n>>16,n>>8&255,n&255].map(v=>{v/=255;return v>.04045?((v+.055)/1.055)**2.4:v/12.92}),
+ L=Math.cbrt(.4122214708*l[0]+.5363325363*l[1]+.0514459929*l[2]),M=Math.cbrt(.2119034982*l[0]+.6806995451*l[1]+.1073969566*l[2]),S=Math.cbrt(.0883024619*l[0]+.2817188376*l[1]+.6299787005*l[2]);
+ return[.2104542553*L+.793617785*M-.0040720468*S,1.9779984951*L-2.428592205*M+.4505937099*S,.0259040371*L+.7827717662*M-.808675766*S]};
+const okHex=([L,a,b])=>{const l=(L+.3963377774*a+.2158037573*b)**3,m=(L-.1055613458*a-.0638541728*b)**3,s=(L-.0894841775*a-1.291485548*b)**3;
+ return'#'+[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s].map(v=>{v=Math.max(0,Math.min(1,v));v=v>.0031308?1.055*v**(1/2.4)-.055:12.92*v;return Math.round(v*255).toString(16).padStart(2,'0')}).join('')};
+const okD=(a,b,w)=>Math.hypot(w*(a[0]-b[0]),a[1]-b[1],a[2]-b[2]);
+function discStops(sel,comp,ana){const o=new Map([sel,...comp,...ana].map(p=>[p,okLab(p.h)]));
+ const path=g=>{const u=[...g].sort((x,y)=>o.get(x)[0]-o.get(y)[0]);if(u.length<4)return u;const A=u[0],Z=u[u.length-1];let best=null,bc=1e9;
+  const go=(cur,rest,cost,acc)=>{if(cost>=bc)return;if(!rest.length){const t=cost+okD(o.get(cur),o.get(Z),2);if(t<bc){bc=t;best=acc}return}
+   rest.forEach((p,i)=>go(p,rest.filter((_,j)=>j!==i),cost+okD(o.get(cur),o.get(p),2),[...acc,p]))};
+  go(A,u.slice(1,-1),0,[]);return[A,...best,Z]};
+ const C=path(comp),F=path([sel,...ana]);let pick=[[],F];
+ if(C.length){let bd=1e9;for(const c of[C,[...C].reverse()])for(const f of[F,[...F].reverse()]){const d=Math.abs(o.get(c[c.length-1])[0]-o.get(f[0])[0]);if(d<bd){bd=d;pick=[c,f]}}}
+ const seq=[...pick[0],...pick[1]].map(p=>o.get(p)),d=[0];for(let i=1;i<seq.length;i++)d.push(d[i-1]+.04+okD(seq[i-1],seq[i],1.5));
+ const off=d.map(v=>seq.length<2?0:v/d[d.length-1]),out=[];
+ seq.forEach((c,i)=>{out.push([okHex(c),off[i]]);if(i<seq.length-1)for(let k=1;k<6;k++){const t=k/6;out.push([okHex(c.map((v,j)=>v+(seq[i+1][j]-v)*t)),off[i]+(off[i+1]-off[i])*t])}});
+ return out}
 const svg=document.getElementById('w');let sel=null;
 function draw(){let s='';
 for(let h=0;h<360;h+=10){const a0=U(h-5)*Math.PI/180-Math.PI/2,a1=U(h+5)*Math.PI/180-Math.PI/2,R=480,r=110;
@@ -222,13 +242,10 @@ if(sel&&!R&&!MX){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp
 ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hd(a.H,sel.H)-hd(b.H,sel.H)).slice(0,6);
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
-// Centre disc: gradient from the complements, through the selected paint, out to its neighbours, laid along the complement→selected axis.
-// Each group is ordered by how close its lightness is to the selected paint, so the blend ramps outward instead of striping.
 if(R)s+=nmmWheel(R);
 if(MX)s+=blendWheel();
-if(sel&&!R&&!MX){const byL=(a,b)=>Math.abs(a.L-sel.L)-Math.abs(b.L-sel.L),st=[...[...comp].sort(byL).reverse(),sel,...[...ana].sort(byL)],ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2,mid=comp.length/Math.max(1,st.length-1);
-const off=i=>st.length<2?0:i<comp.length?i/Math.max(1,comp.length)*mid*.9:i===comp.length?mid:mid+(1-mid)*(.1+.9*(i-comp.length)/Math.max(1,ana.length));
-s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${st.map((p,i)=>`<stop offset="${off(i).toFixed(3)}" stop-color="${p.h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
+if(sel&&!R&&!MX){const ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
+s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${discStops(sel,comp,ana).map(([h,o])=>`<stop offset="${o.toFixed(4)}" stop-color="${h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
 const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,kk=R0/26;
 CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
 const st=(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
