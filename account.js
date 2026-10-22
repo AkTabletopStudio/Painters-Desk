@@ -102,7 +102,7 @@ function renderAccount(){
     catch(e){$('fMsg').className='err';$('fMsg').textContent=e.message;$('fGo').disabled=false}};
    return}
   const up=authMode==='up';
-  el.innerHTML=`<h1>${up?'Create an account':'Sign in'}</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. See the <a href="privacy.html">privacy policy</a> for what we store.</p>
+  el.innerHTML=`<h1>${up?'Create an account':'Sign in'}</h1>${err}<div class="panel"><p class="s">Sign in to save your paint collection, use it on the colour wheel, save recipes and tutorials, and join discussions. See the <a href="privacy">privacy policy</a> for what we store.</p>
   ${btns?`<div class="row">${btns}</div><p class="s">Your first sign-in with one of these creates your account.</p><p class="or"><span>or use your email</span></p>`:''}
   <div class="row"><button class="btn${up?'':' pri'}" type="button" data-m="in">Sign in</button><button class="btn${up?' pri':''}" type="button" data-m="up">Create account</button></div>
   <form id="pwForm">${up?'<label class="f"><span>Display name</span><input type="text" id="aName" maxlength="40" autocomplete="nickname" required></label>':''}
