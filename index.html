@@ -97,6 +97,29 @@ dialog.pd.fb textarea{min-height:120px;resize:vertical}.fbhp{position:absolute;l
 .card:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--sh)}
 .card h3{margin:0 0 4px;font:400 18px/1.2 var(--hf)}
 .sw{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}.sw i{width:20px;height:20px;border-radius:50%;border:2px solid var(--ink);display:block;box-sizing:border-box}
+.rstrip{display:flex;height:22px;border:3px solid var(--ink);border-radius:999px;overflow:hidden;margin:6px 0}.rstrip i{flex:1;display:block}
+.rstrip.big{height:54px;width:calc(100% + 28px);margin:-12px -14px 10px;border:0;border-bottom:3px solid var(--ink);border-radius:0}
+.rstrip.tall{height:64px;border-radius:18px;margin:10px 0 14px}
+.rthumb{float:right;width:64px;height:64px;object-fit:cover;border-radius:12px;border:2px solid var(--ink);margin:0 0 6px 8px}
+.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}
+.kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 16px;margin:0 0 6px}.kinds p{margin:4px 0;font-size:14.5px}
+.kpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.kpick label{display:block;border:3px solid var(--ink);border-radius:16px;padding:10px 12px;cursor:pointer;background:var(--card)}.kpick label.on{box-shadow:4px 4px 0 var(--sh);outline:3px solid var(--yel);outline-offset:-6px}
+.kpick input{position:absolute;opacity:0}.kpick b{display:block;margin-bottom:4px}.kpick small{display:block;color:var(--mut);font-size:13.5px;line-height:1.4}
+.kpick label:focus-within{outline:3px solid var(--blu)}
+.tmeta{align-items:flex-start}.tmeta .f{flex:1 1 160px;margin:0}
+.layers{list-style:none;padding:0;margin:6px 0}.layers li{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:2px dashed var(--ink)}.layers li:first-child{border-top:0}
+.layers li>div{flex:1;min-width:0}.layers .mix{margin:4px 0}.layers .ph{max-height:260px}
+.lc{flex:0 0 auto;display:inline-block;width:38px;height:38px;border-radius:50%;border:3px solid var(--ink);box-sizing:border-box}
+.step .row .lc{width:26px;height:26px;margin-right:6px;align-self:center}
+.layers.sm li{padding:4px 0}.layers.sm .lc{width:26px;height:26px}.layers.sm .mix{font-size:14px}
+.lrec{border:3px solid var(--ink);border-radius:16px;padding:8px 12px;margin:8px 0;background:var(--card)}.lrec>a{color:inherit;text-decoration:none;display:block}.lrec>a b{text-decoration:underline}
+.lrec.ed{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}.lrec.ed .rstrip{flex:1 1 100%}
+.rpi{display:block;cursor:pointer}.rpi .rstrip i{width:auto;height:auto;border:0;border-radius:0;flex:1}.rpi .rstrip{height:14px;border-width:2px;margin:2px 0 4px}.rpi em{font-style:normal;color:var(--mut);font-size:13px}
+.rcl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:6px 0}
+.rcm{display:block;border:3px solid var(--ink);border-radius:14px;padding:6px 10px;color:var(--fg);text-decoration:none;background:var(--card)}.rcm:hover{box-shadow:3px 3px 0 var(--sh)}
+.rcm .rstrip{height:16px;border-width:2px;margin:0 0 4px}.rcm b{display:block;font-size:14px;line-height:1.25}.rcm span{font-size:12px;color:var(--mut)}.rcm .pb{width:9px;height:14px;vertical-align:-2px}
+.used{margin:4px 0;padding-left:20px}
 .tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;border:2px solid var(--ink);background:var(--tea);color:#1b1b1b;margin-right:4px}
 .f{display:block;margin:12px 0}.f>span{display:block;font-size:14px;font-weight:700;color:var(--fg);margin-bottom:4px}
 .f input[type=text],.f input[type=url],.f textarea,.f select,.inp{width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border:3px solid var(--ink);border-radius:14px;background:var(--bg);color:var(--fg)}
@@ -291,7 +314,7 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <a class="feat wide" href="#/"><span class="band" style="background:var(--red)"></span><span class="in"><h3>Colour wheel</h3><p>Every paint placed by its hue around the wheel and its lightness from centre to rim. Tick whole ranges or single paints, from any mix of brands.</p><ul><li>Complements and neighbours for shading, highlights and glazes</li><li>A centre gradient that blends from the complement through your paint</li><li>Remembers the paints you last had open</li></ul><span class="go">Open the wheel →</span></span></a>
 <a class="feat" href="#/"><span class="band" style="background:var(--org)"></span><span class="in"><h3>Cross-brand matches</h3><p>Tap any paint to see its closest equivalents in the other ranges, so you can swap a paint you don't own for one you do.</p><ul><li>Matches from published conversion charts are ticked</li><li>Nearest-colour picks fill the gaps</li><li>Swatches are estimates, so check against the real pot</li></ul><span class="go">Find a match →</span></span></a>
 <a class="feat" href="#/paints" data-api><span class="band" style="background:var(--tea)"></span><span class="in"><h3>My paints</h3><p>Keep a list of the paints on your shelf and bring them up on the wheel in one tap.</p><ul><li>Show only your collection on the wheel</li><li>Limit matches to paints you already own</li></ul><span class="go">Build your collection →</span></span></a>
-<a class="feat" href="#/recipes" data-api><span class="band" style="background:var(--blu)"></span><span class="in"><h3>Recipes &amp; tutorials</h3><p>Share how you painted something, step by step, with the paints, photos and video for each stage.</p><ul><li>Browse what other painters have posted</li><li>Upvote and save the ones you like</li><li>Comment and ask questions</li></ul><span class="go">Browse recipes →</span></span></a>
+<a class="feat" href="#/recipes" data-api><span class="band" style="background:var(--blu)"></span><span class="in"><h3>Recipes &amp; tutorials</h3><p>Recipes are one colour, layer by layer from base to highlight. Tutorials are a whole model, step by step with photos and video, and can use recipes.</p><ul><li>Browse what other painters have posted</li><li>Upvote and save the ones you like</li><li>Comment and ask questions</li></ul><span class="go">Browse recipes →</span></span></a>
 <a class="feat" href="#/account" data-api><span class="band" style="background:var(--pur)"></span><span class="in"><h3>Your account</h3><p>Sign in with Google, Discord, GitHub or an email and password to save your collection, recipes and wheel across devices.</p><ul><li>A public profile with your favourite paints</li><li>Your recipes and tutorials in one place</li></ul><span class="go">Sign in or create one →</span></span></a>
 </div>
 </section>
@@ -299,6 +322,7 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>22 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Recipes and tutorials are now different things.</b> A recipe is one colour: a short list of layers from base to highlight, shown as a colour strip. A tutorial is a whole model, step by step, with a level, time and model, and its steps can use recipes. Ramps, NMM and Blends now save as recipes, and the wheel shows recipes that use the paint you pick.</li>
 <li><span class="tg pt">Paints</span><b>Tamiya.</b> 286 paints: XF flat and X gloss acrylics, plus the AS, PS and TS spray cans. Clears, thinner and flat base are left out.</li>
 </ul></div>
 <div class="panel cl"><h2>21 October 2026</h2><ul>

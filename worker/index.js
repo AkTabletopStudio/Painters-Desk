@@ -690,7 +690,7 @@ async function putWheel(request, env) {
 
 const recipeOut = r => ({
   id: r.id, kind: r.kind, title: r.title, summary: r.summary, body: r.body, link: r.link,
-  paints: JSON.parse(r.paints || '[]'), steps: JSON.parse(r.steps || '[]'), cover: r.cover || '', visibility: r.visibility, created_at: r.created_at, updated_at: r.updated_at,
+  paints: JSON.parse(r.paints || '[]'), steps: JSON.parse(r.steps || '[]'), cover: r.cover || '', meta: JSON.parse(r.meta || '{}'), visibility: r.visibility, created_at: r.created_at, updated_at: r.updated_at,
   author: { id: r.user_id, name: r.author_name, avatar: r.author_avatar }, comments: r.comment_count ?? undefined,
   views: r.views || 0, votes: r.vote_count || 0, voted: !!r.voted, saved: !!r.saved,
 });
@@ -709,21 +709,43 @@ async function listRecipes(request, env, url) {
   }
   else where.push("r.visibility = 'public'");
   if (q) { where.push('(r.title LIKE ? OR r.summary LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
+  const kind = url.searchParams.get('kind');
+  if (kind === 'recipe' || kind === 'tutorial') { where.push('r.kind = ?'); args.push(kind); }
+  // Recipes that use one paint (the wheel's "Recipes using this paint"). Keys are stored as a JSON array, so match the quoted key.
+  const paint = url.searchParams.get('paint');
+  if (paint && paint.length <= 120) { where.push("r.paints LIKE ? ESCAPE '\\'"); args.push(`%${JSON.stringify(paint).replace(/[\\%_]/g, c => '\\' + c)}%`); }
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit')) || 100));
   const rows = (await env.DB.prepare(
     `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
-     FROM ${from} JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT 100`
+     FROM ${from} JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${limit}`
   ).bind(...args).all()).results;
   return json({ recipes: rows.map(r => ({ ...listItem(r), saved: scope === 'saved' })) });
 }
 
 // The list only needs a picture: the main photo, else the last step photo (usually the finished model).
+// A recipe card shows its layers as a colour strip instead, so recipes keep each layer's mix.
 function listItem(r) {
   const o = recipeOut(r);
   o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
+  if (o.kind === 'recipe') o.layers = o.steps.map(s => s.mix);
   o.steps = o.steps.length; o.saved = false; delete o.body;
   return o;
+}
+
+// Recipes a tutorial's steps point at, as far as this viewer may see them (public, or their own).
+async function linkedRecipes(env, steps, viewer) {
+  const ids = [...new Set(steps.map(s => s.recipe).filter(Boolean))];
+  if (!ids.length) return {};
+  const rows = (await env.DB.prepare(
+    `SELECT r.id, r.title, r.steps, r.paints, r.user_id, u.name AS author_name FROM recipes r JOIN users u ON u.id = r.user_id
+     WHERE r.kind = 'recipe' AND r.id IN (${ids.map(() => '?').join(',')}) AND (r.visibility = 'public' OR r.user_id = ?)`
+  ).bind(...ids, viewer || '').all()).results;
+  return Object.fromEntries(rows.map(r => [r.id, {
+    id: r.id, title: r.title, paints: JSON.parse(r.paints || '[]'), author: { id: r.user_id, name: r.author_name },
+    layers: JSON.parse(r.steps || '[]').map(s => ({ title: s.title, mix: s.mix })),
+  }]));
 }
 
 async function loadRecipe(env, id, viewer = null) {
@@ -746,10 +768,17 @@ async function getRecipe(request, env, id) {
       `SELECT c.id, c.body, c.created_at, c.user_id, u.name, ${AVATAR} AS avatar FROM comments c JOIN users u ON u.id = c.user_id WHERE c.recipe_id = ? ORDER BY c.created_at`
     ).bind(id).all()).results.map(c => ({ id: c.id, body: c.body, created_at: c.created_at, author: { id: c.user_id, name: c.name, avatar: c.avatar } }));
   }
-  return json({ recipe: recipeOut(r), comments });
+  const out = recipeOut(r);
+  const linked = out.kind === 'tutorial' ? await linkedRecipes(env, out.steps, u?.id) : {};
+  // A recipe lists the public tutorials that use it in a step.
+  const usedIn = out.kind === 'recipe' ? (await env.DB.prepare(
+    `SELECT id, title FROM recipes WHERE kind = 'tutorial' AND visibility = 'public' AND steps LIKE ? ORDER BY updated_at DESC LIMIT 20`
+  ).bind(`%"recipe":"${id}"%`).all()).results : [];
+  return json({ recipe: out, comments, linked, usedIn });
 }
 
-const IMAGE_ID = /^[0-9a-f-]{36}$/;
+const IMAGE_ID = /^[0-9a-f-]{36}$/, RECIPE_ID = /^[\w-]{1,64}$/;
+const LEVELS = ['beginner', 'intermediate', 'advanced'];
 
 // Validate the steps and make sure every photo they use was uploaded by this user.
 function cleanSteps(raw) {
@@ -760,8 +789,9 @@ function cleanSteps(raw) {
       .map(m => ({ k: m.k, parts: Math.min(20, Math.max(1, Math.round(Number(m.parts) || 1))) }));
     if (mix.length > 8) throw new HttpError(400, `Step ${i + 1} has too many paints (max 8)`);
     const image = typeof s?.image === 'string' && IMAGE_ID.test(s.image) ? s.image : '';
-    return { title: str(s?.title, 80, `Step ${i + 1} name`), text: str(s?.text, 4000, `Step ${i + 1} details`), image, mix };
-  }).filter(s => s.title || s.text || s.image || s.mix.length);
+    const recipe = typeof s?.recipe === 'string' && RECIPE_ID.test(s.recipe) ? s.recipe : '';
+    return { title: str(s?.title, 80, `Step ${i + 1} name`), text: str(s?.text, 4000, `Step ${i + 1} details`), image, mix, recipe };
+  }).filter(s => s.title || s.text || s.image || s.mix.length || s.recipe);
   return steps;
 }
 
@@ -783,13 +813,27 @@ async function deleteImages(env, ids) {
 
 async function saveRecipe(request, env, id) {
   const u = await requireUser(request, env), b = await body(request);
+  const kind = b.kind === 'tutorial' ? 'tutorial' : 'recipe';
   const steps = cleanSteps(b.steps);
+  // Only tutorial steps can use a recipe, and only one this user can see. Its paints count as the tutorial's paints.
+  let linkedPaints = [];
+  if (kind === 'tutorial') {
+    const linked = await linkedRecipes(env, steps, u.id);
+    steps.forEach(s => { if (s.recipe && !linked[s.recipe]) s.recipe = ''; });
+    linkedPaints = Object.values(linked).flatMap(l => l.paints);
+  } else steps.forEach(s => { s.recipe = ''; });
+  const m = b.meta && typeof b.meta === 'object' ? b.meta : {};
+  const meta = kind === 'tutorial' ? {
+    level: LEVELS.includes(m.level) ? m.level : '', time: str(m.time, 40, 'Time'), model: str(m.model, 120, 'Model'),
+  } : {};
   const cover = typeof b.cover === 'string' && IMAGE_ID.test(b.cover) ? b.cover : '';
   // "paints" is every paint in the steps plus any extras listed separately; it drives list swatches and the wheel button.
   // Water can be part of a step's mix (to show a thinning ratio) but isn't a paint, so it's left out here.
   const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])].filter(k => k !== 'water'), 60);
+  for (const k of linkedPaints) if (paints.length < 60 && !paints.includes(k)) paints.push(k);
   const rec = {
-    kind: b.kind === 'tutorial' ? 'tutorial' : 'recipe',
+    kind,
+    meta: JSON.stringify(meta),
     title: str(b.title, 120, 'Title', { required: true }),
     summary: str(b.summary, 300, 'Summary'),
     body: str(b.body, 20000, 'Notes'),
@@ -809,13 +853,13 @@ async function saveRecipe(request, env, id) {
     const before = recipeImages({ cover: old.cover, steps: JSON.parse(old.steps || '[]') });
     await checkImagesOwned(env, u, [...used].filter(i => !before.has(i)));
     removed = [...before].filter(i => !used.has(i));
-    await env.DB.prepare('UPDATE recipes SET kind=?, title=?, summary=?, body=?, link=?, paints=?, steps=?, cover=?, visibility=?, updated_at=? WHERE id=?')
-      .bind(rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.steps, rec.cover, rec.visibility, t, id).run();
+    await env.DB.prepare('UPDATE recipes SET kind=?, title=?, summary=?, body=?, link=?, paints=?, steps=?, cover=?, meta=?, visibility=?, updated_at=? WHERE id=?')
+      .bind(rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.steps, rec.cover, rec.meta, rec.visibility, t, id).run();
   } else {
     await checkImagesOwned(env, u, [...used]);
     id = crypto.randomUUID();
-    await env.DB.prepare('INSERT INTO recipes (id, user_id, kind, title, summary, body, link, paints, steps, cover, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
-      .bind(id, u.id, rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.steps, rec.cover, rec.visibility, t, t).run();
+    await env.DB.prepare('INSERT INTO recipes (id, user_id, kind, title, summary, body, link, paints, steps, cover, meta, visibility, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .bind(id, u.id, rec.kind, rec.title, rec.summary, rec.body, rec.link, rec.paints, rec.steps, rec.cover, rec.meta, rec.visibility, t, t).run();
   }
   await deleteImages(env, removed);
   return json({ recipe: recipeOut(await loadRecipe(env, id, u.id)) }, isNew ? 201 : 200);
