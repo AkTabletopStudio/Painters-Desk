@@ -147,7 +147,7 @@ el.innerHTML=`<b>Your blend from:</b> <div class="chips"><span class="chip"><i s
 ${add(0,'+ Add a step on the shadow side')}<div class="nrows">${rows}</div>${add(st.length,'+ Add a step on the light side')}
 <svg class="blade" viewBox="0 0 300 96" role="img" aria-label="Blend preview"><defs><linearGradient id="bp" x1="0" x2="1">${st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${mixHex(x)}"/>`).join('')}</linearGradient></defs>${st.map((x,i)=>`<rect x="${(4+i*w).toFixed(1)}" y="6" width="${w.toFixed(1)}" height="40" fill="${mixHex(x)}"/>`).join('')}<rect x="4" y="6" width="292" height="40" rx="6" fill="none" stroke="#1b1b1b" stroke-width="3"/><rect x="4" y="54" width="292" height="36" rx="18" fill="url(#bp)" stroke="#1b1b1b" stroke-width="3"/></svg>
 <p class="s">Top: each step as painted. Bottom: how they blend. Mixed colours and swatches are estimates, so test the blend on the model.</p>
-<div class="row"><button class="btn" type="button" id="blTut">Save as tutorial</button><button class="btn" type="button" id="blReset">Reset to wheel picks</button></div>`;
+<div class="row"><button class="btn" type="button" id="blTut">Save as recipe</button><button class="btn" type="button" id="blReset">Reset to wheel picks</button></div>`;
 el.querySelectorAll('[data-ma]').forEach(e=>e.onclick=()=>{const i=+e.dataset.ma;ACT=ACT&&ACT.ins&&ACT.i===i?null:{i,ins:1};draw()});
 el.querySelectorAll('[data-mr]').forEach(e=>e.onclick=()=>{const i=+e.dataset.mr;ACT=ACT&&!ACT.ins&&ACT.i===i?null:{i};draw()});
 el.querySelectorAll('[data-mu],[data-md]').forEach(e=>e.onclick=()=>{const i=+(e.dataset.mu??e.dataset.md),j=e.dataset.mu!=null?i-1:i+1;[st[i],st[j]]=[st[j],st[i]];ACT=null;draw()});
@@ -155,9 +155,9 @@ el.querySelectorAll('[data-mp]').forEach(e=>e.onclick=()=>{const x=st[+e.dataset
 el.querySelectorAll('[data-mx]').forEach(e=>e.onclick=()=>{st.splice(+e.dataset.mx,1);ACT=null;draw()});
 el.querySelectorAll('[data-mm]').forEach(e=>e.onchange=()=>{st[+e.dataset.mm].m=+e.value;draw()});
 document.getElementById('blReset').onclick=()=>{blendSeed(b);draw()};
-// Tutorial order: the base first, then the shadow side working outward from it, then the light side.
+// Recipe order: the base first, then the shadow side working outward from it, then the light side.
 document.getElementById('blTut').onclick=()=>{const sh=st.slice(0,i0).reverse(),li=st.slice(i0+1),mx=x=>x.m?[{k:x.p.k,parts:MXR[x.m][0]},{k:b.k,parts:MXR[x.m][1]}]:[{k:x.p.k,parts:1}];
- NMM_DRAFT={kind:'tutorial',title:'Blend: '+b.n.trim(),summary:'Custom blend built on the Painters Desk wheel.',
+ NMM_DRAFT={kind:'recipe',title:'Blend: '+b.n.trim(),summary:'Custom blend built on the Painters Desk wheel.',
  steps:[{title:'Base',text:'Cover the whole area.',image:'',mix:[{k:b.k,parts:1}]}].concat(sh.map((x,k)=>({title:'Shadow '+(k+1),text:k?'Thinner, into the deepest recesses inside the last.':'Thinned, into the recesses and blended out toward the base.',image:'',mix:mx(x)})),li.map((x,k)=>({title:'Highlight '+(k+1),text:k?'Over a smaller area inside the last, on the highest points.':'On the raised areas, blended back into the base.',image:'',mix:mx(x)})))};location.hash='#/new'}}
 
 try{const o=JSON.parse(localStorage.getItem('pd-nmm'));if(o){MODE=o.m==='nmm'||o.m==='mix'?o.m:'col';NMO.n=o.n===5?5:7;NMO.t=!!o.t;NMO.q=TQ[o.q]?o.q:'nmm'}}catch(e){}
@@ -194,9 +194,9 @@ el.innerHTML=`<b>${esc(T.full)} ramp from:</b> <div class="chips"><span class="c
 (metal?'<p class="s">That\'s a metallic or effect paint, so the base uses the nearest opaque paint instead.</p>':'')+
 `<div class="nrows">${rows}</div>${rampPrev(R,T)}
 <p class="s">Small dot = the colour the ramp asks for; big dot = the nearest of your ticked paints (${ONLY_MINE?'from your collection only':'tick more ranges for closer matches'}). Close / Fair / Loose = ΔE under 6, under 12, above that. ↻ swaps a step for the next nearest paint.${T.glaze?' 1:4 💧 = one part paint to four parts water; thinner glazes need more coats.':''} Swatches are estimates, so check the ramp on the model.</p>
-<div class="row"><button class="btn" type="button" id="nmmTut">Save as tutorial</button></div>`;
+<div class="row"><button class="btn" type="button" id="nmmTut">Save as recipe</button></div>`;
 el.querySelectorAll('[data-sk]').forEach(e=>e.onclick=()=>{const i=+e.dataset.sk;nmmSkip[i]=(nmmSkip[i]||0)+1;draw()});
-document.getElementById('nmmTut').onclick=()=>{NMM_DRAFT={kind:'tutorial',title:T.name+' '+b.n.trim(),summary:T.sum,
+document.getElementById('nmmTut').onclick=()=>{NMM_DRAFT={kind:'recipe',title:T.name+' '+b.n.trim(),summary:T.sum,
  steps:R.filter(x=>x.p).map(x=>({title:x.r,text:T.tip[x.r]||'',image:'',mix:[{k:x.p.k,parts:1}].concat(T.glaze?[{k:'water',parts:x.w}]:[])}))};location.hash='#/new'}}
 function nmmUI(){const n=MODE==='nmm',T=TQN(),ss=T.steps||['5','7'];[['mCol','col'],['mNmm','nmm'],['mMix','mix']].forEach(([id,m])=>{const e=document.getElementById(id);e.classList.toggle('pri',MODE===m);e.setAttribute('aria-pressed',MODE===m)});document.getElementById('nmmOpt').hidden=!n;
 document.getElementById('nTech').value=NMO.q;const o=document.getElementById('nSteps').options;o[0].textContent=ss[0];o[1].textContent=ss[1];
@@ -259,7 +259,7 @@ if(R){nmmPanel(NBp,R);return}
 if(MX){blendPanel();return}
 if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>'+TQN().hint+'</b>';return}
 if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to start a blend. It starts with the wheel\'s own complements and neighbours, then you swap in your own.</b>';return}
-document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel)wireMatch(sel)}
+document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
 function pick(p){if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
@@ -298,7 +298,7 @@ function wireMatch(p){const el=document.getElementById('sel');
 el.querySelectorAll('.mt .chip').forEach(e=>e.onclick=()=>{const q=P[+e.dataset.mi];addOn([q],q)});
 const md=matchData(p),a=document.getElementById('mAddDoc'),b=document.getElementById('mAddAll');
 if(a)a.onclick=()=>addOn(md.flatMap(o=>o.ch.map(m=>m.p)),p);if(b)b.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.near].map(m=>m.p)),p)}
-function neutralShow(p){if(MODE==='mix'&&blendFill(p))return;if(MODE==='nmm'||MODE==='mix'){sel=null;NB=p;nmmSkip=[];draw();return}document.getElementById('sel').innerHTML=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span></div><p class="s">Neutral paint: it sits outside the hue wheel. Use it to dull a neighboring color or set value in an underpainting; warm greys pair with oranges and flesh, cool greys with blues.</p>`+matchHTML(p);wireMatch(p)}
+function neutralShow(p){if(MODE==='mix'&&blendFill(p))return;if(MODE==='nmm'||MODE==='mix'){sel=null;NB=p;nmmSkip=[];draw();return}document.getElementById('sel').innerHTML=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span></div><p class="s">Neutral paint: it sits outside the hue wheel. Use it to dull a neighboring color or set value in an underpainting; warm greys pair with oranges and flesh, cool greys with blues.</p>`+matchHTML(p);wireMatch(p);window.pdRecipesFor&&pdRecipesFor(p)}
 // Last wheel selection: {t,g:[fully ticked ranges],k:[other ticked paint keys]}, kept in this browser and (via account.js) on the account.
 const WK='pd-wheel',GS=[...new Set(P.map(p=>p.g))];
 function selNow(){const g=GS.filter(x=>P.every(p=>p.g!==x||p.on));return{t:Date.now(),g,k:P.filter(p=>p.on&&!g.includes(p.g)).map(p=>p.k)}}
