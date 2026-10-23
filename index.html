@@ -62,6 +62,7 @@ details.br{margin:6px 0}details.br>summary{padding:5px 0;font-weight:700;font-si
 .pi{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--fg);cursor:pointer}
 .pi i{width:18px;height:18px;border-radius:50%;border:2px solid var(--ink);flex:none;box-sizing:border-box}
 .pi em{color:var(--mut);font-style:normal;font-size:11px}
+.sub{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:3px 10px}.sub .sh{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;margin-top:6px;cursor:pointer}
 .mt{margin-top:12px;border-top:3px dashed var(--ink);padding-top:10px}
 .mt .br2{display:flex;gap:8px;align-items:flex-start;margin:6px 0;flex-wrap:wrap}
 .mt .bl{flex:0 0 118px;font-size:13px;color:var(--mut);padding-top:5px;font-weight:700}
@@ -321,6 +322,9 @@ dialog.pd.th{max-width:min(760px,calc(100vw - 32px));width:760px}
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>23 October 2026</h2><ul>
+<li><span class="tg up">Better</span><b>One Metallics section per brand.</b> In the paint lists, metallics no longer hide inside mixed ranges such as Citadel Base and Layer, Warpaints Fanatic, Speedpaint or Model Air. Each brand now has one Metallics section, split by the range each paint comes from, and Tamiya's pearl and iridescent sprays have their own Pearls section. Your collection, saved wheel and recipes are unchanged.</li>
+</ul></div>
 <div class="panel cl"><h2>22 October 2026</h2><ul>
 <li><span class="tg up">Better</span><b>Two Thin Coats grouped by triad.</b> The Two Thin Coats ranges now follow Duncan Rhodes' own chart: every triad paint sits under Triad shadows, midtones or highlights (the greys, bones, browns and skins included), plus Brights, Metallics, Washes and Glazes. Your collection and recipes keep these paints.</li>
 <li><span class="tg fx">Fixed</span><b>Missed metallics.</b> Grey Knights Steel and 16 other metallics whose names don't sound metallic (Army Painter coloured metallics such as Mithril, Fairy Dust and Glittering Loot, plus two Tamiya sprays) now count as metallics, so the Paint types button hides them with the rest.</li>

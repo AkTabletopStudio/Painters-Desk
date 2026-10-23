@@ -254,19 +254,21 @@ function renderPaints(){
  <div id="ptree"></div></div>
  <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>`;
  const tr=$('ptree');
- tr.innerHTML=BRANDS.map(([bn,gs])=>`<details class="br"><summary><b>${bn}</b> <span class="n" data-pb="${bn}"></span></summary>`+gs.map(g=>`<details class="rg" data-g="${g}"><summary><input type="checkbox" data-r="${g}"> ${GL[g]} <span class="n" data-pc="${g}"></span></summary><div class="pl">`+P.map((p,i)=>p.g===g?`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${esc(p.n)}${p.c?' <em>'+esc(p.c)+'</em>':''}</span></label>`:'').join('')+'</div></details>').join('')+'</details>').join('');
+ tr.innerHTML=treeHTML('data-pc','data-pb');
  const q=()=>$('pq').value.trim().toLowerCase(),only=()=>$('pOwned').checked,vis=p=>(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))&&(!only()||OWN.has(p.k));
  const counts=()=>{tr.querySelectorAll('input[data-i]').forEach(e=>e.checked=OWN.has(P[+e.dataset.i].k));
-  BRANDS.forEach(([bn,gs])=>{let bo=0;gs.forEach(g=>{const m=P.filter(p=>p.g===g),o=m.filter(p=>OWN.has(p.k)).length;bo+=o;const cb=tr.querySelector(`input[data-r="${g}"]`);if(!cb)return;cb.checked=o===m.length&&o>0;cb.indeterminate=o>0&&o<m.length;tr.querySelector(`[data-pc="${g}"]`).textContent=o+'/'+m.length});tr.querySelector(`[data-pb="${bn}"]`).textContent=bo?'('+bo+' owned)':''});
+  TREE.forEach(([bn,ss],bi)=>{let bo=0;ss.forEach(x=>bo+=x.ps.filter(i=>OWN.has(P[i].k)).length);tr.querySelector(`[data-pb="${bi}"]`).textContent=bo?'('+bo+' owned)':''});
+  Object.entries(SETS).forEach(([id,x])=>{const o=x.ps.filter(i=>OWN.has(P[i].k)).length,n=x.ps.length;const cb=tr.querySelector(`input[data-r="${id}"]`);if(!cb)return;cb.checked=o===n&&o>0;cb.indeterminate=o>0&&o<n;tr.querySelector(`[data-pc="${id}"]`).textContent=o+'/'+n});
   $('pcnt').textContent=OWN.size+' paints owned.'};
  const filt=()=>{const f=!!q()||only();tr.querySelectorAll('label.pi').forEach(l=>l.hidden=!vis(P[+l.dataset.i]));
+  tr.querySelectorAll('.sub').forEach(d=>d.hidden=f&&!d.querySelector('label.pi:not([hidden])'));
   tr.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=f&&!v;if(f)d.open=v});
   tr.querySelectorAll('details.br').forEach(d=>{d.hidden=f&&!d.querySelector('details.rg:not([hidden])');if(f)d.open=true})};
  tr.addEventListener('change',e=>{const t=e.target;
-  if(t.dataset.r){const ks=P.filter(p=>p.g===t.dataset.r&&(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))).map(p=>p.k);
+  if(t.dataset.r){const ks=SETS[t.dataset.r].ps.map(i=>P[i]).filter(p=>!q()||(p.n+' '+p.c).toLowerCase().includes(q())).map(p=>p.k);
    // Ticking or unticking a whole range asks first when it would change BULK or more paints; Cancel leaves the collection as it was.
    const on=t.checked,ch=ks.filter(k=>OWN.has(k)!==on);
-   if(ch.length>=BULK){counts();askBulk(ch,GL[t.dataset.r],on);return}
+   if(ch.length>=BULK){counts();askBulk(ch,SETS[t.dataset.r].w||SETS[t.dataset.r].l,on);return}
    if(ch.length){setOwned(ch,on);undoBar(ch,on)}}
   else if(t.dataset.i!==undefined){const k=P[+t.dataset.i].k;setOwned([k],t.checked);if(!t.checked)undoBar([k])}
   $('pmsg').textContent='Saving…';counts()});
