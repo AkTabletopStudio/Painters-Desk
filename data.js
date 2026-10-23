@@ -1352,48 +1352,89 @@ Blue Glaze||#7a8eca
 Orange Glaze||#fea660
 Green Glaze||#d7ebcd
 Purple Glaze||#e2ccdc
-#k
+#O
 Doom Death Black||#373737
+#N
 Death Reaper||#505052
+#H
 Dungeon Stone Grey||#5b5f62
+#O
 Wizard Grey||#686c6d
+#N
 Carcharodon Grey||#919596
+#H
 White Star||#f4f7f4
+#O
 Ashen Grey||#58574c
+#N
 Eidolon Grey||#5c5d4d
+#H
 Rodent Grey||#7b7b69
+#O
 Griffon Claw||#998d83
+#N
 Ivory Tusk||#ccc2ba
+#H
 Trooper White||#ebe8dc
+#O
 Dragon Fang||#998364
+#N
 Skeleton Legion||#ac9770
+#H
 Vampire Fang||#c7b397
+#O
 Dust Bowl||#756151
+#N
 Sandstone||#897b6a
+#H
 Temple Stone||#9f8d7a
+#O
 Noble Steed Brown||#77553a
+#N
 Dry Rust Brown||#b97740
+#H
 Satyr Brown||#d69758
+#O
 Gyzmo Fur||#d98d49
+#N
 Manticore Ochre||#dd9d3e
+#H
 Cerberus Brown||#e6b455
+#O
 Cuirass Leather||#4c3f38
+#N
 Boar Hide||#481315
+#H
 Fur Cloak||#8a5452
+#O
 Scorched Earth||#514d4a
+#N
 Ancient Forest||#695b52
+#H
 Wasteland Brown||#7d6a5f
+#O
 Scabbard Brown||#7d6148
+#N
 Boot Strap Brown||#8e694f
+#H
 Vambrace Brown||#9e7760
+#O
 Druid Flesh||#604535
+#N
 Paladin Flesh||#835f4d
+#H
 Bard Skin||#a27866
+#O
 Barbarian Brawn||#89635b
+#N
 Dwarven Skin||#a97a66
+#H
 Elven Skin||#bf9475
+#O
 Argonaut Skin||#b49670
+#N
 Kronos Flesh||#caa474
+#H
 Ares Flesh||#e6c789
 #V
 Elf Skin Tone|72.004|#bc6e49
