@@ -283,6 +283,19 @@ const GL={A:'Warpaints Fanatic',C:'John Blanche Vol. 1-4',R:'Warpaints Air',S:'S
 const BRANDS=[['Army Painter',['A','C','R','S']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z','L']],['AK Interactive',['K','e','g','j','m','n','o','v','y']],['Two Thin Coats',['H','N','O','J','q','z','r']],['Turbo Dork',['D','I','Q']],['Tamiya',['U','h','2','3','4']],['Scale75',['7','8','9','0','%','*','@']],['Green Stuff World',['5','6','!','+','~','^','=']]];
 
 const BR_OF={};BRANDS.forEach(([bn,gs],bi)=>gs.forEach(g=>BR_OF[g]=bi));
+// Paint tree sections (wheel and My paints). A brand whose metallics or pearls are spread over mixed ranges gets one Metallics and one
+// Pearls section at the end, with a sub-heading per original range; pure metallic ranges of that brand fold in. Paints keep their range (p.g),
+// so collections, saved wheels and recipes are untouched. SETS: section or sub-heading id -> {l: label, w: sub-heading name in prompts, ps: paint indices}.
+const SETS={},TREE=BRANDS.map(([bn,gs],bi)=>{const of=g=>P.filter(p=>p.g===g),kd=p=>{const t=paintType(p);return t==='met'||t==='pearl'?t:''};
+ const pure=(g,t)=>of(g).every(p=>kd(p)===t),pull={};['met','pearl'].forEach(t=>pull[t]=gs.some(g=>!pure(g,t)&&of(g).some(p=>kd(p)===t)));
+ const out=[],X={met:{id:'met'+bi,l:'Metallics',subs:[]},pearl:{id:'pearl'+bi,l:'Pearls',subs:[]}};
+ gs.forEach(g=>{const keep=[];of(g).forEach(p=>{const t=kd(p);if(t&&pull[t]){const ss=X[t].subs;let u=ss.find(u=>u.g===g);if(!u)ss.push(u={id:X[t].id+'.'+g,g,l:GL[g],w:GL[g]+' '+X[t].l.toLowerCase(),ps:[]});u.ps.push(p.i)}else keep.push(p.i)});
+  if(keep.length)out.push({id:g,l:GL[g],ps:keep})});
+ ['met','pearl'].forEach(t=>{const x=X[t];if(!x.subs.length)return;x.ps=x.subs.flatMap(u=>u.ps);out.push(x);x.subs.forEach(u=>SETS[u.id]=u)});
+ out.forEach(x=>SETS[x.id]=x);return[bn,out]});
+const treeRow=i=>{const p=P[i],e=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));return`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${e(p.n)}${p.c?' <em>'+e(p.c)+'</em>':''}</span></label>`};
+// ca: attribute for the per-section count spans; ba: attribute (value = brand index) for the brand total; op(bi): open that brand.
+const treeHTML=(ca,ba,op)=>TREE.map(([bn,ss],bi)=>`<details class="br"${op&&op(bi)?' open':''}><summary><b>${bn}</b> <span class="n" ${ba}="${bi}"></span></summary>`+ss.map(s=>`<details class="rg" data-g="${s.id}"><summary><input type="checkbox" data-r="${s.id}"> ${s.l} <span class="n" ${ca}="${s.id}"></span></summary><div class="pl">`+(s.subs?s.subs.map(u=>`<div class="sub"><label class="sh"><input type="checkbox" data-r="${u.id}"> ${u.l} <span class="n" ${ca}="${u.id}"></span></label>`+u.ps.map(treeRow).join('')+'</div>').join(''):s.ps.map(treeRow).join(''))+'</div></details>').join('')+'</details>').join('');
 function hexLab(h){const f=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92};
 const r=f(parseInt(h.slice(1,3),16)),g=f(parseInt(h.slice(3,5),16)),b=f(parseInt(h.slice(5,7),16));
 let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.1192*g+.9505*b)/1.08883;const t=v=>v>.008856?Math.cbrt(v):7.787*v+16/116;
@@ -316,22 +329,24 @@ let onSelSave=null;
 function remember(){const w=selNow();try{localStorage.setItem(WK,JSON.stringify(w))}catch(e){}if(onSelSave)onSelSave(w)}
 const W0=selLocal();if(W0)selApply(W0);else P.forEach(p=>p.on=!!on[p.g]);
 const tree=document.getElementById('tree');
-tree.innerHTML=BRANDS.map(([bn,gs],bi)=>`<details class="br"${gs.some(g=>on[g])?' open':''}><summary><b>${bn}</b> <span class="n" data-bc="${bi}"></span></summary>`+gs.map(g=>`<details class="rg" data-g="${g}"><summary><input type="checkbox" data-r="${g}"> ${GL[g]} <span class="n" data-gc="${g}"></span></summary><div class="pl">`+P.map((p,i)=>p.g===g?`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${p.n}${p.c?' <em>'+p.c+'</em>':''}</span></label>`:'').join('')+`</div></details>`).join('')+`</details>`).join('');
+tree.innerHTML=treeHTML('data-gc','data-bc',bi=>TREE[bi][1].some(x=>x.ps.some(i=>on[P[i].g])));
 const qv=()=>document.getElementById('q').value.trim().toLowerCase(),match=(p,q)=>(p.n+' '+p.c).toLowerCase().includes(q);
 const refresh=()=>{sel=null;NB=null;layout();renderNeu();draw()};
 function boxes(){
  const q=qv();tree.querySelectorAll('input[data-i]').forEach(e=>e.checked=P[+e.dataset.i].on);
  let tot=0;
- BRANDS.forEach(([bn,gs],bi)=>{let bo=0;gs.forEach(g=>{const m=P.filter(p=>p.g===g),o=m.filter(p=>p.on).length,mm=q?m.filter(p=>match(p,q)):m,mo=mm.filter(p=>p.on).length;bo+=o;const cb=tree.querySelector(`input[data-r="${g}"]`);cb.checked=mm.length>0&&mo===mm.length;cb.indeterminate=mo>0&&mo<mm.length;tree.querySelector(`[data-gc="${g}"]`).textContent=o+'/'+m.length});tree.querySelector(`[data-bc="${bi}"]`).textContent=bo?'('+bo+' selected)':'';tot+=bo});
+ TREE.forEach(([bn,ss],bi)=>{let bo=0;ss.forEach(x=>bo+=x.ps.filter(i=>P[i].on).length);tree.querySelector(`[data-bc="${bi}"]`).textContent=bo?'('+bo+' selected)':'';tot+=bo});
+ Object.entries(SETS).forEach(([id,x])=>{const m=x.ps.map(i=>P[i]),o=m.filter(p=>p.on).length,mm=q?m.filter(p=>match(p,q)):m,mo=mm.filter(p=>p.on).length;const cb=tree.querySelector(`input[data-r="${id}"]`);cb.checked=mm.length>0&&mo===mm.length;cb.indeterminate=mo>0&&mo<mm.length;tree.querySelector(`[data-gc="${id}"]`).textContent=o+'/'+m.length});
  document.getElementById('cnt').textContent=tot+' selected'}
 function sync(){boxes();refresh();remember()}
 tree.addEventListener('change',e=>{const t=e.target;
- if(t.dataset.r){const q=qv();P.forEach(p=>{if(p.g===t.dataset.r&&(!q||match(p,q)))p.on=t.checked})}
+ if(t.dataset.r){const q=qv();SETS[t.dataset.r].ps.forEach(i=>{const p=P[i];if(!q||match(p,q))p.on=t.checked})}
  else if(t.dataset.i!==undefined)P[+t.dataset.i].on=t.checked;
  sync()});
 document.getElementById('clr').onclick=()=>{P.forEach(p=>p.on=false);sync()};
 document.getElementById('q').oninput=()=>{const q=qv();
  tree.querySelectorAll('label.pi').forEach(l=>l.hidden=!!q&&!match(P[+l.dataset.i],q));
+ tree.querySelectorAll('.sub').forEach(d=>d.hidden=!!q&&!d.querySelector('label.pi:not([hidden])'));
  tree.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=!!q&&!v;d.open=!!q&&v});
  tree.querySelectorAll('details.br').forEach(d=>{d.hidden=!!q&&!d.querySelector('details.rg:not([hidden])');if(q)d.open=true});boxes()};
 boxes();refresh();
