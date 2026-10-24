@@ -119,7 +119,15 @@ async function route(request, env, url) {
   if (p === '/api/admin/announce' && m === 'GET') return announceInfo(request, env);
   if (p === '/api/admin/announce' && m === 'POST') return announce(request, env, url);
   if (p === '/api/images' && m === 'POST') return uploadImage(request, env);
-  if ((r = p.match(/^\/api\/images\/([\w-]+)$/)) && m === 'GET') return getImage(env, r[1]);
+  if ((r = p.match(/^\/api\/images\/([\w-]+)$/)) && m === 'GET') return getImage(request, env, r[1]);
+  if (p === '/api/reports' && m === 'POST') return addReport(request, env, url);
+  if (p === '/api/admin/moderation' && m === 'GET') return moderation(request, env);
+  if ((r = p.match(/^\/api\/admin\/images\/([\w-]+)$/))) {
+    if (m === 'PUT') return hideImage(request, env, r[1]);
+    if (m === 'DELETE') return adminDeleteImage(request, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/admin\/users\/([\w-]+)$/)) && m === 'PUT') return blockUser(request, env, r[1]);
+  if ((r = p.match(/^\/api\/admin\/reports\/([\w-]+)$/)) && m === 'PUT') return resolveReport(request, env, r[1]);
   return json({ error: 'Not found' }, 404);
 }
 
@@ -162,14 +170,17 @@ async function sha256(s) {
 
 const adminEmails = env => (env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
 
-// A user's picture: their uploaded icon if they chose one, else the picture from their sign-in service.
-const AVATAR = "CASE WHEN u.avatar_image != '' THEN '/api/images/' || u.avatar_image ELSE u.avatar END";
+// A user's picture: their uploaded icon if they chose one (and an admin hasn't hidden it), else the picture from
+// their sign-in service. Blocked accounts show no picture at all.
+const AVATAR = `CASE WHEN u.blocked = 1 THEN NULL
+  WHEN u.avatar_image != '' AND NOT EXISTS (SELECT 1 FROM images i WHERE i.id = u.avatar_image AND i.hidden = 1) THEN '/api/images/' || u.avatar_image
+  ELSE u.avatar END`;
 
 async function currentUser(request, env) {
   const token = cookies(request)[SESSION_COOKIE];
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.created_at
+    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now()).first();
   if (!row) return null;
@@ -178,6 +189,7 @@ async function currentUser(request, env) {
   row.email_verified = !!row.email_verified;
   row.updates = !!row.updates;
   row.updates_asked = !!row.updates_asked;
+  row.blocked = !!row.blocked;
   row.favourites = JSON.parse(row.favourites || '[]');
   return row;
 }
@@ -588,6 +600,7 @@ async function saveProfile(request, env) {
   let icon = u.avatar_image;
   if (typeof b.icon === 'string' && b.icon !== icon) {
     if (b.icon && !IMAGE_ID.test(b.icon)) throw new HttpError(400, 'Bad icon');
+    if (b.icon && u.blocked) throw new HttpError(403, 'This account has been blocked from adding pictures');
     if (b.icon) await checkImagesOwned(env, u, [b.icon]);
     icon = b.icon;
   }
@@ -599,8 +612,11 @@ async function saveProfile(request, env) {
 
 // Anyone can see a profile: icon, name, bio, link, favourite paints and public recipes & tutorials. Never the email.
 async function getProfile(request, env, id) {
-  const p = await env.DB.prepare(`SELECT u.id, u.name, ${AVATAR} AS avatar, u.bio, u.link, u.favourites, u.created_at FROM users u WHERE u.id = ?`).bind(id).first();
+  const p = await env.DB.prepare(`SELECT u.id, u.name, ${AVATAR} AS avatar, u.bio, u.link, u.favourites, u.blocked, u.created_at FROM users u WHERE u.id = ?`).bind(id).first();
   if (!p) throw new HttpError(404, 'Painter not found');
+  // A blocked account's profile shows only its name.
+  if (p.blocked) { p.bio = ''; p.link = ''; p.favourites = '[]'; }
+  delete p.blocked;
   p.favourites = JSON.parse(p.favourites || '[]');
   const rows = (await env.DB.prepare(
     `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
@@ -765,7 +781,7 @@ async function getRecipe(request, env, id) {
   let comments = [];
   if (r.visibility === 'public') {
     comments = (await env.DB.prepare(
-      `SELECT c.id, c.body, c.created_at, c.user_id, u.name, ${AVATAR} AS avatar FROM comments c JOIN users u ON u.id = c.user_id WHERE c.recipe_id = ? ORDER BY c.created_at`
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.name, ${AVATAR} AS avatar FROM comments c JOIN users u ON u.id = c.user_id WHERE c.recipe_id = ? AND u.blocked = 0 ORDER BY c.created_at`
     ).bind(id).all()).results.map(c => ({ id: c.id, body: c.body, created_at: c.created_at, author: { id: c.user_id, name: c.name, avatar: c.avatar } }));
   }
   const out = recipeOut(r);
@@ -843,7 +859,8 @@ async function saveRecipe(request, env, id) {
     paints: JSON.stringify(paints),
     steps: JSON.stringify(steps),
     cover,
-    visibility: b.visibility === 'public' ? 'public' : 'private',
+    // A blocked account can keep notes for itself but can't share anything.
+    visibility: b.visibility === 'public' && !u.blocked ? 'public' : 'private',
   };
   if (rec.link && !/^https?:\/\//i.test(rec.link)) throw new HttpError(400, 'Link must start with http:// or https://');
   const used = recipeImages({ cover, steps });
@@ -887,40 +904,213 @@ const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE = 5 * 1024 * 1024;
 
 // The page shrinks photos before upload; the raw image bytes are the request body.
+// Before a photo is stored: the account must not be blocked, a typed-in email must be confirmed, at most
+// UPLOADS_PER_HOUR an hour, and the automatic check (scanImage) must not refuse it.
+const UPLOADS_PER_HOUR = 30;
+
 async function uploadImage(request, env) {
   const u = await requireUser(request, env);
   if (!env.IMAGES) throw new HttpError(503, 'Photo storage is not set up yet');
+  if (u.blocked) throw new HttpError(403, 'This account has been blocked from uploading photos');
+  if (u.email && !u.email_verified) throw new HttpError(403, 'Please confirm your email before uploading photos. You can send the confirmation email from your account page.');
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim();
   if (!IMAGE_TYPES.includes(type)) throw new HttpError(400, 'Photos must be JPEG, PNG or WebP');
   const data = await request.arrayBuffer();
   if (!data.byteLength) throw new HttpError(400, 'Empty photo');
   if (data.byteLength > MAX_IMAGE) throw new HttpError(413, 'Photo is too large (max 5 MB)');
+  const t = now();
+  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM images WHERE user_id = ? AND created_at > ?').bind(u.id, t - 3600000).first();
+  if (c.n >= UPLOADS_PER_HOUR) throw new HttpError(429, "You've uploaded a lot of photos this hour, please try again later");
+  const scan = await scanImage(env, data, type);
+  if (scan.refused) {
+    // The photo isn't kept; the attempt is logged for the admin page so repeat tries stand out.
+    await env.DB.prepare("INSERT INTO reports (id, kind, target_id, reason, note, reporter_id, created_at) VALUES (?, 'upload', ?, 'auto', ?, NULL, ?)")
+      .bind(crypto.randomUUID(), u.id, scan.reason, t).run();
+    throw new HttpError(422, "This photo can't be uploaded because it looks like it breaks the site rules. If you think that's a mistake, tell us with the Feedback button.");
+  }
   const id = crypto.randomUUID();
   await env.IMAGES.put(`img/${id}`, data, { httpMetadata: { contentType: type } });
-  await env.DB.prepare('INSERT INTO images (id, user_id, content_type, size, created_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(id, u.id, type, data.byteLength, now()).run();
+  await env.DB.prepare('INSERT INTO images (id, user_id, content_type, size, scan, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id, u.id, type, data.byteLength, scan.result, t).run();
   return json({ id, url: `/api/images/${id}` }, 201);
 }
 
+// The automatic check: a Workers AI vision model (binding AI) looks at each photo before it is stored.
+// If the model can't be reached the photo is kept but marked 'unchecked', so it stands out on the admin page.
+const SCAN_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+const SCAN_PROMPT = `You check photos uploaded to a miniature painting website, where people share photos of painted tabletop miniatures and models, paints, palettes, artwork and their painting desk.
+Decide if this photo breaks the site rules.
+Not allowed: nudity or sexual content (photos or artwork); real gore, injuries or violence against people or animals; hate symbols shown to promote hate; illegal drugs; anything sexual or harmful involving children.
+Allowed: painted miniatures and models even when they show monsters, skulls, blood effects, gore or battle scenes; fantasy and sci-fi artwork without nudity; everyday photos of people, pets, places and things.
+Answer with JSON only, either {"allowed": true} or {"allowed": false, "reason": "<a few words>"}.`;
+
+function toBase64(buf) {
+  const a = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode(...a.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+async function scanImage(env, data, type) {
+  // Local development (npm run dev runs without Workers AI): DEV_SCAN=ok|refuse|unchecked in .dev.vars fakes the answer.
+  if (env.DEV_LOGIN === '1' && env.DEV_SCAN) return env.DEV_SCAN === 'refuse' ? { refused: true, reason: 'dev test' } : { result: env.DEV_SCAN };
+  if (!env.AI) return { result: 'unchecked' };
+  try {
+    const r = await env.AI.run(SCAN_MODEL, {
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: SCAN_PROMPT },
+        { type: 'image_url', image_url: { url: `data:${type};base64,${toBase64(data)}` } },
+      ] }],
+      max_tokens: 60, temperature: 0,
+    });
+    let v = r?.response;
+    if (typeof v === 'string') { const m = v.match(/\{[^{}]*\}/); v = m ? JSON.parse(m[0]) : null; }
+    if (v && v.allowed === true) return { result: 'ok' };
+    if (v && v.allowed === false) return { refused: true, reason: String(v.reason || 'breaks the site rules').slice(0, 200) };
+    console.error('Photo check gave no answer', JSON.stringify(r).slice(0, 300));
+  } catch (e) { console.error('Photo check failed', e); }
+  return { result: 'unchecked' };
+}
+
 // Photo IDs are random, so a private tutorial's photos can only be found by someone who has the link.
-async function getImage(env, id) {
+// A photo an admin hid looks missing to everyone but admins. Browsers keep a copy but check back on every view
+// (a quick "not modified" answer when nothing changed), so a hidden or deleted photo stops showing straight away.
+async function getImage(request, env, id) {
   if (!env.IMAGES || !IMAGE_ID.test(id)) return json({ error: 'Not found' }, 404);
-  const obj = await env.IMAGES.get(`img/${id}`);
+  const row = await env.DB.prepare('SELECT hidden FROM images WHERE id = ?').bind(id).first();
+  if (!row) return json({ error: 'Not found' }, 404);
+  if (row.hidden && !(await currentUser(request, env))?.admin) return json({ error: 'Not found' }, 404);
+  const obj = await env.IMAGES.get(`img/${id}`, { onlyIf: request.headers });
   if (!obj) return json({ error: 'Not found' }, 404);
   const type = obj.httpMetadata?.contentType;
-  return new Response(obj.body, {
-    headers: {
-      'Content-Type': IMAGE_TYPES.includes(type) ? type : 'application/octet-stream',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+  const headers = {
+    'Content-Type': IMAGE_TYPES.includes(type) ? type : 'application/octet-stream',
+    'Cache-Control': row.hidden ? 'private, no-store' : 'no-cache',
+    ETag: obj.httpEtag,
+    'X-Content-Type-Options': 'nosniff',
+  };
+  if (!('body' in obj)) return new Response(null, { status: 304, headers });
+  return new Response(obj.body, { headers });
+}
+
+/* ---------- reports & moderation ---------- */
+
+// The Report button on public recipes, tutorials, palettes and profiles. Anyone can report, signed in or not;
+// each sender (by IP) can send REPORTS_PER_HOUR an hour. Reports are emailed to FEEDBACK_TO (else the first ADMIN_EMAILS).
+const REPORT_REASONS = { nudity: 'Nudity or sexual content', violence: 'Violence or gore', hate: 'Hate or harassment', spam: 'Spam or scam', other: 'Something else' };
+const REPORTS_PER_HOUR = 10;
+
+async function addReport(request, env, url) {
+  const b = await body(request);
+  if (b.website) return json({ ok: true });
+  const kind = b.kind === 'user' ? 'user' : 'recipe';
+  const target = typeof b.id === 'string' && RECIPE_ID.test(b.id) ? b.id : '';
+  const reason = REPORT_REASONS[b.reason] ? b.reason : 'other';
+  const note = str(b.note, 1000, 'Details');
+  const row = kind === 'recipe'
+    ? await env.DB.prepare("SELECT title AS name FROM recipes WHERE id = ? AND visibility = 'public'").bind(target).first()
+    : await env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(target).first();
+  if (!row) throw new HttpError(404, kind === 'recipe' ? 'Recipe not found' : 'Painter not found');
+  const u = await currentUser(request, env), t = now();
+  const ip = await sha256('report:' + (request.headers.get('CF-Connecting-IP') || ''));
+  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM reports WHERE ip_hash = ? AND created_at > ?').bind(ip, t - 3600000).first();
+  if (c.n >= REPORTS_PER_HOUR) throw new HttpError(429, "Thanks! You've sent a lot of reports this hour, please try again later");
+  await env.DB.prepare('INSERT INTO reports (id, kind, target_id, reason, note, reporter_id, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), kind, target, reason, note, u?.id || null, ip, t).run();
+  const to = env.FEEDBACK_TO || adminEmails(env)[0];
+  if (to) {
+    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
+    try {
+      await sendMail(env, to, `[Painters Desk] Report: ${REPORT_REASONS[reason]}`,
+        `Someone reported ${what}.\n\nReason: ${REPORT_REASONS[reason]}\n\n${note ? 'Details: ' + note + '\n\n' : ''}Reported by: ${u ? u.name : 'someone not signed in'}`,
+        `${url.origin}/#/admin`, 'Open moderation');
+    } catch (e) { console.error('Report email failed', e); }
+  }
+  return json({ ok: true });
+}
+
+// Every photo a recipe uses: its cover and step photos.
+const usedImages = r => [r.cover, ...JSON.parse(r.steps || '[]').map(s => s.image)].filter(Boolean);
+
+// The admin page: open reports (newest first) and the most recent photos, each with where it is used.
+async function moderation(request, env) {
+  await requireAdmin(request, env);
+  const users = new Map((await env.DB.prepare('SELECT id, name, email, email_verified, avatar_image, blocked, created_at FROM users').all()).results.map(x => [x.id, x]));
+  const recipes = (await env.DB.prepare('SELECT id, user_id, title, kind, visibility, cover, steps FROM recipes').all()).results;
+  const usedIn = new Map(), add = (img, where) => { if (!usedIn.has(img)) usedIn.set(img, []); usedIn.get(img).push(where); };
+  for (const r of recipes) for (const img of new Set(usedImages(r))) add(img, { type: 'recipe', id: r.id, title: r.title, kind: r.kind, visibility: r.visibility });
+  for (const x of users.values()) if (x.avatar_image) add(x.avatar_image, { type: 'icon', id: x.id });
+  const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
+  const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
+  const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
+  const rows = (await env.DB.prepare("SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT 100").all()).results;
+  const imgById = async ids => ids.length ? (await env.DB.prepare(`SELECT * FROM images WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()).results.map(imgRow) : [];
+  const reports = [];
+  for (const r of rows) {
+    const o = { id: r.id, kind: r.kind, reason: r.reason, label: REPORT_REASONS[r.reason] || 'Refused at upload', note: r.note, created_at: r.created_at, reporter: r.reporter_id ? person(r.reporter_id) : null };
+    if (r.kind === 'recipe') {
+      const rec = recipes.find(x => x.id === r.target_id);
+      o.target = rec ? { id: rec.id, title: rec.title, kind: rec.kind, visibility: rec.visibility } : null;
+      o.user = rec ? person(rec.user_id) : null;
+      o.images = rec ? await imgById([...new Set(usedImages(rec))]) : [];
+    } else {
+      o.user = person(r.target_id);
+      const icon = r.kind === 'user' && users.get(r.target_id)?.avatar_image;
+      o.images = icon ? await imgById([icon]) : [];
+    }
+    reports.push(o);
+  }
+  return json({ reports, images });
+}
+
+// Hide a photo (it stops loading for everyone but admins) or show it again: { hidden: true | false }.
+async function hideImage(request, env, id) {
+  await requireAdmin(request, env);
+  const b = await body(request);
+  const r = await env.DB.prepare('UPDATE images SET hidden = ? WHERE id = ?').bind(b.hidden === false ? 0 : 1, id).run();
+  if (!r.meta.changes) throw new HttpError(404, 'Photo not found');
+  return json({ ok: true, hidden: b.hidden !== false });
+}
+
+// Delete a photo for good, and take it out of every recipe and profile that used it.
+async function adminDeleteImage(request, env, id) {
+  await requireAdmin(request, env);
+  if (!IMAGE_ID.test(id)) throw new HttpError(404, 'Photo not found');
+  const rows = (await env.DB.prepare('SELECT id, cover, steps FROM recipes WHERE cover = ? OR steps LIKE ?').bind(id, `%"${id}"%`).all()).results;
+  const stmts = rows.map(r => env.DB.prepare('UPDATE recipes SET cover = ?, steps = ? WHERE id = ?').bind(
+    r.cover === id ? '' : r.cover, JSON.stringify(JSON.parse(r.steps || '[]').map(s => (s.image === id ? { ...s, image: '' } : s))), r.id));
+  stmts.push(env.DB.prepare("UPDATE users SET avatar_image = '' WHERE avatar_image = ?").bind(id));
+  await env.DB.batch(stmts);
+  await deleteImages(env, [id]);
+  return json({ ok: true });
+}
+
+// Block an account or unblock it: { blocked: true | false }. Blocking makes all its recipes private and hides its
+// picture, profile text and comments; it can no longer upload, comment or share. Unblocking doesn't make anything public again.
+async function blockUser(request, env, id) {
+  const admin = await requireAdmin(request, env), b = await body(request);
+  if (id === admin.id) throw new HttpError(400, "You can't block yourself");
+  const on = b.blocked !== false, stmts = [env.DB.prepare('UPDATE users SET blocked = ? WHERE id = ?').bind(on ? 1 : 0, id)];
+  if (on) stmts.push(env.DB.prepare("UPDATE recipes SET visibility = 'private' WHERE user_id = ?").bind(id));
+  const r = await env.DB.batch(stmts);
+  if (!r[0].meta.changes) throw new HttpError(404, 'Painter not found');
+  return json({ ok: true, blocked: on });
+}
+
+// Mark a report as dealt with ({ status: 'done' }) or reopen it ({ status: 'open' }).
+async function resolveReport(request, env, id) {
+  await requireAdmin(request, env);
+  const b = await body(request), done = b.status !== 'open';
+  const r = await env.DB.prepare('UPDATE reports SET status = ?, resolved_at = ? WHERE id = ?').bind(done ? 'done' : 'open', done ? now() : null, id).run();
+  if (!r.meta.changes) throw new HttpError(404, 'Report not found');
+  return json({ ok: true });
 }
 
 /* ---------- comments (public recipes, signed-in users) ---------- */
 
 async function addComment(request, env, recipeId) {
   const u = await requireUser(request, env), b = await body(request);
+  if (u.blocked) throw new HttpError(403, 'This account has been blocked from commenting');
   const text = str(b.body, 2000, 'Comment', { required: true });
   const r = await env.DB.prepare('SELECT visibility FROM recipes WHERE id = ?').bind(recipeId).first();
   if (!r || r.visibility !== 'public') throw new HttpError(404, 'Recipe not found');
