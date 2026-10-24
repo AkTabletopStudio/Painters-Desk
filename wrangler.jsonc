@@ -27,5 +27,7 @@
   "previews": {},
   // Cloudflare Email Sending (Workers Paid) for confirmation and password-reset emails, sent from the MAIL_FROM secret.
   // paintersdesk.com must be onboarded under Email Service > Email Sending.
-  "send_email": [{ "name": "EMAIL" }]
+  "send_email": [{ "name": "EMAIL" }],
+  // Workers AI checks each uploaded photo before it is stored (see scanImage in worker/index.js).
+  "ai": { "binding": "AI" }
 }

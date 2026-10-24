@@ -8,7 +8,7 @@ const BYKEY=new Map(P.map(p=>[p.k,p]));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
@@ -80,6 +80,7 @@ function route(){
  else if(view==='account')renderAccount();
  else if(view==='profile')renderProfile(id);
  else if(view==='reset')renderReset(id);
+ else if(view==='admin')renderAdmin();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 function renderWelcome(){
@@ -147,6 +148,7 @@ function renderAccount(){
  ${INFO.mail&&ME.email?`<div class="panel"><h2>Emails</h2>
  <p><label><input type="checkbox" id="uOpt"${ME.updates?' checked':''}> Email me when new features go live</label> <span class="s" id="uMsg"></span></p>
  <p class="s">A few times a year at most, with an unsubscribe link in every email.${ME.email_verified?'':' We only send these to confirmed addresses, so confirm yours above.'} Emails about your account, like password resets, come either way.</p></div>`:''}
+ ${ME.admin?`<div class="panel"><h2>Moderation <span class="tag">admin</span></h2><p class="s">Reports from the Report button, photos refused at upload, and the newest photos. Hide or delete a photo, or block an account.</p><a class="btn" href="#/admin">Open moderation</a></div>`:''}
  ${ME.admin?`<div class="panel" id="annP"><h2>Send an update email <span class="tag">admin</span></h2>
  <p class="s" id="annN">Checking who has opted in…</p>
  <label class="f"><span>Subject</span><input type="text" id="annS" maxlength="150"></label>
@@ -225,13 +227,14 @@ async function renderProfile(id){
  const p=d.profile,mine=ME&&ME.id===p.id;
  el.innerHTML=`<div class="prof">${avHTML(p,'av huge')}<div><h1>${esc(p.name)}</h1><p class="s">Painting with us since ${fmtDate(p.created_at)}</p>
  ${p.link?`<p><a href="${esc(p.link)}" target="_blank" rel="noopener nofollow ugc">${esc(p.link.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,''))}</a></p>`:''}
- ${mine?'<a class="btn" href="#/account">Edit profile</a>':''}</div></div>
+ ${mine?'<a class="btn" href="#/account">Edit profile</a>':`<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
  ${p.bio?`<div class="panel"><div class="steps">${esc(p.bio)}</div></div>`:''}
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
  <h2>Public recipes &amp; tutorials</h2>
  <div class="cards">${d.recipes.map(cardHTML).join('')||`<p class="s">${mine?'Nothing public yet. Make a recipe or tutorial public to show it here.':'Nothing shared yet.'}</p>`}</div>`;
  el.querySelectorAll('#fp .chip').forEach(c=>c.onclick=()=>{const q=BYKEY.get(c.dataset.k);if(q){showOnWheel([q.k]);setTimeout(()=>showP(q),0)}});
- if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites)}
+ if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites);
+ if($('pRep'))$('pRep').onclick=()=>openReport('user',p.id,p.name)}
 
 /* ---------- my paints ---------- */
 // Guards against ticking or unticking lots of paints by accident: a confirm dialog for big range changes, and an Undo bar after them.
@@ -423,11 +426,13 @@ async function renderRecipe(id){
  ${r.body?`<div class="panel"><h2>${r.steps.length?'Notes':rec?'How to paint it':'Steps'}</h2><div class="steps">${esc(r.body)}</div></div>`:''}
  ${rec&&d.usedIn?.length?`<div class="panel"><h2>Used in tutorials</h2><ul class="used">${d.usedIn.map(t=>`<li><a href="#/recipe/${esc(t.id)}">${esc(t.title)}</a></li>`).join('')}</ul></div>`:''}
  ${mine||ME?.admin?`<div class="row">${mine?`<a class="btn" href="#/recipe/${esc(r.id)}/edit">Edit</a>`:''}<button class="btn dan" id="rDel" type="button">Delete</button></div>`:''}
+ ${r.visibility==='public'&&!mine?`<p><button class="lnk rpb" type="button" id="rRep">⚑ Report this ${K.t.toLowerCase()}</button></p>`:''}
  ${r.visibility==='public'?`<div class="panel"><h2>Discussion</h2><div id="cms">${d.comments.map(c=>cmHTML(c,canMod(c))).join('')||'<p class="s" id="nocm">No comments yet.</p>'}</div>
   ${ME?`<label class="f"><span>Add a comment</span><textarea id="cBody" maxlength="2000" style="min-height:70px" class="inp"></textarea></label><div class="row"><button class="btn pri" id="cGo" type="button">Post comment</button><span class="err" id="cErr"></span></div>`:signInLink('Registered painters can join the discussion.')}</div>`
   :(mine?'<p class="s">This is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
  el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
+ if($('rRep'))$('rRep').onclick=()=>openReport('recipe',r.id,r.title);
  countView(r);
  if($('rSave'))$('rSave').onclick=async()=>{const b=$('rSave');b.disabled=true;
   try{const v=await api(`/recipes/${r.id}/save`,{method:'PUT',body:{on:!r.saved}});r.saved=v.saved;r.voted=v.voted;r.votes=v.votes;
@@ -578,6 +583,56 @@ window.pdRecipesFor=p=>{
  if(RFOR.has(p.k)){show(RFOR.get(p.k));return}
  box.innerHTML='<h2>Recipes using this paint</h2><p class="s">Loading…</p>';
  api(`/recipes?kind=recipe&paint=${encodeURIComponent(p.k)}&limit=100`).then(d=>{RFOR.set(p.k,d.recipes);show(d.recipes)}).catch(()=>box.remove())};
+
+/* ---------- reports & moderation ---------- */
+// A photo a moderator hid or deleted answers 404: drop it (and the link around it) instead of showing a broken image.
+document.addEventListener('error',e=>{const i=e.target;if(i.tagName==='IMG'&&/\/api\/images\//.test(i.src)&&!i.closest('#v-admin')){const a=i.closest('a[target]');(a||i).hidden=true}},true);
+// The Report button on public recipes, tutorials, palettes and profiles. Anyone can report, signed in or not.
+let REP=null;
+function openReport(kind,id,name){const D=$('rpDlg'),F=$('rpForm');REP={kind,id};F.reset();
+ $('rpErr').textContent='';$('rpBody').hidden=false;$('rpSend').hidden=false;$('rpSend').disabled=false;$('rpNo').textContent='Cancel';$('rpDone').hidden=true;
+ $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:`"${name}"`;D.showModal()}
+$('rpNo').onclick=()=>$('rpDlg').close();
+$('rpForm').onsubmit=async e=>{e.preventDefault();const F=$('rpForm');$('rpErr').textContent='';$('rpSend').disabled=true;
+ try{await api('/reports',{method:'POST',body:{kind:REP.kind,id:REP.id,reason:F.rpReason.value,note:$('rpNote').value,website:$('rpWeb').value}});
+  $('rpBody').hidden=true;$('rpSend').hidden=true;$('rpDone').hidden=false;$('rpNo').textContent='Close';$('rpNo').focus()}
+ catch(err){$('rpErr').textContent=err.message;$('rpSend').disabled=false}};
+
+// Admin: open reports and the newest photos. A photo can be hidden (and shown again) or deleted; an account can be blocked.
+const SCAN={ok:'',unchecked:'<span class="tag warn" title="The automatic check could not run on this photo">not checked</span>','':'<span class="tag" title="Uploaded before the automatic check">before checks</span>'};
+async function renderAdmin(){
+ const el=$('v-admin');
+ if(!ME?.admin){el.innerHTML='<h1>Moderation</h1><p class="s">Admins only.</p>';return}
+ el.innerHTML='<h1>Moderation</h1><p class="s">Loading…</p>';
+ let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
+ const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
+ const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
+ const where=w=>w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
+  <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
+  <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
+  <div class="row"><button class="btn sm" type="button" data-hide="${i.hidden?0:1}">${i.hidden?'Show again':'Hide'}</button><button class="btn sm dan" type="button" data-delimg>Delete</button></div></div>`;
+ const what=r=>r.kind==='upload'?`A photo by ${pers(r.user)} was refused at upload: ${esc(r.note)}`
+  :r.kind==='user'?`Profile of ${pers(r.user)}`
+  :r.target?`<a href="#/recipe/${esc(r.target.id)}">${esc(r.target.title)}</a> (${esc(r.target.kind)}, ${esc(r.target.visibility)}) by ${pers(r.user)}`:'A recipe that has since been deleted';
+ const by=r=>r.kind==='upload'?'':r.reporter?` · reported by ${pers(r.reporter)}`:' · reported by someone not signed in';
+ const repCard=r=>`<div class="panel mrep" data-rep="${esc(r.id)}"><h3>${esc(r.label)}</h3>
+  <p class="s">${what(r)} · ${fmtDate(r.created_at)}${by(r)}</p>
+  ${r.kind!=='upload'&&r.note?`<div class="steps">${esc(r.note)}</div>`:''}
+  ${r.images.length?`<div class="mgrid">${r.images.map(imgCard).join('')}</div>`:''}
+  <div class="row">${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
+ el.innerHTML=`<h1>Moderation</h1><p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
+ <h2>Open reports (${d.reports.length})</h2>${d.reports.map(repCard).join('')||'<p class="s">No open reports.</p>'}
+ <h2>Newest photos</h2><div class="mgrid">${d.images.map(imgCard).join('')||'<p class="s">No photos yet.</p>'}</div>`;
+ const act=async(b,fn)=>{b.disabled=true;try{await fn();renderAdmin()}catch(e){b.disabled=false;b.parentElement.insertAdjacentHTML('beforeend',`<span class="err">${esc(e.message)}</span>`)}};
+ // Deleting and blocking ask for a second click.
+ const twice=(b,t)=>{if(b.dataset.c)return true;b.dataset.c=1;b.textContent=t;return false};
+ const imgOf=b=>b.closest('[data-img]').dataset.img;
+ el.querySelectorAll('[data-hide]').forEach(b=>b.onclick=()=>act(b,()=>api('/admin/images/'+imgOf(b),{method:'PUT',body:{hidden:b.dataset.hide==='1'}})));
+ el.querySelectorAll('[data-delimg]').forEach(b=>b.onclick=()=>twice(b,'Click again to delete')&&act(b,()=>api('/admin/images/'+imgOf(b),{method:'DELETE'})));
+ el.querySelectorAll('[data-delrec]').forEach(b=>b.onclick=()=>twice(b,'Click again to delete for good')&&act(b,()=>api('/recipes/'+b.dataset.delrec,{method:'DELETE'})));
+ el.querySelectorAll('[data-blk]').forEach(b=>b.onclick=()=>(b.dataset.on!=='1'||twice(b,'Click again to block'))&&act(b,()=>api('/admin/users/'+b.dataset.blk,{method:'PUT',body:{blocked:b.dataset.on==='1'}})));
+ el.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>act(b,()=>api('/admin/reports/'+b.closest('[data-rep]').dataset.rep,{method:'PUT',body:{status:'done'}})))}
 
 /* ---------- feedback ---------- */
 // The floating Feedback button on every page opens this popup; messages go to /api/feedback.
