@@ -102,7 +102,7 @@ dialog.pd.fb textarea{min-height:120px;resize:vertical}.fbhp{position:absolute;l
 .rstrip.big{height:54px;width:calc(100% + 28px);margin:-12px -14px 10px;border:0;border-bottom:3px solid var(--ink);border-radius:0}
 .rstrip.tall{height:64px;border-radius:18px;margin:10px 0 14px}
 .rthumb{float:right;width:64px;height:64px;object-fit:cover;border-radius:12px;border:2px solid var(--ink);margin:0 0 6px 8px}
-.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}
+.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}.tag.tpal{background:#c9b3ff}
 .kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 16px;margin:0 0 6px}.kinds p{margin:4px 0;font-size:14.5px}
 .kpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .kpick label{display:block;border:3px solid var(--ink);border-radius:16px;padding:10px 12px;cursor:pointer;background:var(--card)}.kpick label.on{box-shadow:4px 4px 0 var(--sh);outline:3px solid var(--yel);outline-offset:-6px}
@@ -329,7 +329,7 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>24 October 2026</h2><ul>
-<li><span class="tg nw">New</span><b>Palette from a photo.</b> Tap From a photo on the colour wheel and pick any picture: the site pulls out its main colours and finds the closest paint for each, from every brand or only your own paints. Tap the photo to add a colour from a spot you like, swap in a different paint if you prefer, then show them all on the wheel. Your photo never leaves your device.</li>
+<li><span class="tg nw">New</span><b>Palette from a photo.</b> Tap From a photo on the colour wheel and pick any picture: the site pulls out its main colours and finds the closest paint for each, from every brand or only your own paints. Tap the photo to add a colour from a spot you like, swap in a different paint if you prefer, then show them all on the wheel or save them as a Palette card in Recipes &amp; tutorials (signed in). Your photo never leaves your device unless you choose to add it to the card.</li>
 </ul></div>
 <div class="panel cl"><h2>23 October 2026</h2><ul>
 <li><span class="tg up">Better</span><b>One Metallics section per brand.</b> In the paint lists, metallics no longer hide inside mixed ranges such as Citadel Base and Layer, Warpaints Fanatic, Speedpaint or Model Air. Each brand now has one Metallics section, split by the range each paint comes from, and Tamiya's pearl and iridescent sprays have their own Pearls section. Your collection, saved wheel and recipes are unchanged.</li>
@@ -410,10 +410,10 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <section id="v-profile" hidden></section>
 <section id="v-reset" hidden></section>
 <dialog class="pd" id="tyDlg" aria-labelledby="tyT"><form method="dialog"><h2 id="tyT">Paint types on the wheel</h2><p>Washes, inks and effect paints only show their colour over a basecoat, so they can crowd out better complements. Untick a type to hide it from the wheel and the neutrals.</p><div id="tyList"></div><div class="row"><button class="btn pri" value="ok" autofocus>Done</button></div></form></dialog>
-<dialog class="pd phd" id="phDlg" aria-labelledby="phT"><h2 id="phT">Palette from a photo</h2><p>Pick a photo you like (artwork, a scene, a painted miniature) and get the paints closest to its main colours. Your photo stays on this device: it is never uploaded.</p>
+<dialog class="pd phd" id="phDlg" aria-labelledby="phT"><h2 id="phT">Palette from a photo</h2><p>Pick a photo you like (artwork, a scene, a painted miniature) and get the paints closest to its main colours. Your photo stays on this device: it is only uploaded if you add it to a saved palette card.</p>
 <div class="row"><label class="btn pri phf">Choose a photo<input type="file" id="phFile" accept="image/*"></label><label>Colours <select id="phK" class="nsel"><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>10</option></select></label><label id="phMineL" hidden><input type="checkbox" id="phMine"> My paints only</label></div>
 <p class="err" id="phErr" role="alert"></p><div id="phImg" hidden><canvas id="phCv" title="Tap to add the colour under your finger"></canvas><p class="s">Tap the photo to add a colour from that spot. Tap a paint to choose it for that colour (the first is the closest). Swatch colours are estimates.</p></div>
-<div id="phRes"></div><div class="row"><button class="btn" type="button" id="phNo">Cancel</button><button class="btn pri" type="button" id="phGo" disabled>Show on wheel</button></div></dialog>
+<div id="phRes"></div><div class="row"><button class="btn" type="button" id="phNo">Cancel</button><button class="btn" type="button" id="phSave" hidden disabled title="Save these paints as a palette card in Recipes &amp; tutorials">Save as palette card</button><button class="btn pri" type="button" id="phGo" disabled>Show on wheel</button></div></dialog>
 <div class="undo" id="phUndo" role="status" hidden><span id="phUndoM"></span><button class="btn" type="button" id="phUndoB">Undo</button></div>
 <dialog class="pd" id="remDlg" aria-labelledby="remDlgT"><form method="dialog"><h2 id="remDlgT">Remove from your collection?</h2><p id="remDlgM"></p><div class="row"><button class="btn" value="cancel" id="remNo" autofocus>Cancel</button><button class="btn dan" value="ok" id="remOk">Remove paints</button></div></form></dialog>
 <div class="undo ask" id="updAsk" role="region" aria-label="Update emails" hidden><span>Want an email when new features go live?</span><button class="btn pri" type="button" id="updYes">Yes please</button><button class="btn" type="button" id="updNo">No thanks</button></div>

@@ -10,6 +10,7 @@ const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
 const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset'];
 let ME=null,INFO=null,API=false;
+window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
 async function api(path,{method='GET',body}={}){
  const r=await fetch('/api'+path,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
@@ -17,9 +18,11 @@ async function api(path,{method='GET',body}={}){
  if(!r.ok){const e=new Error(d.error||'Something went wrong ('+r.status+')');e.status=r.status;throw e}
  return d}
 const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
-// Recipe cards lead with the colour strip (one band per layer); tutorial cards lead with the model photo.
-const cardHTML=r=>{const rec=r.kind!=='tutorial',strip=rec?stripHTML(r.layers||[],'big'):'';
- return `<a class="card${rec?' rcard':''}" href="#/recipe/${esc(r.id)}">${strip||(r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:'')}<h3>${esc(r.title)}</h3><span class="tag ${rec?'trec':'ttut'}">${rec?'Recipe':'Tutorial'}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} ${rec?'layer':'step'}${r.steps===1?'':'s'}</span>`:''}${rec?'':metaTags(r.meta)}${strip&&r.cover?`<img class="rthumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`};
+// Recipe and palette cards lead with the colour strip (one band per layer or colour); tutorial cards lead with the model photo.
+// A palette is a set of paints matched to a photo's colours; it is stored and shown like a recipe whose layers are its colours.
+const KIND={recipe:{c:'trec',t:'Recipe',u:'layer'},tutorial:{c:'ttut',t:'Tutorial',u:'step'},palette:{c:'tpal',t:'Palette',u:'colour'}},kindOf=r=>KIND[r.kind]||KIND.recipe;
+const cardHTML=r=>{const rec=r.kind!=='tutorial',K=kindOf(r),strip=rec?stripHTML(r.layers||[],'big'):'';
+ return `<a class="card${rec?' rcard':''}" href="#/recipe/${esc(r.id)}">${strip||(r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:'')}<h3>${esc(r.title)}</h3><span class="tag ${K.c}">${K.t}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} ${K.u}${r.steps===1?'':'s'}</span>`:''}${rec?'':metaTags(r.meta)}${strip&&r.cover?`<img class="rthumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div><div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`};
 // A layer's colour: the rough mix of its paints, or the paint itself. Water is left out.
 const layerHex=mix=>{const ps=(mix||[]).filter(m=>m.k!==WATER.k);return mixColour(ps)||BYKEY.get(ps[0]?.k)?.h||null};
 const stripHTML=(layers,cls='')=>{const c=layers.map(layerHex).filter(Boolean);return c.length?`<div class="rstrip ${cls}" aria-hidden="true">${c.map(h=>`<i style="background:${h}"></i>`).join('')}</div>`:''};
@@ -73,7 +76,7 @@ function route(){
  else if(view==='paints')renderPaints();
  else if(view==='recipes')renderRecipes();
  else if(view==='recipe')renderRecipe(id);
- else if(view==='edit')renderEdit(v==='new'?null:id,v==='new'&&id==='recipe'?'recipe':'tutorial');
+ else if(view==='edit')renderEdit(v==='new'?null:id,v==='new'&&(id==='recipe'||id==='palette')?id:'tutorial');
  else if(view==='account')renderAccount();
  else if(view==='profile')renderProfile(id);
  else if(view==='reset')renderReset(id);
@@ -314,15 +317,15 @@ async function renderRecipes(){
  if(!ME)rScope='public';
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint),kb=(k,t)=>`<button class="btn${rKind===k?' pri':''}" data-kd="${k}" type="button">${t}</button>`;
  el.innerHTML=`<h1>Recipes &amp; tutorials</h1>
- <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p></div>
+ <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p></div>
  <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new/recipe">+ New recipe</a><a class="btn pri" href="#/new">+ New tutorial</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
- <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
+ <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
  <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  el.querySelectorAll('[data-kd]').forEach(b=>b.onclick=()=>{rKind=b.dataset.kd;renderRecipes()});
  if($('rPaintC'))$('rPaintC').onclick=()=>{rPaint='';renderRecipes()};
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
- const what=rKind==='recipe'?'recipes':rKind==='tutorial'?'tutorials':'recipes or tutorials';
+ const what=rKind==='recipe'?'recipes':rKind==='tutorial'?'tutorials':rKind==='palette'?'palettes':'recipes or tutorials';
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&kind=${rKind}&paint=${encodeURIComponent(rPaint)}&q=${encodeURIComponent($('rq').value)}`);
    L.innerHTML=d.recipes.length?d.recipes.map(cardHTML).join('')
@@ -399,18 +402,18 @@ async function renderRecipe(id){
  const el=$('v-recipe');el.innerHTML='<p class="s">Loading…</p>';
  let d;try{d=await api('/recipes/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
  const r=d.recipe;r.paints=r.paints.filter(k=>k!==WATER.k);const mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
- const rec=r.kind!=='tutorial',L=d.linked||{};
+ const rec=r.kind!=='tutorial',pal=r.kind==='palette',K=kindOf(r),L=d.linked||{};
  // A recipe reads as one colour: a strip of its layers, then each layer's paints. A tutorial reads as a model, step by step.
- const layersHTML=(ls,cls='')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||'Layer '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${esc(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
+ const layersHTML=(ls,cls='',W='Layer')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||W+' '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${esc(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
  const linkHTML=id=>{const l=L[id];return l?`<div class="lrec"><a href="#/recipe/${esc(l.id)}">${stripHTML(l.layers.map(x=>x.mix))}<b>Recipe: ${esc(l.title)}</b> <span class="s">by ${esc(l.author.name)}</span></a>${layersHTML(l.layers,'sm')}</div>`:'<p class="s">This step used a recipe that is no longer shared.</p>'};
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
- <p class="s"><span class="tag ${rec?'trec':'ttut'}">${rec?'Recipe':'Tutorial'}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>${rec?'':metaTags(r.meta)}by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
+ <p class="s"><span class="tag ${K.c}">${K.t}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>${rec?'':metaTags(r.meta)}by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
  ${voteHTML(r,mine)}
  ${rec&&r.steps.length?stripHTML(r.steps.map(s=>s.mix),'tall'):''}
  ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank"><img class="ph cover${rec?' rcov':''}" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
  ${r.summary?`<p>${esc(r.summary)}</p>`:''}
  ${r.link?videoEmbed(r.link):''}
- ${rec&&r.steps.length?`<div class="panel"><h2>Layers</h2>${layersHTML(r.steps)}</div>`:''}
+ ${rec&&r.steps.length?`<div class="panel"><h2>${pal?'Colours':'Layers'}</h2>${layersHTML(r.steps,'',pal?'Colour':'Layer')}</div>`:''}
  ${rec&&r.steps.length&&r.paints.every(k=>r.steps.some(s=>s.mix.some(m=>m.k===k)))?(r.paints.length?'<div class="row"><button class="btn" id="rWheel" type="button">Show these paints on the wheel</button></div>':'')
   :`<div class="panel"><h2>${rec&&r.steps.length?'Other paints':'Paints used'}</h2><div class="chips" id="rp">${r.paints.map(k=>pchip(k)).join('')||'<span class="s">No paints listed.</span>'}</div>
  ${r.paints.length?'<button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>':''}</div>`}
@@ -449,7 +452,7 @@ const LAYER_NAMES=['Base','Shade','Wash','Recess','Mid tone','Layer','Highlight'
 const recPick=l=>({id:l.id,title:l.title,author:l.author,layers:l.layers.map(x=>x.mix||x)});
 async function renderEdit(id,kind){
  const el=$('v-edit');
- if(!ME){el.innerHTML='<h1>New '+kind+'</h1>'+signInLink((kind==='recipe'?'Recipes':'Tutorials')+' are saved to your account.');return}
+ if(!ME){el.innerHTML='<h1>New '+kind+'</h1>'+signInLink(KIND[kind].t+'s are saved to your account.');return}
  let r={kind,title:'',summary:'',body:'',link:'',paints:[],steps:[],cover:'',meta:{},visibility:'private'},REC={};
  if(id){try{const d=await api('/recipes/'+encodeURIComponent(id));r=d.recipe;Object.values(d.linked||{}).forEach(l=>REC[l.id]=recPick(l))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p>`;return}}
  else if(NMM_DRAFT){r={...r,...NMM_DRAFT};NMM_DRAFT=null} // a ramp or recipe started from the wheel
@@ -466,25 +469,26 @@ async function renderEdit(id,kind){
   const [a,b]=await Promise.all(['mine','saved'].map(sc=>api(`/recipes?scope=${sc}&kind=recipe`).then(d=>d.recipes).catch(()=>[])));
   const seen=new Set();return myRecs=[...a,...b].filter(x=>!seen.has(x.id)&&seen.add(x.id)&&x.id!==id)};
 
- function draw(){const rec=r.kind==='recipe',T=rec?'recipe':'tutorial';
+ function draw(){const pal=r.kind==='palette',rec=r.kind==='recipe'||pal,T=KIND[r.kind].t.toLowerCase();
  el.innerHTML=`<p><a href="${back}">← Back</a></p><h1>${id?'Edit':'New'} ${T}</h1><div class="panel">
  <div class="f"><span>What are you making?</span><div class="kpick">
-  <label class="${rec?'on':''}"><input type="radio" name="eKind" value="recipe"${rec?' checked':''}><b><span class="tag trec">Recipe</span> One colour</b><small>The paints for one look, like bone or purple robes, as a short list of layers from base to highlight.</small></label>
-  <label class="${rec?'':'on'}"><input type="radio" name="eKind" value="tutorial"${rec?'':' checked'}><b><span class="tag ttut">Tutorial</span> A whole model</b><small>Step by step with photos and video. A step can use one of your recipes.</small></label></div></div>
- <label class="f"><span>Title</span><input type="text" id="eTitle" maxlength="120" placeholder="${rec?'e.g. Weathered bone':'e.g. Painting a Space Marine captain'}"></label>
- <label class="f"><span>Short summary</span><input type="text" id="eSum" maxlength="300" placeholder="${rec?'e.g. Warm bone for skulls, horns and parchment':'What this is for'}"></label>
- <div class="f"><span>${rec?'Photo of the colour on a model (optional)':'Main photo (the finished model)'}</span><div id="eCover"></div></div>
+  <label class="${rec&&!pal?'on':''}"><input type="radio" name="eKind" value="recipe"${rec&&!pal?' checked':''}><b><span class="tag trec">Recipe</span> One colour</b><small>The paints for one look, like bone or purple robes, as a short list of layers from base to highlight.</small></label>
+  <label class="${rec?'':'on'}"><input type="radio" name="eKind" value="tutorial"${rec?'':' checked'}><b><span class="tag ttut">Tutorial</span> A whole model</b><small>Step by step with photos and video. A step can use one of your recipes.</small></label>
+  <label class="${pal?'on':''}"><input type="radio" name="eKind" value="palette"${pal?' checked':''}><b><span class="tag tpal">Palette</span> Colours of a photo</b><small>A set of paints for a scene, artwork or mood. From a photo on the colour wheel fills one in for you.</small></label></div></div>
+ <label class="f"><span>Title</span><input type="text" id="eTitle" maxlength="120" placeholder="${pal?'e.g. Desert sunset':rec?'e.g. Weathered bone':'e.g. Painting a Space Marine captain'}"></label>
+ <label class="f"><span>Short summary</span><input type="text" id="eSum" maxlength="300" placeholder="${pal?'e.g. Warm dusk colours for a desert army':rec?'e.g. Warm bone for skulls, horns and parchment':'What this is for'}"></label>
+ <div class="f"><span>${pal?'The photo it comes from (optional, shown on the card)':rec?'Photo of the colour on a model (optional)':'Main photo (the finished model)'}</span><div id="eCover"></div></div>
  ${rec?'':`<div class="row tmeta"><label class="f"><span>Level</span><select id="eLevel"><option value="">Any</option>${Object.entries(LEVEL).map(([k,t])=>`<option value="${k}">${t}</option>`).join('')}</select></label>
   <label class="f"><span>Time it takes</span><input type="text" id="eTime" maxlength="40" placeholder="e.g. 3 hours"></label>
   <label class="f"><span>Model or army</span><input type="text" id="eModel" maxlength="120" placeholder="e.g. Ultramarines captain"></label></div>
  <label class="f"><span>Video link (optional; YouTube and Vimeo play in the page)</span><input type="url" id="eLink" maxlength="500" placeholder="https://youtube.com/watch?v=…"></label>`}</div>
- <h2 style="font-size:16px;margin-top:16px">${rec?'Layers':'Steps'}</h2><p class="s">${rec?'One layer per paint stage, in painting order, e.g. Base, Shade, Highlight. Add the paints with their ratio (add Water to show thinning).':'One step per stage, e.g. Base coat, then Edge highlight. Pick a recipe for a step, or add the paints you used with their ratio (add Water to show thinning, e.g. 1:2 for a glaze), a photo of the result, and any details.'}</p>
- ${rec?'<div id="eStrip"></div>':''}<div id="eSteps"></div><button class="btn" id="eAdd" type="button">+ Add ${rec?'layer':'step'}</button>
- <div class="panel" style="margin-top:14px"><div class="f"><span>Other paints used (not in a ${rec?'layer':'step'})</span><div id="eX"></div></div>
+ <h2 style="font-size:16px;margin-top:16px">${pal?'Colours':rec?'Layers':'Steps'}</h2><p class="s">${pal?'One colour per paint, e.g. Sky, Sand, Shadow. A colour can also be a mix of paints with their ratio.':rec?'One layer per paint stage, in painting order, e.g. Base, Shade, Highlight. Add the paints with their ratio (add Water to show thinning).':'One step per stage, e.g. Base coat, then Edge highlight. Pick a recipe for a step, or add the paints you used with their ratio (add Water to show thinning, e.g. 1:2 for a glaze), a photo of the result, and any details.'}</p>
+ ${rec?'<div id="eStrip"></div>':''}<div id="eSteps"></div><button class="btn" id="eAdd" type="button">+ Add ${pal?'colour':rec?'layer':'step'}</button>
+ <div class="panel" style="margin-top:14px"><div class="f"><span>Other paints used (not in a ${pal?'colour':rec?'layer':'step'})</span><div id="eX"></div></div>
  <label class="f"><span>Notes (optional)</span><textarea id="eBody" maxlength="20000" style="min-height:90px" placeholder="Anything else: brushes, tips, thinning"></textarea></label>
  <div class="f"><span>Who can see it</span><label><input type="radio" name="eVis" value="private"> Private, only me</label><br><label><input type="radio" name="eVis" value="public"> Public, anyone can view and registered users can comment</label></div>
  <div class="row"><button class="btn pri" id="eSave" type="button">Save</button><a class="btn" href="${back}">Cancel</a><span class="err" id="eErr"></span></div></div>
- <datalist id="stepNames">${(rec?LAYER_NAMES:STEP_NAMES).map(n=>`<option value="${n}">`).join('')}</datalist>`;
+ <datalist id="stepNames">${(pal?[]:rec?LAYER_NAMES:STEP_NAMES).map(n=>`<option value="${n}">`).join('')}</datalist>`;
  const bind=(eid,get,set)=>{const e=$(eid);if(e){e.value=get();e.oninput=e.onchange=()=>set(e.value)}};
  bind('eTitle',()=>r.title,v=>r.title=v);bind('eSum',()=>r.summary,v=>r.summary=v);bind('eBody',()=>r.body,v=>r.body=v);bind('eLink',()=>r.link,v=>r.link=v);
  bind('eLevel',()=>r.meta.level,v=>r.meta.level=v);bind('eTime',()=>r.meta.time,v=>r.meta.time=v);bind('eModel',()=>r.meta.model,v=>r.meta.model=v);
@@ -492,6 +496,9 @@ async function renderEdit(id,kind){
  el.querySelectorAll('input[name=eVis]').forEach(x=>x.onchange=()=>r.visibility=x.value);
  el.querySelectorAll('input[name=eKind]').forEach(x=>x.onchange=()=>{r.kind=x.value;draw()});
  photoSlot($('eCover'),()=>cover,v=>cover=v,rec?'Add photo':'Add main photo');
+ // The photo picked in From a photo stays on the device until the painter chooses to add it here.
+ if(pal&&!cover&&window.pdPhotoFile){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent='Add the photo you used';$('eCover').querySelector('.row').prepend(b);
+  b.onclick=async()=>{b.disabled=true;b.textContent='Uploading…';busy++;try{cover=await uploadPhoto(window.pdPhotoFile);busy--;draw()}catch(e){busy--;b.textContent=e.message}}}
  drawExtra();drawSteps();
  $('eAdd').onclick=()=>{steps.push({title:'',text:'',image:'',mix:[],recipe:''});drawSteps();$('eSteps').lastElementChild.querySelector('[data-f=title]').focus()};
  $('eSave').onclick=save}
@@ -526,11 +533,11 @@ async function renderEdit(id,kind){
     show([...own,...pub])};
    q.oninput=()=>{clearTimeout(t);t=setTimeout(go,200)};go()}}
 
- function drawSteps(){const S=$('eSteps'),rec=r.kind==='recipe',W=rec?'Layer':'Step';
+ function drawSteps(){const S=$('eSteps'),pal=r.kind==='palette',rec=r.kind==='recipe'||pal,W=pal?'Colour':rec?'Layer':'Step';
   if(rec){$('eStrip').innerHTML=stripHTML(steps.map(s=>s.mix),'tall')}
   S.innerHTML=steps.map((s,i)=>`<div class="panel step" data-i="${i}"><div class="row" style="margin:0">${rec?`<span class="lc" style="background:${layerHex(s.mix)||'transparent'}"></span>`:''}<b>${W} ${i+1}</b><span style="flex:1"></span>
    <button class="btn" type="button" data-mv="-1" ${i?'':'disabled'} title="Move up">↑</button><button class="btn" type="button" data-mv="1" ${i<steps.length-1?'':'disabled'} title="Move down">↓</button><button class="btn dan" type="button" data-del title="Remove ${W.toLowerCase()}">✕</button></div>
-   <label class="f"><span>${W} name</span><input type="text" list="stepNames" maxlength="80" data-f="title" placeholder="${rec?'e.g. Base':'e.g. Base coat'}"></label>
+   <label class="f"><span>${W} name</span><input type="text" list="stepNames" maxlength="80" data-f="title" placeholder="${pal?'e.g. Sky':rec?'e.g. Base':'e.g. Base coat'}"></label>
    ${rec?'':'<div class="f"><span>Recipe for this step (optional)</span><div data-rec></div></div>'}
    <div class="f"><span>${!rec&&s.recipe?'Other paints in this step':'Paints and mix ratio'}</span><div class="mixed">${s.mix.map((m,j)=>{const p=mixP(m.k);return `<div class="mrow"><i style="background:${p?p.h:'#888'}"></i><span>${p===WATER?'💧 Water <em>for thinning</em>':p?esc(p.n)+' <em>'+esc(GL[p.g])+'</em>':'Unknown paint'}</span><input type="number" min="1" max="20" value="${m.parts}" data-parts="${j}" title="Parts" aria-label="Parts"><span class="s">part${m.parts>1?'s':''}</span><span class="x" data-rmix="${j}" title="Remove">×</span></div>`}).join('')}</div>
     ${s.mix.length>1?`<p class="s" data-ratio>Ratio ${s.mix.map(m=>m.parts).join(':')}</p>`:''}<div data-ps></div>${s.mix.some(m=>m.k===WATER.k)||s.mix.length>=8?'':'<button class="btn" type="button" data-water title="Add water to show a thinning ratio, e.g. 1:2 paint to water for a glaze">+ 💧 Water</button>'}</div>
@@ -549,8 +556,8 @@ async function renderEdit(id,kind){
 
  async function save(){if(busy){$('eErr').textContent='Please wait for photos to finish uploading.';return}
   $('eSave').disabled=true;$('eErr').textContent='';
-  const rec=r.kind==='recipe';
-  // A recipe keeps no video, tutorial extras or recipe links (the server drops them too).
+  const rec=r.kind!=='tutorial';
+  // A recipe or palette keeps no video, tutorial extras or recipe links (the server drops them too).
   const b={kind:r.kind,title:r.title,summary:r.summary,body:r.body,link:rec?'':r.link.trim(),cover,meta:rec?{}:r.meta,
    steps:steps.map(s=>({title:s.title,text:s.text,image:s.image,mix:s.mix,recipe:rec?'':s.recipe})),paints:extra,visibility:r.visibility};
   try{const d=await api(id?'/recipes/'+id:'/recipes',{method:id?'PUT':'POST',body:b});RFOR.clear();location.hash='#/recipe/'+d.recipe.id}

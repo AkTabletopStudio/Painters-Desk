@@ -424,7 +424,7 @@ window.pdThemeFirst=()=>{FV=true;ttl.textContent='Pick a look';txt.textContent='
 let PX=null,COLS=[],prev=null,tm=0;
 const hx=(r,g,b)=>'#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function load(f){if(!f)return;const u=URL.createObjectURL(f),im=new Image();
+function load(f){if(!f)return;window.pdPhotoFile=f;const u=URL.createObjectURL(f),im=new Image();
  im.onload=()=>{URL.revokeObjectURL(u);const s=Math.min(1,520/Math.max(im.width,im.height));cv.width=Math.max(1,Math.round(im.width*s));cv.height=Math.max(1,Math.round(im.height*s));
   cx.drawImage(im,0,0,cv.width,cv.height);const t=Math.min(1,120/Math.max(cv.width,cv.height)),c2=document.createElement('canvas');c2.width=Math.max(1,Math.round(cv.width*t));c2.height=Math.max(1,Math.round(cv.height*t));
   const x2=c2.getContext('2d');x2.drawImage(cv,0,0,c2.width,c2.height);const d=x2.getImageData(0,0,c2.width,c2.height).data;PX=[];
@@ -445,7 +445,7 @@ function render(){const R=$('phRes');if(!COLS.length){R.innerHTML='';$('phGo').d
  R.innerHTML=`<div class="phpal">${COLS.map(c=>`<i style="background:${c.h};flex:${Math.max(c.w,.04)}"></i>`).join('')}</div>`+COLS.map((c,ci)=>`<div class="phr"><span class="phs" style="background:${c.h}"></span><span class="phw">${c.w?Math.round(c.w*100)+'%':'tapped'}</span><div class="chips">`+
   (c.m.length?c.m.map(m=>`<button type="button" class="chip${m.p===c.pick?' on':''}" data-c="${ci}" data-i="${m.p.i}" aria-pressed="${m.p===c.pick}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints to match. Untick “My paints only” or show more paint types.</span>')+
   `</div><button type="button" class="phx" data-x="${ci}" aria-label="Remove this colour" title="Remove this colour">×</button></div>`).join('');
- $('phGo').disabled=!COLS.some(c=>c.pick)}
+ $('phGo').disabled=$('phSave').disabled=!COLS.some(c=>c.pick)}
 $('phRes').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.x!==undefined){COLS.splice(+b.dataset.x,1);render();return}
  const c=COLS[+b.dataset.c],p=P[+b.dataset.i];c.pick=c.pick===p?null:p;render()};
 cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.clientX-r.left)/r.width*cv.width),y=Math.floor((e.clientY-r.top)/r.height*cv.height),d=cx.getImageData(Math.max(0,x-1),Math.max(0,y-1),3,3).data;
@@ -453,9 +453,12 @@ cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.
  const c={lab:rgbLab(...s),h:hx(...s),w:0},C=cands();c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const u=new Set(COLS.map(x=>x.pick)),f=c.m.find(m=>!u.has(m.p))||c.m[0];c.pick=f?f.p:null;COLS.unshift(c);render()};
 $('phFile').onchange=e=>load(e.target.files[0]);
 $('phK').onchange=run;$('phMine').onchange=match;
-$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;if(!OWN)$('phMine').checked=false;dlg.showModal()};
+$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=!(window.pdApi&&pdApi());if(!OWN)$('phMine').checked=false;dlg.showModal()};
 $('phNo').onclick=()=>dlg.close();dlg.onclick=e=>{if(e.target===dlg)dlg.close()};
 const bar=$('phUndo');
+// Save as palette card: opens the palette editor (account.js) filled with one colour per chosen paint. The photo is only uploaded if the painter adds it there.
+$('phSave').onclick=()=>{const cs=COLS.filter(c=>c.pick);if(!cs.length)return;
+ NMM_DRAFT={kind:'palette',title:'',steps:cs.map(c=>({title:'',text:'',image:'',recipe:'',mix:[{k:c.pick.k,parts:1}]}))};dlg.close();location.hash='#/new/palette'};
 $('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))];if(!ps.length)return;prev=P.filter(p=>p.on).map(p=>p.i);
  P.forEach(p=>p.on=false);ps.forEach(p=>p.on=true);dlg.close();if(MODE!=='col')setMode('col');sync()
  $('phUndoM').textContent=`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`;bar.hidden=false;clearTimeout(tm);tm=setTimeout(()=>bar.hidden=true,15000);
