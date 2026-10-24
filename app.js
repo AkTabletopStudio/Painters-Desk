@@ -296,8 +296,9 @@ const SETS={},TREE=BRANDS.map(([bn,gs],bi)=>{const of=g=>P.filter(p=>p.g===g),kd
 const treeRow=i=>{const p=P[i],e=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));return`<label class="pi" data-i="${i}"><input type="checkbox" data-i="${i}"><i style="background:${p.h}"></i><span>${e(p.n)}${p.c?' <em>'+e(p.c)+'</em>':''}</span></label>`};
 // ca: attribute for the per-section count spans; ba: attribute (value = brand index) for the brand total; op(bi): open that brand.
 const treeHTML=(ca,ba,op)=>TREE.map(([bn,ss],bi)=>`<details class="br"${op&&op(bi)?' open':''}><summary><b>${bn}</b> <span class="n" ${ba}="${bi}"></span></summary>`+ss.map(s=>`<details class="rg" data-g="${s.id}"><summary><input type="checkbox" data-r="${s.id}"> ${s.l} <span class="n" ${ca}="${s.id}"></span></summary><div class="pl">`+(s.subs?s.subs.map(u=>`<div class="sub"><label class="sh"><input type="checkbox" data-r="${u.id}"> ${u.l} <span class="n" ${ca}="${u.id}"></span></label>`+u.ps.map(treeRow).join('')+'</div>').join(''):s.ps.map(treeRow).join(''))+'</div></details>').join('')+'</details>').join('');
-function hexLab(h){const f=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92};
-const r=f(parseInt(h.slice(1,3),16)),g=f(parseInt(h.slice(3,5),16)),b=f(parseInt(h.slice(5,7),16));
+const hexLab=h=>rgbLab(parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16));
+function rgbLab(r,g,b){const f=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92};
+r=f(r);g=f(g);b=f(b);
 let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.1192*g+.9505*b)/1.08883;const t=v=>v>.008856?Math.cbrt(v):7.787*v+16/116;
 return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
 P.forEach(p=>p.lab=hexLab(p.h));
@@ -414,3 +415,52 @@ ok.onclick=()=>{if(FV)save((dlg.querySelector('.tho[aria-checked="true"]')||opts
 dlg.onclose=()=>{if(!FV)return;FV=false;[ttl.textContent,txt.textContent,ok.textContent]=T0;apply(saved())};
 dlg.onclick=e=>{if(e.target===dlg)dlg.close()};
 window.pdThemeFirst=()=>{FV=true;ttl.textContent='Pick a look';txt.textContent='Tap a theme to preview it, then confirm. Paint colours stay the same, and you can change it any time with the Theme button at the top.';ok.textContent='Confirm';open()}}
+
+/* ---------- Palette from a photo ----------
+   The photo is read in this browser only (canvas), never uploaded. It is shrunk to ~120px, its pixels clustered in Lab
+   (k-means, fixed seed so the same photo gives the same palette), and each colour matched to the nearest paints by ΔE,
+   using the paint types shown on the wheel and, if ticked, only the signed-in user's paints. Swatches are estimates. */
+{const $=id=>document.getElementById(id),dlg=$('phDlg'),cv=$('phCv'),cx=cv.getContext('2d',{willReadFrequently:true});
+let PX=null,COLS=[],prev=null,tm=0;
+const hx=(r,g,b)=>'#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function load(f){if(!f)return;window.pdPhotoFile=f;const u=URL.createObjectURL(f),im=new Image();
+ im.onload=()=>{URL.revokeObjectURL(u);const s=Math.min(1,520/Math.max(im.width,im.height));cv.width=Math.max(1,Math.round(im.width*s));cv.height=Math.max(1,Math.round(im.height*s));
+  cx.drawImage(im,0,0,cv.width,cv.height);const t=Math.min(1,120/Math.max(cv.width,cv.height)),c2=document.createElement('canvas');c2.width=Math.max(1,Math.round(cv.width*t));c2.height=Math.max(1,Math.round(cv.height*t));
+  const x2=c2.getContext('2d');x2.drawImage(cv,0,0,c2.width,c2.height);const d=x2.getImageData(0,0,c2.width,c2.height).data;PX=[];
+  for(let i=0;i<d.length;i+=4)if(d[i+3]>200)PX.push([d[i],d[i+1],d[i+2],rgbLab(d[i],d[i+1],d[i+2])]);
+  $('phErr').textContent='';$('phImg').hidden=false;run()};
+ im.onerror=()=>{URL.revokeObjectURL(u);$('phErr').textContent="That file couldn't be opened as a picture here. Try a JPG or PNG."};im.src=u}
+function kmeans(k){let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647,n=PX.length,d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;
+ if(!n)return[];const C=[PX[Math.floor(rnd()*n)][3].slice()],md=PX.map(p=>d2(p[3],C[0]));
+ while(C.length<k){let t=rnd()*md.reduce((s,v)=>s+v,0),j=0;while(j<n-1&&(t-=md[j])>0)j++;C.push(PX[j][3].slice());PX.forEach((p,i)=>md[i]=Math.min(md[i],d2(p[3],C[C.length-1])))}
+ const A=new Int16Array(n);for(let it=0;it<20;it++){let ch=0;PX.forEach((p,i)=>{let b=0,bd=1e9;C.forEach((c,j)=>{const v=d2(p[3],c);if(v<bd){bd=v;b=j}});if(A[i]!==b){A[i]=b;ch++}});
+  const S=C.map(()=>[0,0,0,0]);PX.forEach((p,i)=>{const s=S[A[i]];s[0]+=p[3][0];s[1]+=p[3][1];s[2]+=p[3][2];s[3]++});S.forEach((s,j)=>{if(s[3])C[j]=[s[0]/s[3],s[1]/s[3],s[2]/s[3]]});if(!ch&&it)break}
+ const R=C.map(c=>({lab:c,rgb:[0,0,0],n:0}));PX.forEach((p,i)=>{const r=R[A[i]];r.rgb[0]+=p[0];r.rgb[1]+=p[1];r.rgb[2]+=p[2];r.n++});
+ return R.filter(r=>r.n).map(r=>({lab:r.lab,h:hx(...r.rgb.map(v=>v/r.n)),w:r.n/n})).sort((a,b)=>b.w-a.w)}
+const cands=()=>P.filter(p=>p.g!=='B'&&shown(p)&&(!$('phMine').checked||own(p)));
+function match(){const C=cands(),used=new Set();COLS.forEach(c=>{c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const f=c.m.find(m=>!used.has(m.p))||c.m[0];c.pick=f?f.p:null;if(c.pick)used.add(c.pick)});render()}
+function run(){if(!PX)return;COLS=kmeans(+$('phK').value);match()}
+function render(){const R=$('phRes');if(!COLS.length){R.innerHTML='';$('phGo').disabled=true;return}
+ R.innerHTML=`<div class="phpal">${COLS.map(c=>`<i style="background:${c.h};flex:${Math.max(c.w,.04)}"></i>`).join('')}</div>`+COLS.map((c,ci)=>`<div class="phr"><span class="phs" style="background:${c.h}"></span><span class="phw">${c.w?Math.round(c.w*100)+'%':'tapped'}</span><div class="chips">`+
+  (c.m.length?c.m.map(m=>`<button type="button" class="chip${m.p===c.pick?' on':''}" data-c="${ci}" data-i="${m.p.i}" aria-pressed="${m.p===c.pick}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints to match. Untick “My paints only” or show more paint types.</span>')+
+  `</div><button type="button" class="phx" data-x="${ci}" aria-label="Remove this colour" title="Remove this colour">×</button></div>`).join('');
+ $('phGo').disabled=$('phSave').disabled=!COLS.some(c=>c.pick)}
+$('phRes').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.x!==undefined){COLS.splice(+b.dataset.x,1);render();return}
+ const c=COLS[+b.dataset.c],p=P[+b.dataset.i];c.pick=c.pick===p?null:p;render()};
+cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.clientX-r.left)/r.width*cv.width),y=Math.floor((e.clientY-r.top)/r.height*cv.height),d=cx.getImageData(Math.max(0,x-1),Math.max(0,y-1),3,3).data;
+ let s=[0,0,0],n=0;for(let i=0;i<d.length;i+=4)if(d[i+3]>0){s[0]+=d[i];s[1]+=d[i+1];s[2]+=d[i+2];n++}if(!n)return;s=s.map(v=>v/n);
+ const c={lab:rgbLab(...s),h:hx(...s),w:0},C=cands();c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const u=new Set(COLS.map(x=>x.pick)),f=c.m.find(m=>!u.has(m.p))||c.m[0];c.pick=f?f.p:null;COLS.unshift(c);render()};
+$('phFile').onchange=e=>load(e.target.files[0]);
+$('phK').onchange=run;$('phMine').onchange=match;
+$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=!(window.pdApi&&pdApi());if(!OWN)$('phMine').checked=false;dlg.showModal()};
+$('phNo').onclick=()=>dlg.close();dlg.onclick=e=>{if(e.target===dlg)dlg.close()};
+const bar=$('phUndo');
+// Save as palette card: opens the palette editor (account.js) filled with one colour per chosen paint. The photo is only uploaded if the painter adds it there.
+$('phSave').onclick=()=>{const cs=COLS.filter(c=>c.pick);if(!cs.length)return;
+ NMM_DRAFT={kind:'palette',title:'',steps:cs.map(c=>({title:'',text:'',image:'',recipe:'',mix:[{k:c.pick.k,parts:1}]}))};dlg.close();location.hash='#/new/palette'};
+$('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))];if(!ps.length)return;prev=P.filter(p=>p.on).map(p=>p.i);
+ P.forEach(p=>p.on=false);ps.forEach(p=>p.on=true);dlg.close();if(MODE!=='col')setMode('col');sync()
+ $('phUndoM').textContent=`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`;bar.hidden=false;clearTimeout(tm);tm=setTimeout(()=>bar.hidden=true,15000);
+ document.getElementById('w').scrollIntoView({behavior:'smooth',block:'start'})};
+$('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const s=new Set(prev);P.forEach(p=>p.on=s.has(p.i));prev=null;sync()}}

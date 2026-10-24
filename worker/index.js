@@ -710,7 +710,7 @@ async function listRecipes(request, env, url) {
   else where.push("r.visibility = 'public'");
   if (q) { where.push('(r.title LIKE ? OR r.summary LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
   const kind = url.searchParams.get('kind');
-  if (kind === 'recipe' || kind === 'tutorial') { where.push('r.kind = ?'); args.push(kind); }
+  if (KINDS.includes(kind)) { where.push('r.kind = ?'); args.push(kind); }
   // Recipes that use one paint (the wheel's "Recipes using this paint"). Keys are stored as a JSON array, so match the quoted key.
   const paint = url.searchParams.get('paint');
   if (paint && paint.length <= 120) { where.push("r.paints LIKE ? ESCAPE '\\'"); args.push(`%${JSON.stringify(paint).replace(/[\\%_]/g, c => '\\' + c)}%`); }
@@ -725,11 +725,11 @@ async function listRecipes(request, env, url) {
 }
 
 // The list only needs a picture: the main photo, else the last step photo (usually the finished model).
-// A recipe card shows its layers as a colour strip instead, so recipes keep each layer's mix.
+// Recipe and palette cards show their layers (a palette's colours) as a colour strip instead, so they keep each one's mix.
 function listItem(r) {
   const o = recipeOut(r);
   o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
-  if (o.kind === 'recipe') o.layers = o.steps.map(s => s.mix);
+  if (o.kind !== 'tutorial') o.layers = o.steps.map(s => s.mix);
   o.steps = o.steps.length; o.saved = false; delete o.body;
   return o;
 }
@@ -779,6 +779,8 @@ async function getRecipe(request, env, id) {
 
 const IMAGE_ID = /^[0-9a-f-]{36}$/, RECIPE_ID = /^[\w-]{1,64}$/;
 const LEVELS = ['beginner', 'intermediate', 'advanced'];
+// 'palette': paints matched to a photo's colours, stored like a recipe (one step per colour, no recipe links or video).
+const KINDS = ['recipe', 'tutorial', 'palette'];
 
 // Validate the steps and make sure every photo they use was uploaded by this user.
 function cleanSteps(raw) {
@@ -813,7 +815,7 @@ async function deleteImages(env, ids) {
 
 async function saveRecipe(request, env, id) {
   const u = await requireUser(request, env), b = await body(request);
-  const kind = b.kind === 'tutorial' ? 'tutorial' : 'recipe';
+  const kind = KINDS.includes(b.kind) ? b.kind : 'recipe';
   const steps = cleanSteps(b.steps);
   // Only tutorial steps can use a recipe, and only one this user can see. Its paints count as the tutorial's paints.
   let linkedPaints = [];
