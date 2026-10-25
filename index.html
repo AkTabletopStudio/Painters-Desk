@@ -116,7 +116,13 @@ dialog.pd.fb textarea{min-height:120px;resize:vertical}.fbhp{position:absolute;l
 .rstrip.big{height:54px;width:calc(100% + 28px);margin:-12px -14px 10px;border:0;border-bottom:3px solid var(--ink);border-radius:0}
 .rstrip.tall{height:64px;border-radius:18px;margin:10px 0 14px}
 .rthumb{float:right;width:64px;height:64px;object-fit:cover;border-radius:12px;border:2px solid var(--ink);margin:0 0 6px 8px}
-.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}.tag.tpal{background:#c9b3ff}
+.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}.tag.tpal{background:#c9b3ff}.tag.topen{background:#8fe3a1}
+.pgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}.pgal img{width:100%;aspect-ratio:1;object-fit:cover;border:3px solid var(--ink);border-radius:12px;display:block;background:var(--bg)}
+.pgal.ed>div{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}.pgal.ed .x{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:2px solid var(--ink);background:var(--card);color:var(--fg);font-size:18px;line-height:1;cursor:pointer}.pgal.ed .lnk{font-size:13px;padding:0}
+.pcard h3 .av{width:26px;height:26px}.pmini{display:flex;gap:6px;margin:-4px 0 8px}.pmini img{width:48px;height:48px;object-fit:cover;border:2px solid var(--ink);border-radius:8px}
+.pclip{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:6px}
+.cmp h2 .tag{vertical-align:middle;font-family:Rubik,sans-serif}.cmf{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:10px 0}.cmf dt{font-weight:700}.cmf dd{margin:0}
+dialog.pd.fb textarea#cmText{min-height:140px}
 .kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 16px;margin:0 0 6px}.kinds p{margin:4px 0;font-size:14.5px}
 .kpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .kpick label{display:block;border:3px solid var(--ink);border-radius:16px;padding:10px 12px;cursor:pointer;background:var(--card)}.kpick label.on{box-shadow:4px 4px 0 var(--sh);outline:3px solid var(--yel);outline-offset:-6px}
@@ -343,6 +349,7 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>25 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Commission painters.</b> Painters who take commissions can now list themselves from their account page, with photos of their work, styles, prices, turnaround and links to their shop or socials. Find them under Recipes &amp; tutorials in <a href="#/painters">Commission painters</a>, and message a painter through the site: they get your message by email and reply to you directly, and your email is only shared with the painter you write to.</li>
 <li><span class="tg fx">Fixed</span><b>Paint pages and guides follow your theme.</b> The paint pages and guides now use the look you picked on the colour wheel (Neon 1984, Grimdark, Forest, Dwarven or Paint Pot), with the same backgrounds, fonts and icons.</li>
 <li><span class="tg nw">New</span><b>Paint guides.</b> New <a href="guides">conversion charts</a> (Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75, and back again) list every paint with its chart-listed equivalent and its nearest colour side by side, and new guides pick the best paints in each brand for non-metallic metal, skin, OSL and gems. Each brand page now opens with a short guide to the brand and how its colours compare to Citadel.</li>
 <li><span class="tg fx">Fixed</span><b>Army Painter washes.</b> The Warpaints Fanatic washes (the "Tone" paints) now count as washes, so they're hidden with the other washes in Paint types and no longer turn up in ramps.</li>
@@ -429,6 +436,7 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <section id="v-edit" hidden></section>
 <section id="v-account" hidden></section>
 <section id="v-profile" hidden></section>
+<section id="v-painters" hidden></section>
 <section id="v-reset" hidden></section>
 <section id="v-admin" hidden></section>
 <dialog class="pd" id="tyDlg" aria-labelledby="tyT"><form method="dialog"><h2 id="tyT">Paint types on the wheel</h2><p>Washes, inks and effect paints only show their colour over a basecoat, so they can crowd out better complements. Untick a type to hide it from the wheel and the neutrals.</p><div id="tyList"></div><div class="row"><button class="btn pri" value="ok" autofocus>Done</button></div></form></dialog>
@@ -448,6 +456,11 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <label class="fbhp" aria-hidden="true">Website<input type="text" id="fbWeb" tabindex="-1" autocomplete="off"></label>
 <p class="err" id="fbErr" role="alert"></p></div>
 <div class="row"><button class="btn" type="button" id="fbNo">Cancel</button><button class="btn pri" type="submit" id="fbSend">Send</button></div></form></dialog>
+<dialog class="pd fb" id="cmDlg" aria-labelledby="cmT"><form id="cmForm" method="dialog"><h2 id="cmT">Message <span id="cmWho"></span></h2><p class="ok" id="cmDone" hidden>Sent! Replies come to your email.</p><div id="cmBody"><p>Say what you'd like painted: the models, how many, the standard, colours and when you need them. The painter gets this by email and replies to <b id="cmMe"></b>.</p>
+<label class="f"><span>Message</span><textarea class="inp" id="cmText" minlength="20" maxlength="3000" required></textarea></label>
+<label class="fbhp" aria-hidden="true">Website<input type="text" id="cmWeb" tabindex="-1" autocomplete="off"></label>
+<p class="err" id="cmErr" role="alert"></p></div>
+<div class="row"><button class="btn" type="button" id="cmNo">Cancel</button><button class="btn pri" type="submit" id="cmSend">Send message</button></div></form></dialog>
 <dialog class="pd fb" id="rpDlg" aria-labelledby="rpT"><form id="rpForm" method="dialog"><h2 id="rpT">Report</h2><p class="ok" id="rpDone" hidden>Thanks. We'll take a look and remove it if it breaks the site rules.</p><div id="rpBody"><p>Tell us what's wrong with <span id="rpWhat"></span>. See the <a href="terms" target="_blank">site rules</a>.</p>
 <div class="f" role="radiogroup" aria-label="Reason"><span>Reason</span><div class="fbk"><label><input type="radio" name="rpReason" value="nudity" required><span>Nudity or sexual</span></label><label><input type="radio" name="rpReason" value="violence"><span>Violence or gore</span></label><label><input type="radio" name="rpReason" value="hate"><span>Hate or harassment</span></label><label><input type="radio" name="rpReason" value="spam"><span>Spam or scam</span></label><label><input type="radio" name="rpReason" value="other"><span>Something else</span></label></div></div>
 <label class="f"><span>Details (optional, e.g. which photo or step)</span><textarea class="inp" id="rpNote" maxlength="1000"></textarea></label>

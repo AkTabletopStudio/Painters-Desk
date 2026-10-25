@@ -8,7 +8,7 @@ const BYKEY=new Map(P.map(p=>[p.k,p]));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
@@ -72,7 +72,7 @@ function route(){
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
- document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'))));
+ document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'))));
  if(view==='welcome')renderWelcome();
  else if(view==='paints')renderPaints();
  else if(view==='recipes')renderRecipes();
@@ -82,6 +82,7 @@ function route(){
  else if(view==='profile')renderProfile(id);
  else if(view==='reset')renderReset(id);
  else if(view==='admin')renderAdmin();
+ else if(view==='painters')renderPainters();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -152,6 +153,7 @@ function renderAccount(){
  ${INFO.mail&&ME.email?`<div class="panel"><h2>Emails</h2>
  <p><label><input type="checkbox" id="uOpt"${ME.updates?' checked':''}> Email me when new features go live</label> <span class="s" id="uMsg"></span></p>
  <p class="s">A few times a year at most, with an unsubscribe link in every email.${ME.email_verified?'':' We only send these to confirmed addresses, so confirm yours above.'} Emails about your account, like password resets, come either way.</p></div>`:''}
+ <div class="panel" id="cmP"><h2>Commission painting</h2><p class="s">Loading…</p></div>
  ${ME.admin?`<div class="panel"><h2>Moderation <span class="tag">admin</span></h2><p class="s">Reports from the Report button, photos refused at upload, and the newest photos. Hide or delete a photo, or block an account.</p><a class="btn" href="#/admin">Open moderation</a></div>`:''}
  ${ME.admin?`<div class="panel" id="annP"><h2>Send an update email <span class="tag">admin</span></h2>
  <p class="s" id="annN">Checking who has opted in…</p>
@@ -188,6 +190,7 @@ function renderAccount(){
   try{ME=(await api('/me/updates',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('uMsg').textContent=c.checked?'Thanks, you\'re on the list.':'Turned off.';$('updAsk').hidden=true}
   catch(e){c.checked=!c.checked;$('uMsg').className='err';$('uMsg').textContent=e.message}c.disabled=false};
  if(ME.admin)annPanel();
+ commissionPanel();
  $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
  $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});await loadMe();location.hash='#/'}}
@@ -233,12 +236,14 @@ async function renderProfile(id){
  ${p.link?`<p><a href="${esc(p.link)}" target="_blank" rel="noopener nofollow ugc">${esc(p.link.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,''))}</a></p>`:''}
  ${mine?'<a class="btn" href="#/account">Edit profile</a>':`<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
  ${p.bio?`<div class="panel"><div class="steps">${esc(p.bio)}</div></div>`:''}
+ ${d.commission?commissionHTML(d.commission,p,mine):''}
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
  <h2>Public recipes &amp; tutorials</h2>
  <div class="cards">${d.recipes.map(cardHTML).join('')||`<p class="s">${mine?'Nothing public yet. Make a recipe or tutorial public to show it here.':'Nothing shared yet.'}</p>`}</div>`;
  el.querySelectorAll('#fp .chip').forEach(c=>c.onclick=()=>{const q=BYKEY.get(c.dataset.k);if(q){showOnWheel([q.k]);setTimeout(()=>showP(q),0)}});
  if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites);
- if($('pRep'))$('pRep').onclick=()=>openReport('user',p.id,p.name)}
+ if($('pRep'))$('pRep').onclick=()=>openReport('user',p.id,p.name);
+ if($('cmMsg'))$('cmMsg').onclick=()=>openMessage(p)}
 
 /* ---------- my paints ---------- */
 // Guards against ticking or unticking lots of paints by accident: a confirm dialog for big range changes, and an Undo bar after them.
@@ -324,9 +329,9 @@ async function renderRecipes(){
  if(!ME)rScope='public';
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint),kb=(k,t)=>`<button class="btn${rKind===k?' pri':''}" data-kd="${k}" type="button">${t}</button>`;
  el.innerHTML=`<h1>Recipes &amp; tutorials</h1>
- <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p></div>
+ <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p><p><span class="tag topen">Commission painters</span> Painters who take commissions, with photos of their work. <a href="#/painters">Find a painter →</a></p></div>
  <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new/recipe">+ New recipe</a><a class="btn pri" href="#/new">+ New tutorial</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
- <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
+ <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}<a class="btn" href="#/painters">🖌 Commission painters</a>${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
  <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  el.querySelectorAll('[data-kd]').forEach(b=>b.onclick=()=>{rKind=b.dataset.kd;renderRecipes()});
@@ -588,6 +593,90 @@ window.pdRecipesFor=p=>{
  box.innerHTML='<h2>Recipes using this paint</h2><p class="s">Loading…</p>';
  api(`/recipes?kind=recipe&paint=${encodeURIComponent(p.k)}&limit=100`).then(d=>{RFOR.set(p.k,d.recipes);show(d.recipes)}).catch(()=>box.remove())};
 
+/* ---------- commission painters ---------- */
+// Painters who take commissions list themselves from their account page. The list lives under Recipes & tutorials,
+// and each painter's listing (photos, prices, links, message form) shows at the top of their public profile.
+const linkLabel=l=>l.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,'');
+const openTag=c=>c.open?'<span class="tag topen">Taking commissions</span>':'<span class="tag">Commissions closed</span>';
+let cmOpen=false;
+async function renderPainters(){
+ const el=$('v-painters');
+ el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>Commission painters</h1>
+ <p class="s">Painters who'll paint your models for you. Open a painter to see their work, prices and tutorials, and send them a message. Agreements, payment and shipping are between you and the painter: The Painters Desk doesn't take part or check painters.</p>
+ <div class="row"><label><input type="checkbox" id="cmOpen"${cmOpen?' checked':''}> Only painters taking commissions now</label><span class="sp" style="flex:1"></span><a class="btn${ME?' pri':''}" href="#/account?commission">${ME?'List yourself as a painter':'Sign in to list yourself'}</a></div>
+ <div class="bar"><input id="cmq" type="search" placeholder="Search names, styles and descriptions"></div><div id="cmlist" class="cards"><p class="s">Loading…</p></div>`;
+ $('cmOpen').onchange=e=>{cmOpen=e.target.checked;load()};
+ let t=0;$('cmq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
+ const card=p=>`<a class="card pcard" href="#/u/${esc(p.id)}">${p.photos[0]?`<img class="thumb" src="${imgURL(p.photos[0])}" alt="" loading="lazy">`:''}
+  ${p.photos.length>1?`<div class="pmini">${p.photos.slice(1,5).map(id=>`<img src="${imgURL(id)}" alt="" loading="lazy">`).join('')}</div>`:''}
+  <h3>${avHTML(p)}${esc(p.name)}</h3>${openTag(p)}${p.tutorials?`<span class="tag ttut">${p.tutorials} tutorial${p.tutorials===1?'':'s'}</span>`:''}
+  ${p.styles?`<div class="n"><b>Styles:</b> ${esc(p.styles)}</div>`:''}${p.price?`<div class="n"><b>Prices:</b> ${esc(p.price)}</div>`:''}
+  <div class="s pclip">${esc(p.pitch)}</div></a>`;
+ async function load(){const L=$('cmlist');
+  try{const d=await api(`/painters?open=${cmOpen?1:0}&q=${encodeURIComponent($('cmq').value)}`);
+   L.innerHTML=d.painters.map(card).join('')||`<p class="s">${$('cmq').value||cmOpen?'No painters match.':'No commission painters listed yet. Paint for others? List yourself from your account page.'}</p>`}
+  catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
+ load()}
+
+// The listing panel at the top of a public profile.
+function commissionHTML(c,p,mine){
+ return `<div class="panel cmp"><h2>Commissions ${openTag(c)}</h2>
+ ${c.pitch?`<div class="steps">${esc(c.pitch)}</div>`:''}
+ <dl class="cmf">${c.styles?`<dt>Styles</dt><dd>${esc(c.styles)}</dd>`:''}${c.price?`<dt>Prices</dt><dd>${esc(c.price)}</dd>`:''}${c.turnaround?`<dt>Turnaround</dt><dd>${esc(c.turnaround)}</dd>`:''}</dl>
+ ${c.photos.length?`<div class="pgal">${c.photos.map(id=>`<a href="${imgURL(id)}" target="_blank" rel="noopener"><img src="${imgURL(id)}" alt="Painted by ${esc(p.name)}" loading="lazy"></a>`).join('')}</div>`:''}
+ <div class="row">${mine?'<a class="btn" href="#/account?commission">Edit your listing</a>':c.contact?(ME?`<button class="btn pri" type="button" id="cmMsg">✉ Message ${esc(p.name)}</button>`:`<a class="btn pri" href="#/account">Sign in to message ${esc(p.name)}</a>`):''}
+ ${c.links.map(l=>`<a class="btn" href="${esc(l)}" target="_blank" rel="noopener nofollow ugc">${esc(linkLabel(l))} ↗</a>`).join('')}</div>
+ <p class="s">Agreements, payment and shipping are between you and the painter. The Painters Desk doesn't take part or check painters.</p></div>`}
+
+// The message form: sent to the painter's email with Reply-To set to the sender's, so neither address is shown here.
+let CMTO=null;
+function openMessage(p){const D=$('cmDlg');CMTO=p;$('cmForm').reset();$('cmErr').textContent='';$('cmBody').hidden=false;$('cmSend').hidden=false;$('cmSend').disabled=false;$('cmNo').textContent='Cancel';$('cmDone').hidden=true;
+ $('cmWho').textContent=p.name;$('cmMe').textContent=ME.email||'';D.showModal();$('cmText').focus()}
+$('cmNo').onclick=()=>$('cmDlg').close();
+$('cmForm').onsubmit=async e=>{e.preventDefault();$('cmErr').textContent='';$('cmSend').disabled=true;
+ try{await api('/painters/'+encodeURIComponent(CMTO.id)+'/message',{method:'POST',body:{message:$('cmText').value,website:$('cmWeb').value}});
+  $('cmBody').hidden=true;$('cmSend').hidden=true;$('cmDone').hidden=false;$('cmNo').textContent='Close';$('cmNo').focus()}
+ catch(err){$('cmErr').textContent=err.message;$('cmSend').disabled=false}};
+
+// Account page: the painter's own listing. Photos upload straight away (with the usual checks) and are kept on Save.
+const CM_PHOTOS=12,CM_ISSUE={mail:'The site can\'t send email yet, so the message form is hidden for now.',noemail:'Add an email to your account (under Signing in) so messages can reach you.',unconfirmed:'Confirm your email (under Signing in) so messages can reach you.'};
+async function commissionPanel(){
+ const box=$('cmP');let d;try{d=await api('/me/commission')}catch(e){box.innerHTML=`<h2>Commission painting</h2><p class="err">${esc(e.message)}</p>`;return}
+ if(d.unavailable){box.hidden=true;return}
+ const c=d.commission||{listed:false,open:true,pitch:'',styles:'',price:'',turnaround:'',links:[],photos:[],contact:true};
+ let photos=[...c.photos],busy=0;
+ box.innerHTML=`<h2>Commission painting</h2><p class="s">Paint for other people? List yourself in <a href="#/painters">Commission painters</a>. Your listing shows on your public profile with photos of your work, and people can message you through the site (your email isn't shown to them).</p>
+ <p><label><input type="checkbox" id="cmL"${c.listed?' checked':''}> <b>List me as a commission painter</b></label></p>
+ <p><label><input type="checkbox" id="cmO"${c.open?' checked':''}> Taking new commissions right now</label></p>
+ <label class="f"><span>About your commissions</span><textarea id="cmPi" maxlength="1500" style="min-height:100px" placeholder="What you paint, the standard you paint to, how to order, whether you build and prime models…"></textarea></label>
+ <div class="tmeta row"><label class="f"><span>Styles</span><input type="text" id="cmS" maxlength="200" placeholder="e.g. tabletop, display, NMM, armies"></label>
+ <label class="f"><span>Prices</span><input type="text" id="cmPr" maxlength="200" placeholder="e.g. from £8 a 28mm infantry model"></label>
+ <label class="f"><span>Turnaround</span><input type="text" id="cmT" maxlength="100" placeholder="e.g. 2 to 4 weeks"></label></div>
+ <div class="f"><span>Photos of your work (up to ${CM_PHOTOS}; the first one leads your card)</span><div id="cmPh"></div></div>
+ <label class="f"><span>Links (optional, one per line, up to 4: shop, Instagram, website)</span><textarea id="cmLk" maxlength="1300" style="min-height:70px" placeholder="https://"></textarea></label>
+ <p><label><input type="checkbox" id="cmC"${c.contact?' checked':''}> Let people message me through the site</label></p>
+ <p class="s">Messages are emailed to you with the sender's email as the reply address, so you can answer them straight from your inbox. They'll see your email once you reply.${d.contactIssue?' <b>'+esc(CM_ISSUE[d.contactIssue])+'</b>':''}</p>
+ <div class="row"><button class="btn pri" id="cmSave" type="button">Save listing</button>${c.listed?'<a class="btn" href="#/u/'+esc(ME.id)+'">See it on your profile</a>':''}<span class="s" id="cmM"></span></div>`;
+ $('cmPi').value=c.pitch;$('cmS').value=c.styles;$('cmPr').value=c.price;$('cmT').value=c.turnaround;$('cmLk').value=c.links.join('\n');
+ const msg=(t,err)=>{$('cmM').className=err?'err':'s';$('cmM').textContent=t};
+ const draw=()=>{const ph=$('cmPh');
+  ph.innerHTML=`<div class="pgal ed">${photos.map((id,i)=>`<div><img src="${imgURL(id)}" alt=""><button type="button" class="x" data-rm="${i}" title="Remove" aria-label="Remove photo">×</button>${i?`<button type="button" class="lnk" data-first="${i}">Make first</button>`:''}</div>`).join('')}</div>
+  ${photos.length<CM_PHOTOS?'<label class="btn">Add photos<input type="file" accept="image/*" multiple hidden></label>':''} <span class="s" data-st></span>`;
+  ph.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{photos.splice(+b.dataset.rm,1);draw();msg('Press Save listing to keep this change.')});
+  ph.querySelectorAll('[data-first]').forEach(b=>b.onclick=()=>{photos.unshift(...photos.splice(+b.dataset.first,1));draw();msg('Press Save listing to keep this change.')});
+  const inp=ph.querySelector('input[type=file]');
+  if(inp)inp.onchange=async e=>{const fs=[...e.target.files].slice(0,CM_PHOTOS-photos.length),st=ph.querySelector('[data-st]');busy++;
+   for(const f of fs){st.className='s';st.textContent='Uploading…';try{photos.push(await uploadPhoto(f));draw()}catch(err){draw();const s2=$('cmPh').querySelector('[data-st]');s2.className='err';s2.textContent=err.message;break}}
+   busy--;if(!$('cmPh').querySelector('[data-st]').textContent)msg('Press Save listing to keep the new photos.')}};
+ draw();
+ $('cmSave').onclick=async()=>{if(busy){msg('Please wait for the photos to finish uploading.',1);return}
+  $('cmSave').disabled=true;msg('Saving…');
+  try{await api('/me/commission',{method:'PUT',body:{listed:$('cmL').checked,open:$('cmO').checked,pitch:$('cmPi').value,styles:$('cmS').value,price:$('cmPr').value,turnaround:$('cmT').value,
+    links:$('cmLk').value.split(/\s*\n\s*/).map(s=>s.trim()).filter(Boolean),photos,contact:$('cmC').checked}});
+   await commissionPanel();msg($('cmL').checked?'Saved. You\'re listed in Commission painters.':'Saved. You\'re not listed.')}
+  catch(e){msg(e.message,1);$('cmSave').disabled=false}};
+ if(/commission/.test(location.hash))box.scrollIntoView({block:'start'})}
+
 /* ---------- reports & moderation ---------- */
 // A photo a moderator hid or deleted answers 404: drop it (and the link around it) instead of showing a broken image.
 document.addEventListener('error',e=>{const i=e.target;if(i.tagName==='IMG'&&/\/api\/images\//.test(i.src)&&!i.closest('#v-admin')){const a=i.closest('a[target]');(a||i).hidden=true}},true);
@@ -611,7 +700,7 @@ async function renderAdmin(){
  let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
  const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
  const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
- const where=w=>w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const where=w=>w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
  const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
   <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
   <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
