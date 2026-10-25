@@ -464,3 +464,8 @@ $('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))
  $('phUndoM').textContent=`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`;bar.hidden=false;clearTimeout(tm);tm=setTimeout(()=>bar.hidden=true,15000);
  document.getElementById('w').scrollIntoView({behavior:'smooth',block:'start'})};
 $('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const s=new Set(prev);P.forEach(p=>p.on=s.has(p.i));prev=null;sync()}}
+// Links from the paint pages (/paints/...) open the wheel at #/?paint=<paint key>: show that paint and select it.
+function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)return;let k='';try{k=decodeURIComponent(m[1])}catch(e){}
+ history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
+ if(CH.includes(p)){if(sel!==p)pick(p)}else neutralShow(p);document.getElementById('w').scrollIntoView({block:'start'})}
+paintLink();addEventListener('hashchange',paintLink);
