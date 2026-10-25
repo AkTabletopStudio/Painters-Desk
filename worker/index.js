@@ -221,7 +221,14 @@ function paintKeys(v, max) {
 }
 
 // Only allow a return path on this site, so sign-in can't be used to bounce visitors elsewhere.
-const safeReturn = r => (typeof r === 'string' && /^\/(?!\/)/.test(r) ? r : '/');
+// Browsers read a backslash as a slash, so '/\evil.example' counts as another site and is refused too.
+const safeReturn = r => {
+  if (typeof r !== 'string' || !r.startsWith('/') || /[\\\s]/.test(r)) return '/';
+  try {
+    const u = new URL(r, 'https://same.invalid');
+    return u.origin === 'https://same.invalid' ? r : '/';
+  } catch { return '/'; }
+};
 
 /* ---------- accounts ---------- */
 
