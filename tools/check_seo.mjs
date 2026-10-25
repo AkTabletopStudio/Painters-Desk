@@ -1,7 +1,7 @@
 // Checks that worker/seo.js can read data.js and app.js, gives every paint a unique page address and can build every guide.
 // Run: node tools/check_seo.mjs
 import { readFileSync } from 'node:fs';
-import { parse, matches, renderGuides } from '../worker/seo.js';
+import { parse, matches, renderGuides, theme } from '../worker/seo.js';
 const D = parse(readFileSync(new URL('../data.js', import.meta.url), 'utf8'), readFileSync(new URL('../app.js', import.meta.url), 'utf8'));
 const urls = D.P.filter(p => p.url).map(p => p.url), gl = Object.keys(D.GL).length;
 if (new Set(urls).size !== urls.length) throw new Error('Duplicate paint addresses');
@@ -12,6 +12,9 @@ D.P.filter(p => p.url).forEach(p => matches(D, p));
 if (D.sgFix.length < 4) throw new Error('Could not read SG_FIX ramp bases from app.js');
 const types = {}; D.P.forEach(p => types[p.t] = (types[p.t] || 0) + 1);
 const guides = renderGuides(D);
+const th = theme(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+if (!th.js || !th.css.includes('data-look="cyber"')) throw new Error('Could not read the site themes from index.html');
+if (/url\((?!["']?(data:|https?:|\/))/.test(th.css)) throw new Error('Relative url() left in theme CSS');
 console.log(`${guides} guides, types ${JSON.stringify(types)}`);
 console.log(`${D.P.length} paints, ${urls.length} pages, ${D.brands.length} brands, ${gl} ranges, ${Object.keys(D.MT).length} chart-matched paints`);
 D.brands.forEach(b => console.log(' ', b.slug, b.paints.length));
