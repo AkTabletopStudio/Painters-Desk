@@ -93,6 +93,10 @@ async function route(request, env, url) {
   if (p === '/api/me/profile' && m === 'PUT') return saveProfile(request, env);
   if (p === '/api/me/password' && m === 'PUT') return setPassword(request, env);
   if ((r = p.match(/^\/api\/users\/([\w-]+)$/)) && m === 'GET') return getProfile(request, env, r[1]);
+  if (p === '/api/painters' && m === 'GET') return listPainters(request, env, url);
+  if ((r = p.match(/^\/api\/painters\/([\w-]+)\/message$/)) && m === 'POST') return messagePainter(request, env, url, r[1]);
+  if (p === '/api/me/commission' && m === 'GET') return getCommission(request, env);
+  if (p === '/api/me/commission' && m === 'PUT') return saveCommission(request, env);
   if (p === '/api/auth/register' && m === 'POST') return register(request, env, url);
   if (p === '/api/auth/password' && m === 'POST') return passwordLogin(request, env, url);
   if (p === '/api/auth/forgot' && m === 'POST') return forgotPassword(request, env, url);
@@ -493,12 +497,12 @@ function mailShell(origin, inner, foot = '') {
 </table></td></tr></table></body></html>`;
 }
 
-async function sendMail(env, to, subject, text, link, button) {
+async function sendMail(env, to, subject, text, link, button, replyTo = '') {
   const html = mailShell(new URL(link).origin, `${text.split('\n\n').map(p => `<p style="margin:0 0 14px">${htmlEsc(p)}</p>`).join('')}
 <p style="margin:20px 0 16px">${mailButton(link, button)}</p>
 <p style="margin:0;color:#b4a3df;font-size:13px;word-break:break-all">Or copy this link: <a href="${link}" style="color:#2de2e6">${link}</a></p>`);
   if (env.EMAIL && env.MAIL_FROM) {
-    try { await env.EMAIL.send({ from: env.MAIL_FROM, to, subject, text: `${text}\n\n${button}: ${link}`, html }); }
+    try { await env.EMAIL.send({ from: env.MAIL_FROM, to, subject, text: `${text}\n\n${button}: ${link}`, html, ...(replyTo ? { replyTo } : {}) }); }
     catch (e) { console.error('Email Sending error', e); throw new HttpError(502, "Couldn't send the email, please try again later"); }
     return;
   }
@@ -510,7 +514,7 @@ async function sendMail(env, to, subject, text, link, button) {
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text: `${text}\n\n${button}: ${link}`, html }),
+    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text: `${text}\n\n${button}: ${link}`, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
   if (!r.ok) {
     console.error('Resend error', r.status, await r.text().catch(() => ''));
@@ -630,6 +634,7 @@ async function getProfile(request, env, id) {
   if (!p) throw new HttpError(404, 'Painter not found');
   // A blocked account's profile shows only its name.
   if (p.blocked) { p.bio = ''; p.link = ''; p.favourites = '[]'; }
+  const blocked = !!p.blocked;
   delete p.blocked;
   p.favourites = JSON.parse(p.favourites || '[]');
   const rows = (await env.DB.prepare(
@@ -638,7 +643,8 @@ async function getProfile(request, env, id) {
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
      FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' ORDER BY r.updated_at DESC LIMIT 100`
   ).bind(id).all()).results;
-  return json({ profile: p, recipes: rows.map(listItem) });
+  const commission = blocked ? null : await commissionFor(env, id);
+  return json({ profile: p, recipes: rows.map(listItem), commission });
 }
 
 async function deleteAccount(request, env) {
@@ -652,6 +658,10 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM saves WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
     env.DB.prepare('DELETE FROM recipes WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
+    ...(await hasCommissions(env) ? [
+      env.DB.prepare('DELETE FROM commissions WHERE user_id = ?').bind(u.id),
+      env.DB.prepare('DELETE FROM commission_messages WHERE painter_id = ? OR sender_id = ?').bind(u.id, u.id),
+    ] : []),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(u.id),
@@ -1054,6 +1064,8 @@ async function moderation(request, env) {
   const usedIn = new Map(), add = (img, where) => { if (!usedIn.has(img)) usedIn.set(img, []); usedIn.get(img).push(where); };
   for (const r of recipes) for (const img of new Set(usedImages(r))) add(img, { type: 'recipe', id: r.id, title: r.title, kind: r.kind, visibility: r.visibility });
   for (const x of users.values()) if (x.avatar_image) add(x.avatar_image, { type: 'icon', id: x.id });
+  if (await hasCommissions(env)) for (const c of (await env.DB.prepare('SELECT user_id, photos FROM commissions').all()).results)
+    for (const img of JSON.parse(c.photos || '[]')) add(img, { type: 'portfolio', id: c.user_id });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -1180,6 +1192,134 @@ async function setSave(request, env, recipeId) {
   }
   const v = await loadRecipe(env, recipeId, u.id);
   return json({ saved: b.on !== false, votes: v?.vote_count || 0, voted: !!v?.voted });
+}
+
+/* ---------- commission painters ---------- */
+
+// A painter can add a commission listing to their profile: a pitch, styles, a price guide, turnaround, up to
+// COMMISSION_PHOTOS portfolio photos and COMMISSION_LINKS links. Listed painters show in the Commission painters list.
+// The contact form emails the painter with Reply-To set to the sender, so neither email is shown on the site.
+const COMMISSION_PHOTOS = 12, COMMISSION_LINKS = 4, MESSAGES_PER_HOUR = 5, MESSAGES_PER_DAY = 20;
+let commissionsReady = false;
+// The tables come with migration 0013. Until it is applied, listings are simply missing instead of breaking profiles.
+async function hasCommissions(env) {
+  if (!commissionsReady) commissionsReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'commissions'").first());
+  return commissionsReady;
+}
+async function needCommissions(env) {
+  if (!await hasCommissions(env)) throw new HttpError(503, 'Commission listings are not set up on this server yet');
+}
+
+// Hidden photos are left out for everyone, so a moderator hiding one doesn't leave a broken picture in the gallery.
+async function visiblePhotos(env, ids) {
+  if (!ids.length) return [];
+  const hidden = new Set((await env.DB.prepare(`SELECT id FROM images WHERE hidden = 1 AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()).results.map(r => r.id));
+  return ids.filter(id => !hidden.has(id));
+}
+
+const commissionOut = (c, photos, contact) => ({
+  open: !!c.open, pitch: c.pitch, styles: c.styles, price: c.price, turnaround: c.turnaround,
+  links: JSON.parse(c.links || '[]'), photos, contact, updated_at: c.updated_at,
+});
+
+// The form only shows when the painter turned it on, their email is confirmed and the site can send email.
+const canContact = (env, c) => !!c.contact && !!c.email && !!c.email_verified && mailReady(env);
+
+// The listing shown on a public profile, or null when the painter isn't listed.
+async function commissionFor(env, id) {
+  if (!await hasCommissions(env)) return null;
+  const c = await env.DB.prepare('SELECT c.*, u.email, u.email_verified FROM commissions c JOIN users u ON u.id = c.user_id WHERE c.user_id = ? AND c.listed = 1').bind(id).first();
+  if (!c) return null;
+  return commissionOut(c, await visiblePhotos(env, JSON.parse(c.photos || '[]')), canContact(env, c));
+}
+
+// GET /api/painters?open=1&q=: listed painters, the ones taking work first, then the most recently updated.
+async function listPainters(request, env, url) {
+  if (!await hasCommissions(env)) return json({ painters: [] });
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 100).replace(/[%_]/g, ''), open = url.searchParams.get('open') === '1';
+  const where = ['c.listed = 1', 'u.blocked = 0'], args = [];
+  if (open) where.push('c.open = 1');
+  if (q) { where.push('(u.name LIKE ? OR c.pitch LIKE ? OR c.styles LIKE ?)'); args.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  const rows = (await env.DB.prepare(
+    `SELECT c.*, u.id AS uid, u.name, ${AVATAR} AS avatar, u.email, u.email_verified,
+       (SELECT COUNT(*) FROM recipes r WHERE r.user_id = u.id AND r.visibility = 'public' AND r.kind = 'tutorial') AS tutorials
+     FROM commissions c JOIN users u ON u.id = c.user_id WHERE ${where.join(' AND ')} ORDER BY c.open DESC, c.updated_at DESC LIMIT 100`
+  ).bind(...args).all()).results;
+  const shown = new Set(await visiblePhotos(env, rows.flatMap(r => JSON.parse(r.photos || '[]'))));
+  return json({
+    painters: rows.map(r => ({
+      id: r.uid, name: r.name, avatar: r.avatar, tutorials: r.tutorials,
+      ...commissionOut(r, JSON.parse(r.photos || '[]').filter(id => shown.has(id)), canContact(env, r)),
+    })),
+  });
+}
+
+// The signed-in painter's own listing, for the account page (also when it isn't listed).
+async function getCommission(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasCommissions(env)) return json({ commission: null, unavailable: true });
+  const c = await env.DB.prepare('SELECT * FROM commissions WHERE user_id = ?').bind(u.id).first();
+  return json({
+    commission: c ? { listed: !!c.listed, ...commissionOut(c, JSON.parse(c.photos || '[]'), !!c.contact) } : null,
+    // Why the contact form wouldn't show yet, if it wouldn't.
+    contactIssue: !mailReady(env) ? 'mail' : !u.email ? 'noemail' : !u.email_verified ? 'unconfirmed' : '',
+  });
+}
+
+async function saveCommission(request, env) {
+  const u = await requireUser(request, env), b = await body(request);
+  await needCommissions(env);
+  const listed = !!b.listed;
+  if (listed && u.blocked) throw new HttpError(403, 'This account has been blocked from sharing publicly');
+  const pitch = str(b.pitch, 1500, 'About your commissions'), styles = str(b.styles, 200, 'Styles'),
+    price = str(b.price, 200, 'Prices'), turnaround = str(b.turnaround, 100, 'Turnaround');
+  const links = [...new Set((Array.isArray(b.links) ? b.links : []).map(l => str(l, 300, 'Link')).filter(Boolean))];
+  if (links.length > COMMISSION_LINKS) throw new HttpError(400, `Up to ${COMMISSION_LINKS} links`);
+  for (const l of links) if (!/^https?:\/\/[^\s/]+\.\S+$/i.test(l)) throw new HttpError(400, 'Each link must be a web address starting with https://');
+  const photos = [...new Set((Array.isArray(b.photos) ? b.photos : []).filter(id => typeof id === 'string'))];
+  if (photos.length > COMMISSION_PHOTOS) throw new HttpError(400, `Up to ${COMMISSION_PHOTOS} photos`);
+  if (photos.some(id => !IMAGE_ID.test(id))) throw new HttpError(400, 'Bad photo');
+  await checkImagesOwned(env, u, photos);
+  if (listed && !photos.length) throw new HttpError(400, 'Add at least one photo of your work to be listed');
+  if (listed && !pitch) throw new HttpError(400, 'Write a few words about your commissions to be listed');
+  const old = await env.DB.prepare('SELECT photos FROM commissions WHERE user_id = ?').bind(u.id).first(), t = now();
+  await env.DB.prepare(`INSERT INTO commissions (user_id, listed, open, pitch, styles, price, turnaround, links, photos, contact, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET listed = excluded.listed, open = excluded.open, pitch = excluded.pitch, styles = excluded.styles,
+      price = excluded.price, turnaround = excluded.turnaround, links = excluded.links, photos = excluded.photos, contact = excluded.contact, updated_at = excluded.updated_at`)
+    .bind(u.id, listed ? 1 : 0, b.open === false ? 0 : 1, pitch, styles, price, turnaround, JSON.stringify(links), JSON.stringify(photos), b.contact === false ? 0 : 1, t, t).run();
+  // Photos taken out of the portfolio are deleted, unless the painter also uses them as their icon or in a recipe.
+  const gone = JSON.parse(old?.photos || '[]').filter(id => !photos.includes(id) && id !== u.avatar_image);
+  if (gone.length) {
+    const used = new Set((await env.DB.prepare('SELECT cover, steps FROM recipes WHERE user_id = ?').bind(u.id).all()).results.flatMap(usedImages));
+    await deleteImages(env, gone.filter(id => !used.has(id)));
+  }
+  return getCommission(request, env);
+}
+
+// POST /api/painters/:id/message { message, website }: the contact form. The sender must be signed in with a
+// confirmed email (it becomes the Reply-To, so it has to be theirs), and can send MESSAGES_PER_HOUR an hour.
+async function messagePainter(request, env, url, id) {
+  const u = await requireUser(request, env), b = await body(request);
+  if (b.website) return json({ ok: true });
+  await needCommissions(env);
+  if (u.blocked) throw new HttpError(403, 'This account has been blocked from sending messages');
+  if (!u.email || !u.email_verified) throw new HttpError(403, 'Please confirm your email first, so the painter can reply to you. You can send the confirmation email from your account page.');
+  if (id === u.id) throw new HttpError(400, "You can't message yourself");
+  const message = str(b.message, 3000, 'Message', { required: true });
+  if (message.length < 20) throw new HttpError(400, 'Please say a little more about what you would like painted');
+  const c = await env.DB.prepare('SELECT c.*, u.email, u.email_verified, u.blocked FROM commissions c JOIN users u ON u.id = c.user_id WHERE c.user_id = ? AND c.listed = 1').bind(id).first();
+  if (!c || c.blocked) throw new HttpError(404, 'Painter not found');
+  if (!canContact(env, c)) throw new HttpError(400, "This painter isn't taking messages through the site. Try the links on their profile.");
+  const t = now();
+  const n = await env.DB.prepare('SELECT COALESCE(SUM(created_at > ?), 0) AS hour, COUNT(*) AS day FROM commission_messages WHERE sender_id = ? AND created_at > ?').bind(t - 3600000, u.id, t - 86400000).first();
+  if (n.hour >= MESSAGES_PER_HOUR || n.day >= MESSAGES_PER_DAY) throw new HttpError(429, "You've sent a lot of messages recently, please try again later");
+  await sendMail(env, c.email, `Commission enquiry from ${u.name} on The Painters Desk`,
+    `${u.name} sent you a message from your commission listing on The Painters Desk.\n\n${message}\n\nReply to this email to answer them: your reply goes straight to their email address, and they will see yours. If this message breaks the site rules, use Report on their profile.`,
+    `${url.origin}/#/u/${u.id}`, 'See their profile', u.email);
+  await env.DB.prepare('INSERT INTO commission_messages (id, painter_id, sender_id, message, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), id, u.id, message, t).run();
+  return json({ ok: true });
 }
 
 /* ---------- feedback ---------- */
