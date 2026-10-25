@@ -12,3 +12,6 @@ package-lock.json
 .dev.vars.example
 .wrangler
 .gitignore
+tools
+*.zip
+__pycache__
