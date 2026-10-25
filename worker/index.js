@@ -1,5 +1,6 @@
 // The Painters Desk API: accounts (OAuth sign-in), paint collections, recipes/tutorials and comments.
-// Static files are served from the assets binding; only /api/* runs through this Worker (see wrangler.jsonc).
+// Static files are served from the assets binding; only /api/* and the paint pages (/paints, /sitemap.xml, see seo.js) run through this Worker.
+import { isSeoPath, seo } from './seo.js';
 
 const SESSION_COOKIE = 'pd_session';
 const OAUTH_COOKIE = 'pd_oauth';
@@ -62,6 +63,7 @@ export default {
       });
       return Response.redirect(url.toString(), 301);
     }
+    if (isSeoPath(url.pathname)) return seo(request, env, url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
       // Writes must come from this site's own pages (blocks cross-site form posts using the session cookie).
