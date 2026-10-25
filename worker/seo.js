@@ -8,6 +8,10 @@ const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
 
 let DATA = null;
+// The site themes (Neon 1984, Grimdark, Forest, Dwarven) come from index.html, so these pages follow the look a visitor
+// picked on the colour wheel. The look is applied in the browser from localStorage, so every visitor and search engine
+// gets the same HTML.
+let THEME = { js: '', css: '' };
 
 export function isSeoPath(p) {
   return p === '/sitemap.xml' || p === '/paints' || p.startsWith('/paints/') || p === '/guides' || p.startsWith('/guides/');
@@ -46,9 +50,25 @@ function send(body, type = 'text/html; charset=utf-8', status = 200) {
 async function load(env, url) {
   if (DATA) return DATA;
   const get = f => env.ASSETS.fetch(new Request(new URL(f, url.origin))).then(r => r.text());
-  const [data, app] = await Promise.all([get('/data.js'), get('/app.js')]);
+  const [data, app, index] = await Promise.all([get('/data.js'), get('/app.js'), get('/')]);
   DATA = parse(data, app);
+  THEME = theme(index);
   return DATA;
+}
+
+// The inline script that sets <html data-look> and the theme CSS block, with relative url()s made absolute.
+// Exported for tools/check_seo.mjs.
+export function theme(index) {
+  try {
+    const js = index.match(/<script>var l='cyber'[\s\S]*?<\/script>/)[0];
+    const a = index.indexOf('/* Site themes'), b = index.indexOf('</style>', a);
+    if (a < 0 || b < 0) throw new Error('theme CSS not found');
+    const css = index.slice(a, b).replace(/url\((?!["']?(?:data:|https?:|\/))(["']?)/g, 'url($1/');
+    return { js, css };
+  } catch (e) {
+    console.error(e);
+    return { js: '', css: '' };
+  }
 }
 
 // Exported for tools/check_seo.mjs.
@@ -174,27 +194,28 @@ function page({ title, desc, path, crumbs, body, ld = [], og = 'website' }) {
 <meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${OG_IMAGE}">
 <link rel="icon" type="image/png" href="/icons/favicon-32.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="theme-color" content="#fff4de">
+${THEME.js}
 <script type="application/ld+json">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>
 <style>
 @font-face{font-family:'Archivo Black';src:url(/fonts/archivo-black.woff2) format('woff2');font-display:swap}
 @font-face{font-family:Rubik;src:url(/fonts/rubik-400.woff2) format('woff2');font-weight:400;font-display:swap}
 @font-face{font-family:Rubik;src:url(/fonts/rubik-700.woff2) format('woff2');font-weight:700;font-display:swap}
-:root{--bg:#fff4de;--fg:#1b1b1b;--mut:#5c5444;--card:#fff;--ink:#1b1b1b}
-@media (prefers-color-scheme:dark){:root{--bg:#1d1a15;--fg:#f6eedd;--mut:#c2b69e;--card:#2b2720;--ink:#e9dcc0}}
+:root{--bg:#fff4de;--fg:#1b1b1b;--mut:#5c5444;--card:#fff;--ink:#1b1b1b;--line:#1b1b1b;--soft:#fff9ee;--yel:#ffd23f;--red:#f2545b;--org:#ff9f1c;--tea:#2ec4b6;--blu:#3a86ff;--pur:#8338ec;--sh:var(--ink);--hf:'Archivo Black',sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-look]){--bg:#1d1a15;--fg:#f6eedd;--mut:#c2b69e;--card:#2b2720;--ink:#e9dcc0;--line:#e9dcc0;--soft:#24211b}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Rubik,system-ui,-apple-system,Segoe UI,sans-serif;padding:0 16px 24px}
-body::before{content:"";display:block;height:12px;margin:0 -16px 14px;background:linear-gradient(90deg,#f2545b 0 16.66%,#ff9f1c 0 33.33%,#ffd23f 0 50%,#2ec4b6 0 66.66%,#3a86ff 0 83.33%,#8338ec 0)}
+body::before{content:"";display:block;height:12px;margin:0 -16px 14px;background:linear-gradient(90deg,var(--red) 0 16.66%,var(--org) 0 33.33%,var(--yel) 0 50%,var(--tea) 0 66.66%,var(--blu) 0 83.33%,var(--pur) 0)}
 .wrap{max-width:960px;margin:auto}
 a{color:inherit}
 header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
-header .logo{font:400 18px 'Archivo Black',sans-serif;text-decoration:none;display:flex;align-items:center;gap:8px}
+header .logo{font:400 18px var(--hf);text-decoration:none;display:flex;align-items:center;gap:8px}
 header .logo img{width:32px;height:32px}
-.btn{display:inline-block;font:700 15px Rubik,sans-serif;background:#ffd23f;color:#1b1b1b;border:3px solid var(--ink);border-radius:12px;padding:8px 14px;box-shadow:3px 3px 0 var(--ink);text-decoration:none}
+.btn{display:inline-block;font:700 15px Rubik,sans-serif;background:var(--yel);color:#1b1b1b;border:3px solid var(--ink);border-radius:12px;padding:8px 14px;box-shadow:3px 3px 0 var(--sh);text-decoration:none}
 nav.crumbs{font-size:14px;color:var(--mut);margin:14px 0 0}
-h1{font:400 clamp(28px,5vw,44px)/1.1 'Archivo Black',sans-serif;margin:10px 0}
-h2{font:400 22px/1.2 'Archivo Black',sans-serif;margin:0 0 8px}
+h1{font:400 clamp(28px,5vw,44px)/1.1 var(--hf);margin:10px 0}
+h2{font:400 22px/1.2 var(--hf);margin:0 0 8px}
 p.s{color:var(--mut);font-size:14px;margin:0 0 12px}
-.panel{background:var(--card);border:3px solid var(--ink);border-radius:18px;padding:16px;margin:16px 0;box-shadow:5px 5px 0 var(--ink)}
+.panel{background:var(--card);border:3px solid var(--ink);border-radius:18px;padding:16px;margin:16px 0;box-shadow:5px 5px 0 var(--sh)}
 .hero{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .big{width:96px;height:96px;border-radius:50%;border:3px solid var(--ink);flex:none}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{color:var(--mut)}dd{margin:0}
@@ -208,10 +229,12 @@ i.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);flex:n
 ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ul.u li:first-child{border-top:0}
 ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}
 footer{font-size:12px;color:var(--mut);margin-top:24px}
-nav.top{display:flex;align-items:center;gap:14px;font-weight:700}
+nav.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+nav.top a:not(.btn){color:#1b1b1b;text-decoration:none;padding:8px 14px;border-radius:14px;font-size:15px;font-weight:700;background:#fff;border:3px solid var(--ink)}
+nav.top a:not(.btn):hover{background:var(--yel)}
 .prose p,p.prose{margin:0 0 12px;max-width:720px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
-.stats div{border:2px solid var(--ink);border-radius:12px;padding:8px 10px}.stats b{display:block;font:400 22px 'Archivo Black',sans-serif}
+.stats div{border:2px solid var(--ink);border-radius:12px;padding:8px 10px}.stats b{display:block;font:400 22px var(--hf)}
 .tw{overflow-x:auto}
 table.cv{border-collapse:collapse;width:100%;font-size:15px}
 table.cv th{text-align:left;font-size:13px;color:var(--mut);padding:4px 6px}
@@ -222,16 +245,18 @@ ol.ramp{list-style:none;margin:0;padding:0}
 ol.ramp li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
 ol.ramp em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .chip{display:flex;height:18px;border:2px solid var(--ink);border-radius:9px;overflow:hidden;margin:4px 0 10px}.chip i{flex:1}
-</style></head>
+${THEME.css}</style></head>
 <body><div class="wrap">
-<header><a class="logo" href="/"><img src="/icons/icon-192.png" alt="" width="32" height="32">The Painters Desk</a><nav class="top"><a href="/paints">Paints</a><a href="/guides">Guides</a><a class="btn" href="/">Open the colour wheel</a></nav></header>
+<header><a class="logo" href="/"><img src="/icons/icon-192.png" alt="" width="32" height="32" id="pdi">The Painters Desk</a><nav class="top"><a href="/paints">Paints</a><a href="/guides">Guides</a><a class="btn on" href="/">Open the colour wheel</a></nav></header>
 <nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
 Chart-listed matches come from the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart; the rest are a nearest-colour calculation.
 The Painters Desk is unofficial and not affiliated with or endorsed by any paint brand. Paint names are trademarks of their owners.
 <a href="/paints">All brands</a> · <a href="/guides">Guides</a> · <a href="/privacy">Privacy policy</a> · <a href="/terms">Site rules</a></p></footer>
-</div></body></html>`;
+</div>
+<script>(function(){var l=document.documentElement.dataset.look;if(l)document.getElementById('pdi').src='/icons/themes/'+l+'.svg'})()</script>
+</body></html>`;
 }
 
 // Public tutorials, recipes and palettes that use a paint (same match as /api/recipes?paint=), tutorials first, most upvoted first.
