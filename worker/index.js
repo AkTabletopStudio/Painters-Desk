@@ -1,5 +1,5 @@
 // The Painters Desk API: accounts (OAuth sign-in), paint collections, recipes/tutorials and comments.
-// Static files are served from the assets binding; only /api/* and the paint pages (/paints, /sitemap.xml, see seo.js) run through this Worker.
+// Static files are served from the assets binding; only /api/* and the paint pages and guides (/paints, /guides, /sitemap.xml, see seo.js) run through this Worker.
 import { isSeoPath, seo } from './seo.js';
 
 const SESSION_COOKIE = 'pd_session';
