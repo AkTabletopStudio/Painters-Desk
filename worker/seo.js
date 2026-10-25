@@ -24,7 +24,7 @@ export async function seo(request, env, url) {
     const br = D.brands.find(x => x.slug === b);
     const paint = br && s && br.bySlug.get(s);
     if (br && !s) r = send(brandPage(D, br));
-    else if (paint && !extra) r = send(paintPage(D, paint));
+    else if (paint && !extra) r = send(paintPage(D, paint, await usedIn(env, paint)));
     else r = send(notFound(), 'text/html; charset=utf-8', 404);
   }
   // Paths with a trailing slash get one address, so search engines don't index both.
@@ -166,6 +166,7 @@ ul.m li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
 i.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);flex:none;margin-top:1px}
 .m em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .ck{color:#2a9d5c;font-weight:700}
+ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ul.u li:first-child{border-top:0}
 ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}
 footer{font-size:12px;color:var(--mut);margin-top:24px}
 </style></head>
@@ -180,7 +181,34 @@ The Painters Desk is unofficial and not affiliated with or endorsed by any paint
 </div></body></html>`;
 }
 
-function paintPage(D, p) {
+// Public tutorials, recipes and palettes that use a paint (same match as /api/recipes?paint=), tutorials first, most upvoted first.
+async function usedIn(env, p) {
+  try {
+    const key = JSON.stringify(p.g + '|' + p.c + '|' + p.n).replace(/[\\%_]/g, c => '\\' + c);
+    return (await env.DB.prepare(
+      `SELECT r.id, r.kind, r.title, r.summary, u.name AS author,
+         (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS votes
+       FROM recipes r JOIN users u ON u.id = r.user_id
+       WHERE r.visibility = 'public' AND u.blocked = 0 AND r.paints LIKE ? ESCAPE '\\'
+       ORDER BY r.kind = 'tutorial' DESC, votes DESC, r.updated_at DESC LIMIT 12`
+    ).bind(`%${key}%`).all()).results;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+const KIND_LABEL = { tutorial: 'Tutorial', recipe: 'Recipe', palette: 'Palette' };
+
+function usedInHTML(p, rs) {
+  if (!rs) return '';
+  const li = r => `<li><a href="/#/recipe/${encodeURIComponent(r.id)}">${esc(r.title)}</a><em>${KIND_LABEL[r.kind] || 'Recipe'} by ${esc(r.author || 'a painter')}${r.votes ? ' · ' + r.votes + ' upvote' + (r.votes === 1 ? '' : 's') : ''}${r.summary ? ' · ' + esc(r.summary.length > 120 ? r.summary.slice(0, 117) + '…' : r.summary) : ''}</em></li>`;
+  return `<section class="panel"><h2>Tutorials using ${esc(p.n)}</h2>` + (rs.length
+    ? `<p class="s">Step-by-step tutorials, recipes and palettes shared by painters on The Painters Desk that use this paint.</p><ul class="m u">${rs.map(li).join('')}</ul>`
+    : `<p class="s">No shared tutorials use ${esc(p.n)} yet. <a href="/#/new">Make the first one</a>.</p>`) + '</section>';
+}
+
+function paintPage(D, p, rs) {
   const br = D.brands[p.b], range = D.GL[p.g] || '', md = matches(D, p);
   const best = md.map(o => ({ br: o.br, m: [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0] })).filter(o => o.m);
   const brandName = br.name.replace(' / Warhammer', '');
@@ -196,7 +224,8 @@ function paintPage(D, p) {
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
 ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Swatches are estimates, so check the real paints before you commit.</p>
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a></p>
-<div class="grid">${md.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o.ch.map(m => item(m, 1)).join('')}${o.near.map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>`;
+<div class="grid">${md.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o.ch.map(m => item(m, 1)).join('')}${o.near.map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>
+${usedInHTML(p, rs)}`;
   return page({
     title, desc, path: paintUrl(p), body,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
