@@ -70,6 +70,7 @@ function route(){
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
  if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
+ countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'))));
  if(view==='welcome')renderWelcome();
@@ -83,6 +84,9 @@ function route(){
  else if(view==='admin')renderAdmin();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
+// Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
+let REF=document.referrer;
+function countHit(p){if(!API)return;const r=REF;REF='';fetch('/api/hit',{method:'POST',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({p,r})}).catch(()=>{})}
 function renderWelcome(){
  $('wCount').textContent=P.length.toLocaleString('en');
  const b=BRANDS.map(x=>x[0].split(' / ')[0]);$('wBrands').textContent=b.slice(0,-1).join(', ')+' and '+b[b.length-1]}

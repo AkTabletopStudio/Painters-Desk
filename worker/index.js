@@ -50,7 +50,7 @@ const PROVIDERS = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     // One address for the whole site, so sign-in redirect URLs and the session cookie always match.
     if (url.hostname.startsWith('www.')) {
@@ -63,7 +63,11 @@ export default {
       });
       return Response.redirect(url.toString(), 301);
     }
-    if (isSeoPath(url.pathname)) return seo(request, env, url);
+    if (isSeoPath(url.pathname)) {
+      const r = await seo(request, env, url);
+      if (r.status === 200 && request.method === 'GET' && url.pathname !== '/sitemap.xml') ctx?.waitUntil(countVisit(request, env, url.pathname, request.headers.get('Referer'), url));
+      return r;
+    }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
       // Writes must come from this site's own pages (blocks cross-site form posts using the session cookie).
@@ -116,6 +120,7 @@ async function route(request, env, url) {
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/save$/)) && m === 'PUT') return setSave(request, env, r[1]);
   if ((r = p.match(/^\/api\/comments\/([\w-]+)$/)) && m === 'DELETE') return deleteComment(request, env, r[1]);
   if (p === '/api/feedback' && m === 'POST') return sendFeedback(request, env);
+  if (p === '/api/hit' && m === 'POST') return hit(request, env, url);
   if (p === '/api/me/updates' && m === 'PUT') return setUpdates(request, env);
   if (p === '/api/unsubscribe' && (m === 'GET' || m === 'POST')) return unsubscribe(request, env, url);
   if (p === '/api/admin/announce' && m === 'GET') return announceInfo(request, env);
@@ -1182,6 +1187,57 @@ async function setSave(request, env, recipeId) {
 // The Feedback button on every page. Saved to D1 and emailed to FEEDBACK_TO (else the first ADMIN_EMAILS address).
 // A hidden "website" field catches form-filling bots; each sender (by IP) can post 5 an hour.
 const FEEDBACK_KINDS = { bug: 'Bug', suggestion: 'Suggestion', other: 'Other' }, FEEDBACK_PER_HOUR = 5;
+
+// ---------- visit counts ----------
+// Anonymous counts for the owner's daily report: page views and referring sites per UTC hour, and unique
+// visitors per day as a salted hash (see migrations/0012_traffic.sql). The app's own views (#/recipes etc.)
+// are reported by the page itself through /api/hit; the paint pages and guides are counted here as they're served.
+const BOT_UA = /bot|crawl|spider|slurp|preview|fetch|monitor|headless|lighthouse|curl|wget|python|axios|node-fetch/i;
+
+async function hit(request, env, url) {
+  const b = await body(request);
+  const path = typeof b.p === 'string' && /^#\/[\w-]{0,40}(\/[\w-]{1,40})?$/.test(b.p) ? b.p : null;
+  if (!path) throw new HttpError(400, 'Bad page');
+  await countVisit(request, env, path, typeof b.r === 'string' ? b.r : null, url);
+  return new Response(null, { status: 204 });
+}
+
+let SALT = null;
+async function countVisit(request, env, path, referrer, url) {
+  try {
+    const ua = request.headers.get('User-Agent') || '';
+    const t = now(), iso = new Date(t).toISOString(), hour = iso.slice(0, 13), day = iso.slice(0, 10);
+    if (!ua || BOT_UA.test(ua)) {
+      await env.DB.prepare("INSERT INTO page_views (hour, path, views) VALUES (?, '[bots]', 1) ON CONFLICT (hour, path) DO UPDATE SET views = views + 1").bind(hour).run();
+      return;
+    }
+    if (SALT?.day !== day) {
+      await env.DB.prepare('INSERT OR IGNORE INTO traffic_salt (day, salt) VALUES (?, ?)').bind(day, crypto.randomUUID()).run();
+      const row = await env.DB.prepare('SELECT salt FROM traffic_salt WHERE day = ?').bind(day).first();
+      SALT = { day, salt: row.salt };
+      // A new day: forget old salts and visitor rows so nothing links back to an older day.
+      const old = new Date(t - 2 * 86400000).toISOString().slice(0, 10);
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM traffic_salt WHERE day < ?').bind(old),
+        env.DB.prepare('DELETE FROM visitors WHERE day < ?').bind(old),
+      ]);
+    }
+    const id = await sha256(SALT.salt + '|' + (request.headers.get('CF-Connecting-IP') || '') + '|' + ua);
+    const q = [
+      env.DB.prepare('INSERT INTO page_views (hour, path, views) VALUES (?, ?, 1) ON CONFLICT (hour, path) DO UPDATE SET views = views + 1').bind(hour, path),
+      env.DB.prepare('INSERT INTO visitors (id, day, last) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET last = excluded.last').bind(id, day, t),
+    ];
+    let host = '';
+    try { host = referrer ? new URL(referrer).hostname.replace(/^www\./, '') : ''; } catch (e) {}
+    if (host && host !== url.hostname && host.length <= 100) {
+      q.push(env.DB.prepare('INSERT INTO referrers (hour, host, n) VALUES (?, ?, 1) ON CONFLICT (hour, host) DO UPDATE SET n = n + 1').bind(hour, host));
+    }
+    await env.DB.batch(q);
+  } catch (e) {
+    // Counting must never break a page (the tables may not exist until migration 0012 is applied).
+    console.error('Visit count failed', e);
+  }
+}
 
 async function sendFeedback(request, env) {
   const b = await body(request);
