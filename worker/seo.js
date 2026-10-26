@@ -24,6 +24,12 @@ export async function seo(request, env, url) {
   let r;
   if (p === '/sitemap.xml') r = send(sitemap(D), 'application/xml; charset=utf-8');
   else if (p === '/paints') r = send(indexPage(D));
+  else if (p === '/paints/find') {
+    // The colour wheel links a selected paint here by its key (range|code|name); send it on to that paint's page.
+    const [g, c, ...n] = (url.searchParams.get('k') || '').split('|');
+    const paint = D.P.find(x => x.g === g && x.c === c && x.n === n.join('|'));
+    return Response.redirect(url.origin + (paint && paint.url ? paint.url : '/paints'), 302);
+  }
   else if (p === '/guides') r = send(guidesPage(D));
   else if (p.startsWith('/guides/')) {
     const g = GUIDES.find(x => '/guides/' + x.slug === p);

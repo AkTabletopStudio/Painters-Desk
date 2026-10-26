@@ -110,6 +110,8 @@ glaze:{name:'Glazes',full:'Glazing blend',sum:'Glazing blend built on the Painte
   out.forEach((x,i)=>x.w=w[i]);
   return NMO.t?tintAt(out,Math.max(8,L0*.4),Math.max(10,C0*.4),(h0+180)%360):out},
  tip:{'Deep glaze':'Very thin, built up in the deepest recesses over several coats.','Shadow glaze':'Thin coats over the shaded areas, letting each dry.','Base':'Thinned a little so it goes on smooth. Cover the whole area.','Glaze 1':'Thin coats over the lit two thirds. Wipe most of the paint off the brush first.','Glaze 2':'Thinner, over a smaller area inside the last.','Glaze 3':'Thinner again, over a smaller area.','Final glaze':'The thinnest, only on the highest points. Several coats build it up.'}}};
+// Ramp techniques with their own /guides page (worker/seo.js GUIDES).
+const TQ_GUIDE={nmm:'best-paints-for-nmm',osl:'best-paints-for-osl',skin:'best-paints-for-skin-tones',gem:'best-paints-for-gems'};
 const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
 /* ---------- Blend mode ----------
    A blend starts from the wheel's own picks (two complements on the shadow side, two neighbours on the light side,
@@ -207,7 +209,8 @@ document.getElementById('nmmTut').onclick=()=>{NMM_DRAFT={kind:'recipe',title:T.
  steps:R.filter(x=>x.p).map(x=>({title:x.r,text:T.tip[x.r]||'',image:'',mix:[{k:x.p.k,parts:1}].concat(T.glaze?[{k:'water',parts:x.w}]:[])}))};location.hash='#/new'}}
 function nmmUI(){const n=MODE==='nmm',T=TQN(),ss=T.steps||['5','7'];[['mCol','col'],['mNmm','nmm'],['mMix','mix']].forEach(([id,m])=>{const e=document.getElementById(id);e.classList.toggle('pri',MODE===m);e.setAttribute('aria-pressed',MODE===m)});document.getElementById('nmmOpt').hidden=!n;
 document.getElementById('nTech').value=NMO.q;const o=document.getElementById('nSteps').options;o[0].textContent=ss[0];o[1].textContent=ss[1];
-document.getElementById('nSteps').value=String(NMO.n);document.getElementById('nTint').checked=NMO.t;document.getElementById('nTintL').hidden=!T.tint;document.getElementById('nTintT').textContent=T.tint}
+document.getElementById('nSteps').value=String(NMO.n);document.getElementById('nTint').checked=NMO.t;document.getElementById('nTintL').hidden=!T.tint;document.getElementById('nTintT').textContent=T.tint;
+const gl=document.getElementById('nGuide'),gs=TQ_GUIDE[NMO.q];gl.hidden=!gs;if(gs){gl.href='guides/'+gs;gl.textContent=T.name+' guide →'}}
 function setMode(m){MODE=m;nmmSave();nmmUI();nmmSkip=[];ACT=null;if(m==='nmm'||m==='mix')NB=NB&&!CH.includes(NB)&&!sel?NB:sel;else if(NB&&!CH.includes(NB)){const p=NB;NB=null;draw();neutralShow(p);return}draw()}
 document.getElementById('nTech').innerHTML=TQK.map(k=>`<option value="${k}">${TQ[k].full}</option>`).join('');
 document.getElementById('mCol').onclick=()=>setMode('col');document.getElementById('mNmm').onclick=()=>setMode('nmm');document.getElementById('mMix').onclick=()=>setMode('mix');
@@ -309,7 +312,12 @@ function matchData(p){const i=p.i,mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map
 BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;const ch=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d);
 const have=new Set(ch.map(m=>m.p));const near=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d).slice(0,ch.length?2:3);
 out.push({bn,ch,near})});return out}
-function matchHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>';
+// Links from a selected paint to its own paint page (the Worker's /paints/find looks up the page by paint key) and to a conversion chart for its brand.
+const CONV_G={'Citadel / Warhammer':['guides','Conversion charts'],'Army Painter':['guides/army-painter-to-citadel','Army Painter to Citadel chart'],'Vallejo':['guides/vallejo-to-citadel','Vallejo to Citadel chart'],
+ 'Pro Acryl':['guides/pro-acryl-to-citadel','Pro Acryl to Citadel chart'],'AK Interactive':['guides/citadel-to-ak-interactive','Citadel to AK chart'],'Scale75':['guides/citadel-to-scale75','Citadel to Scale75 chart']};
+function guideLinks(p){if(p.g==='B')return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]];
+ return`<p class="s glinks"><a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
+function matchHTML(p){const md=matchData(p);let h=guideLinks(p)+'<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>';
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
 md.forEach(o=>{if(!o.ch.length&&!o.near.length)return;h+=`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o.ch.map(m=>c(m,1)).join('')}${o.near.map(m=>c(m,0)).join('')}</div></div>`});
 if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
