@@ -5,6 +5,7 @@
 // so new paints get a page as soon as they're added to data.js. Nothing here needs a build step.
 
 import { TECH_TEXT } from './tech-guides.js';
+import { ANATOMY, HAIR, SHAPES, JOBS, CARE, MISTAKES, PICKS } from './brush-guides.js';
 
 const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
@@ -457,6 +458,10 @@ const GUIDES = [
   ...Object.entries(TECH_TEXT).map(([q, t]) => ({ ...t, q, published: ['zen', 'edge', 'glaze'].includes(q) ? '2026-10-26' : GUIDE_DATE })),
   { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true, label: 'Colour theory',
     blurb: 'Hue, value and saturation, colour schemes, and how the colour wheel picks complements and matches.' },
+  { slug: 'miniature-paint-brushes', page: brushTypesPage, brush: 1, title: 'Brush types for miniature painting', label: 'Brush types',
+    blurb: 'Hair, shapes and sizes, which brush for which job, and how to keep a point.' },
+  { slug: 'best-brushes-for-miniature-painting', page: bestBrushesPage, brush: 2, title: 'The best brushes for miniature painting', label: 'The best brushes',
+    blurb: 'Well-known brushes for each job, from cheap synthetics to kolinsky sable.' },
 ];
 
 const brandBy = (D, s) => D.brands.find(b => b.slug === s);
@@ -756,20 +761,95 @@ ${guideLinks(g)}`;
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [ld] });
 }
 
+/* ---------- brush guides: the words are in brush-guides.js ---------- */
+
+const BRUSH_DATE = '2026-10-26';
+const brushLD = (path, title, desc) => article(path, title, desc, BRUSH_DATE);
+const row = cells => `<tr>${cells.map((c, i) => i ? `<td>${c}</td>` : `<td><b>${c}</b></td>`).join('')}</tr>`;
+const table = (head, rows) => `<div class="tw"><table class="cv"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(row).join('')}</tbody></table></div>`;
+
+// A round brush lying on its side, hair to the left, with the parts labelled.
+function brushSVG() {
+  const lab = (x, t, up) => `<line x1="${x}" y1="${up ? 52 : 88}" x2="${x}" y2="${up ? 26 : 112}" stroke="currentColor" stroke-width="1.5"/><text x="${x}" y="${up ? 18 : 128}" text-anchor="middle" font-size="13" fill="currentColor">${t}</text>`;
+  return `<svg class="pic" viewBox="0 0 340 140" role="img" aria-label="A round brush with its tip, belly, heel, ferrule and handle labelled">
+<path d="M12 70 C40 66 70 52 104 52 L118 54 L118 86 L104 88 C70 88 40 74 12 70 Z" fill="#b5652a" stroke="currentColor" stroke-width="2.5"/>
+<rect x="118" y="54" width="62" height="32" rx="3" fill="#c9ccd1" stroke="currentColor" stroke-width="2.5"/><path d="M172 54v32" stroke="currentColor" stroke-width="1.5"/>
+<path d="M180 58 L330 64 Q336 70 330 76 L180 82 Z" fill="#7a1f2b" stroke="currentColor" stroke-width="2.5"/>
+${lab(22, 'Tip', 1)}${lab(72, 'Belly', 0)}${lab(110, 'Heel', 1)}${lab(150, 'Ferrule', 0)}${lab(260, 'Handle', 1)}</svg>`;
+}
+
+function brushTypesPage(D, g) {
+  const path = '/guides/' + g.slug, title = g.title;
+  const desc = 'Brush types for miniature painting: the parts of a brush, kolinsky sable vs synthetic hair, round, detail, flat, drybrush and wash shapes, what brush sizes mean, which brush to use for each job, and how to care for your brushes.';
+  const job = ([j, b, w, l]) => [l ? `<a href="${l}">${j}</a>` : j, b, w];
+  const body = `<h1>${esc(title)}</h1>
+<div class="prose"><p>You can paint a whole army with two or three brushes, as long as they are the right ones. This guide explains what a brush is made of, the different hairs and shapes, what the sizes mean, and which brush to reach for at each stage of a model. If you just want names, see <a href="/guides/best-brushes-for-miniature-painting">the best brushes for miniature painting</a>.</p></div>
+
+<section class="panel"><h2>The parts of a brush</h2>
+<div class="hero"><figure>${brushSVG()}</figure><div class="prose" style="flex:1;min-width:260px"><dl>${ANATOMY.map(([n, t]) => `<dt><b>${n}</b></dt><dd>${t}</dd>`).join('')}</dl></div></div>
+<div class="prose"><p style="margin-top:12px">For miniatures, <b>the point is everything</b>. A brush with a fine, single point can paint a hairline and a whole cloak, depending on how much of the hair you press down. A brush that splits into two points or curls at the tip can't do either well, whatever its size.</p></div></section>
+
+<section class="panel"><h2>Hair: sable, synthetic or a blend</h2>
+${table(['Hair', 'What it is like', 'Best for'], HAIR)}
+<div class="prose"><p style="margin-top:12px">Most painters end up with both: one or two good kolinsky rounds for layering and detail, and a handful of cheap synthetics for everything that is hard on a brush. If you would rather not use animal hair, a good synthetic blend round is a perfectly good main brush; replace it more often.</p></div></section>
+
+<section class="panel"><h2>Shapes</h2>
+${table(['Shape', 'Looks like', 'Use it for'], SHAPES)}</section>
+
+<section class="panel prose"><h2>What the sizes mean</h2>
+<p>Round brushes are numbered from very small (000, also written 3/0, and smaller still) through 0, 1 and 2 up to large sizes like 8 or 12. There is <b>no shared standard</b>: a size 1 from one maker can be noticeably bigger or smaller than another's, and the length of the hair matters as much as the width. Some makers publish the real size; Rosemary &amp; Co, for example, give their Series 33 size 1 as 1.7 mm across and 11.8 mm long.</p>
+<p>For 28 to 32 mm models, a <b>size 1 or 2 round</b> with a sharp point does most of the work, including much of the detail. Smaller brushes hold less paint, so the tip dries out before you finish a line; that is why experienced painters often do eyes with a size 1 rather than a 000. Bigger models, busts and vehicles want bigger brushes.</p></section>
+
+<section class="panel"><h2>Which brush for which job</h2>
+${table(['Job', 'Brush', 'Why'], JOBS.map(job))}
+<p class="s" style="margin-top:8px">Linked jobs have their own step-by-step guide, with the best paints for each step.</p></section>
+
+<section class="panel prose"><h2>Looking after your brushes</h2><ul>${CARE.map(x => `<li>${x}</li>`).join('')}</ul></section>
+
+<section class="panel prose"><h2>Common mistakes</h2><ul>${MISTAKES.map(x => `<li>${x}</li>`).join('')}</ul></section>
+${guideLinks(g)}`;
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [brushLD(path, title, desc)] });
+}
+
+function bestBrushesPage(D, g) {
+  const path = '/guides/' + g.slug, title = g.title;
+  const desc = 'The best brushes for miniature painting, by job: everyday synthetics, kolinsky sable rounds such as Winsor & Newton Series 7, Raphaël 8404, Rosemary & Co Series 33 and Artis Opus Series S, detail brushes, drybrushes and wash brushes.';
+  const sec = x => `<section class="panel"><h2>${x.h}</h2><p class="s">${x.s}</p>
+<ul class="m u">${x.rows.map(([n, h, t, l, src]) => `<li><b>${n}</b><em>${h} · ${l}</em>${t}${src ? ` <a href="${src}" rel="nofollow noopener" target="_blank">Source</a>` : ''}</li>`).join('')}</ul></section>`;
+  const body = `<h1>${esc(title)}</h1>
+<div class="prose"><p>There is no single best brush: there is a best brush for each job, and a good kit is a mix of cheap and expensive. Below are well-known brushes that miniature painters use, grouped by job. For what the hair types and shapes mean, see <a href="/guides/miniature-paint-brushes">brush types for miniature painting</a>.</p>
+<p><b>How we picked.</b> We only list brushes whose hair, sizes or purpose we could check on the maker's page or a stockist's listing, linked as the source. Price levels compare the brushes with each other; we don't give prices, because they change and differ by country. The Painters Desk doesn't sell brushes and earns nothing from these links. Brush names are trademarks of their makers.</p></div>
+
+<section class="panel prose"><h2>A good first kit</h2><ol>
+<li><b>One kolinsky or good synthetic-blend round, size 1 or 2,</b> for layering, highlights and detail. Look after it.</li>
+<li><b>Two or three cheap synthetic rounds,</b> small to large, for basecoats, washes, contrast paints and metallics.</li>
+<li><b>A drybrush.</b></li>
+<li><b>An old brush</b> for glue, varnish and texture.</li></ol>
+<p>Add a second good round, a bigger one for large models, or a detail brush, when you find yourself missing it.</p></section>
+${PICKS.map(sec).join('\n')}
+<section class="panel prose"><h2>Before you buy</h2><ul>
+<li>Sizes aren't standard between makers, so compare the hair length and width where the maker lists them, not just the number.</li>
+<li>Even good brushes vary. If a new kolinsky won't come to a point when wet, most shops will swap it.</li>
+<li>A good brush lasts far longer with care: see <a href="/guides/miniature-paint-brushes">looking after your brushes</a>.</li></ul></section>
+${guideLinks(g)}`;
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [brushLD(path, title, desc)] });
+}
+
 // Exported for tools/check_seo.mjs: builds every guide page and the brand guides, returns how many guides there are.
 export function renderGuides(D) {
   GUIDES.forEach(g => {
     const html = guideHTML(D, g);
-    if (!html.includes('<table') && !html.includes('class="ramp"') && !html.includes('class="wheel"')) throw new Error('Empty guide: ' + g.slug);
+    if (!html.includes('<table') && !html.includes('class="ramp"') && !html.includes('class="wheel"') && !html.includes('class="m u"')) throw new Error('Empty guide: ' + g.slug);
     if (g.conv && g.conv.some(s => !brandBy(D, s))) throw new Error('Unknown brand in ' + g.slug);
   });
   D.brands.forEach(b => brandPage(D, b));
   return GUIDES.length;
 }
 
-// The guides in the order the /guides list shows them: colour theory, techniques from easiest to hardest, then conversion
-// charts (from Citadel, then to Citadel).
-const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level), ...GUIDES.filter(g => g.conv)];
+// The guides in the order the /guides list shows them: colour theory, techniques from easiest to hardest, brushes, then
+// conversion charts (from Citadel, then to Citadel).
+const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level),
+  ...GUIDES.filter(g => g.brush).sort((a, b) => a.brush - b.brush), ...GUIDES.filter(g => g.conv)];
 
 function guideLinks(cur) {
   const li = g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`;
@@ -779,13 +859,14 @@ function guideLinks(cur) {
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
   const title = 'Miniature painting guides and paint conversion charts';
-  const desc = 'Colour theory for miniature painters, step-by-step guides to edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, and Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, built from ' + n + ' paints. Swatch colours are estimates.';
+  const desc = 'Colour theory for miniature painters, step-by-step guides to edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, built from ' + n + ' paints. Swatch colours are estimates.';
   const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${TECH[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
   const charts = (k, h) => `<div><h3>${h}</h3><ul class="m">${GUIDES.filter(g => g.conv && g.conv[k] === 'citadel').map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div>`;
   const body = `<h1>Paint guides</h1>
-<p class="prose">Guides to colour and painting techniques, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
+<p class="prose">Guides to colour, painting techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
 <section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
+<section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
 <section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}</div></section>
 <p>Looking for one paint? <a href="/paints">Browse every brand</a>.</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
