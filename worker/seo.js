@@ -27,7 +27,7 @@ export async function seo(request, env, url) {
   else if (p === '/guides') r = send(guidesPage(D));
   else if (p.startsWith('/guides/')) {
     const g = GUIDES.find(x => '/guides/' + x.slug === p);
-    r = g ? send(g.conv ? convPage(D, g) : techPage(D, g)) : send(notFound(), 'text/html; charset=utf-8', 404);
+    r = g ? send(guideHTML(D, g)) : send(notFound(), 'text/html; charset=utf-8', 404);
   } else {
     const [, b, s, extra] = p.split('/').slice(1);
     const br = D.brands.find(x => x.slug === b);
@@ -245,6 +245,10 @@ ol.ramp{list-style:none;margin:0;padding:0}
 ol.ramp li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
 ol.ramp em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .chip{display:flex;height:18px;border:2px solid var(--ink);border-radius:9px;overflow:hidden;margin:4px 0 10px}.chip i{flex:1}
+.schs{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin:12px 0}
+.sch h3{margin:0 0 6px;font-size:17px}.sch svg{display:block;margin:0 auto 6px;color:var(--ink);max-width:100%;height:auto}.sch p{margin:0 0 8px;font-size:15px}
+svg.wheel{width:100%;max-width:340px;height:auto;color:var(--ink);flex:none}
+.prose h3{font-size:17px;margin:4px 0 6px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
 ${THEME.css}</style></head>
 <body><div class="wrap">
 <header><a class="logo" href="/"><img src="/icons/icon-192.png" alt="" width="32" height="32" id="pdi">The Painters Desk</a><nav class="top"><a href="/paints">Paints</a><a href="/guides">Guides</a><a class="btn on" href="/">Open the colour wheel</a></nav></header>
@@ -448,6 +452,7 @@ const GUIDES = [
   { slug: 'best-paints-for-gems', q: 'gem', title: 'Best paints for gems and lenses', short: 'Gems',
     intro: 'Gems and lenses are painted back to front: dark on the side nearest the light, bright on the far side where light comes through, with a white glint opposite the bright reflection.',
     how: 'Fill the gem with the deepest shadow, blend up in crescents toward the far side, then add the reflected light and a single sharp glint.' },
+  { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true },
 ];
 
 const brandBy = (D, s) => D.brands.find(b => b.slug === s);
@@ -549,11 +554,126 @@ ${guideLinks(g)}`;
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc)] });
 }
 
+/* ---------- colour theory guide ---------- */
+
+const guideHTML = (D, g) => g.page ? g.page(D, g) : g.conv ? convPage(D, g) : techPage(D, g);
+const THEORY_DATE = '2026-10-26';
+
+// Hue, saturation and lightness of a swatch, worked out the same way as the wheel in app.js (HSL from the hex colour).
+function hslOf(h) {
+  const r = parseInt(h.slice(1, 3), 16) / 255, g = parseInt(h.slice(3, 5), 16) / 255, b = parseInt(h.slice(5, 7), 16) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, L = (mx + mn) / 2;
+  let H = 0;
+  if (d) { H = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; H = (H * 60 + 360) % 360 }
+  return { H, S: d ? d / (1 - Math.abs(2 * L - 1)) : 0, L };
+}
+const hueD = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d };
+const onWheel = p => p.S >= .14 && p.L > .07 && p.L < .95;
+// Point on a wheel of radius r around (c, c), 0 degrees at the top and going clockwise, as on the site.
+const pol = (c, r, deg) => [c + r * Math.cos((deg - 90) * Math.PI / 180), c + r * Math.sin((deg - 90) * Math.PI / 180)].map(v => +v.toFixed(1));
+
+// A hue ring with spokes and dots at the given angles: the little diagrams for each colour scheme.
+function hueRing(c, R, w) {
+  const seg = [];
+  for (let a = 0; a < 360; a += 10) {
+    const [x1, y1] = pol(c, R, a - 5.2), [x2, y2] = pol(c, R, a + 5.2), [x3, y3] = pol(c, R - w, a + 5.2), [x4, y4] = pol(c, R - w, a - 5.2);
+    seg.push(`<path d="M${x1} ${y1}A${R} ${R} 0 0 1 ${x2} ${y2}L${x3} ${y3}A${R - w} ${R - w} 0 0 0 ${x4} ${y4}Z" fill="hsl(${a} 75% 52%)"/>`);
+  }
+  return seg.join('');
+}
+function ringSVG(angles, size = 150) {
+  const c = size / 2, R = c - 12, seg = [hueRing(c, R, 14)];
+  const dots = angles.map(a => { const [x, y] = pol(c, R - 7, a); return `<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="2"/><circle cx="${x}" cy="${y}" r="8" fill="hsl(${a} 75% 52%)" stroke="currentColor" stroke-width="3"/>` });
+  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-hidden="true">${seg.join('')}${dots.join('')}</svg>`;
+}
+
+function theoryPage(D, g) {
+  const cit = D.brands.find(b => b.slug === 'citadel');
+  // Opaque Citadel paints on the wheel, leaving out Air (the same colours again, thinned) and any repeated names.
+  const seen = new Set();
+  const pool = cit.paints.filter(p => p.t === 'op' && !/\bair\b/i.test(D.GL[p.g]) && !seen.has(p.n) && seen.add(p.n)).map(p => ({ p, ...hslOf(p.h) })).filter(onWheel);
+  // The opaque Citadel paint closest to a hue, preferring mid-tone, fairly saturated paints so the examples read clearly.
+  const near = (h, used) => pool.filter(x => !used.has(x.p)).map(x => ({ x, k: hueD(x.H, h) * 1.5 + Math.abs(x.L - .42) * 60 + Math.max(0, .45 - x.S) * 80 }))
+    .sort((a, b) => a.k - b.k)[0]?.x;
+  const chips = (hs) => { const used = new Set(); return hs.map(h => near(h, used)).filter(Boolean).map(x => { used.add(x.p); return x }) };
+  const chipList = xs => `<ul class="m">${xs.map(x => `<li><i class="sw" style="background:${x.p.h}"></i><span><a href="${x.p.url}">${esc(x.p.n)}</a><em>${esc(D.GL[x.p.g])} · hue ${Math.round(x.H)}°</em></span></li>`).join('')}</ul>`;
+
+  // Worked example: Macragge Blue, with complements and neighbours picked by the wheel's rules from Citadel's opaque paints.
+  const ex = pool.find(x => x.p.n === 'Macragge Blue') || pool[0];
+  const th = (ex.H + 180) % 360, rest = pool.filter(x => x !== ex);
+  const comp = rest.filter(x => hueD(x.H, th) <= 22).sort((a, b) => hueD(a.H, th) - hueD(b.H, th)).slice(0, 6);
+  const ana = rest.filter(x => hueD(x.H, ex.H) <= 25).sort((a, b) => hueD(a.H, ex.H) - hueD(b.H, ex.H)).slice(0, 6);
+  const srt = [...pool].sort((a, b) => a.L - b.L);
+  srt.forEach((x, i) => x.rk = i / Math.max(1, srt.length - 1));
+  const W = 340, c = W / 2, hit = new Map([[ex, 'ex'], ...comp.map(x => [x, 'co']), ...ana.map(x => [x, 'an'])]);
+  const dots = [...pool].sort((a, b) => (hit.has(a) ? 1 : 0) - (hit.has(b) ? 1 : 0)).map(x => {
+    const [px, py] = pol(c, 34 + (.55 * x.rk + .45 * Math.min(1, Math.max(0, (x.L - .1) / .85))) * 112, x.H), k = hit.get(x);
+    return `<circle cx="${px}" cy="${py}" r="${k ? 8 : 5}" fill="${x.p.h}" stroke="currentColor" stroke-width="${k === 'ex' ? 4 : k ? 2.5 : 1}"${k ? '' : ' opacity=".55"'}><title>${esc(x.p.n)}</title></circle>`;
+  });
+  const [ax, ay] = pol(c, 158, ex.H), [bx, by] = pol(c, 158, th);
+  const wheel = `<svg class="wheel" viewBox="0 0 ${W} ${W}" role="img" aria-label="Citadel's opaque paints on a colour wheel, with Macragge Blue, its complements and its neighbours outlined">
+${hueRing(c, 168, 6)}<circle cx="${c}" cy="${c}" r="24" fill="none" stroke="currentColor" stroke-width="1" opacity=".4"/>
+<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 5"/>${dots.join('')}</svg>`;
+
+  const schemes = [
+    ['Complementary', [ex.H, th], 'Two hues opposite each other. The strongest contrast you can get from colour alone: blue armour with orange or brass trim, a green cloak with a red gem. Use one as the main colour and the other in small amounts so it draws the eye.'],
+    ['Analogous', [ex.H - 30, ex.H, ex.H + 30], 'Neighbouring hues. Calm and natural, and the easiest way to make a model look unified. Neighbours are also good for shading and highlighting: shift a little along the wheel as you go darker or lighter.'],
+    ['Split complementary', [ex.H, th - 30, th + 30], 'One hue plus the two on either side of its complement. Almost as lively as a complementary scheme but easier to balance, a good default for a squad or a character.'],
+    ['Triadic', [ex.H, ex.H + 120, ex.H + 240], 'Three hues evenly spaced. Bright and busy, so let one colour lead, use the second for large details and the third only for spot colour.'],
+  ].map(([n, hs, t]) => { hs = hs.map(h => (h + 360) % 360); return `<div class="sch"><h3>${n}</h3>${ringSVG(hs)}<p>${t}</p><p class="s">Citadel paints at these hues:</p>${chipList(chips(hs))}</div>` });
+
+  const path = '/guides/' + g.slug, title = g.title;
+  const desc = 'Colour theory for miniature painters: hue, value and saturation, the colour wheel, complementary, analogous, split complementary and triadic schemes, warm and cool, and how The Painters Desk colour wheel places paints and picks complements and matches.';
+  const body = `<h1>Colour theory for miniature painters</h1>
+<div class="prose"><p>Colour theory is a handful of ideas about how colours relate to each other: which ones contrast, which ones sit together quietly, and how to make a model read clearly from across the table. This guide covers the basics, then explains how <a href="/">the colour wheel on The Painters Desk</a> puts those ideas to work on real paints, and where it bends the textbook rules.</p></div>
+
+<section class="panel prose"><h2>Hue, value and saturation</h2>
+<p>Every colour can be described three ways. <b>Hue</b> is the colour family: red, orange, blue and so on, the thing that goes around a colour wheel. <b>Value</b> (or lightness) is how light or dark it is. <b>Saturation</b> (or chroma) is how intense it is, from a vivid pure colour down to a dull grey.</p>
+<p>Of the three, value matters most on a miniature. A model is small and usually seen from arm's length, so it is the contrast between light and dark that shows its shape. Squint at a model, or take a black and white photo of it: if the parts blur into one grey, they need more value contrast, whatever their hues. Saturation comes next: keep the strongest colour for the thing you want people to look at, and let the rest be a little duller.</p>
+<div class="chip tall" title="The same hue at different values">${[15, 30, 45, 60, 75, 88].map(L => `<i style="background:${labHex(lab3(L, 40, 270))}"></i>`).join('')}</div>
+<div class="chip tall" title="The same hue at different saturations">${[0, 10, 20, 32, 46, 60].map(C => `<i style="background:${labHex(lab3(50, C, 40))}"></i>`).join('')}</div>
+<p class="s">Top: one hue, dark to light (value). Bottom: one hue, grey to intense (saturation).</p></section>
+
+<section class="panel prose"><h2>The colour wheel</h2>
+<p>A colour wheel arranges hues in a circle, so every colour sits between its neighbours and opposite its <b>complement</b>. Painters traditionally learn a red, yellow and blue wheel (RYB), where red sits opposite green, yellow opposite purple and blue opposite orange. Screens use a red, green and blue wheel of light (RGB), which spaces the hues a little differently: there red sits opposite a blue-green, and yellow opposite a deep blue.</p>
+<p>Neither is "correct". Both are models, and real paints are made from pigments that don't follow either one exactly. Mixing two complements together dulls them toward a brown or grey, which is why a thin glaze of the complement is a classic way to knock back a colour that is too bright, and why you get mud when complements mix by accident on a wet model.</p>
+<p><b>Warm and cool.</b> Reds, oranges and yellows feel warm and seem to come forward; blues, greens and violets feel cool and seem to sit back. Many painters shift the hue as well as the value along a ramp: cooler or more purple in the shadows, warmer or more yellow in the highlights. It makes a ramp look lit, rather than just darker and lighter.</p></section>
+
+<section class="panel"><h2>Colour schemes</h2>
+<p class="prose">These are the classic ways to pick colours for a model or an army, with the Citadel paints nearest each hue as an example. The angles here are the same hue angles the colour wheel uses.</p>
+<div class="schs">${schemes.join('')}</div>
+<p class="prose">Two more worth knowing: a <b>monochrome</b> scheme uses one hue at many values (great for a single-colour army that still reads well), and a <b>neutral plus accent</b> scheme puts one strong colour against blacks, greys, browns and metals, which is how most grimdark armies are painted.</p></section>
+
+<section class="panel"><h2>How The Painters Desk uses the colour wheel</h2>
+<div class="hero">${wheel}<div class="prose" style="flex:1;min-width:260px">
+<p>This is a small version of the site's wheel showing only Citadel's opaque paints, without the push-apart, so some dots overlap. <b>${esc(ex.p.n)}</b> has the thick outline; its complements (across the dashed line) and its neighbours have thinner outlines.</p>
+<p><b>Around the wheel: the paint's own hue.</b> Each paint sits at the true hue angle of its swatch colour, measured the screen (RGB) way, with red at the top and the hues running clockwise through yellow, green, blue and purple. We don't squeeze the hues into a painter's RYB wheel, because that would mean bending every paint's real position by a different amount.</p>
+<p><b>Centre to rim: lightness.</b> Dark paints sit near the centre and light ones near the rim. The distance mixes each paint's lightness with its rank among the paints you're showing, so a crowd of mid tones still spreads out.</p>
+<p><b>Push-apart.</b> Hundreds of paints share some hues, so the dots are nudged apart until none overlap and then pulled gently back toward their true spot. A dot can end up a few degrees from its exact hue, but complements and neighbours are always worked out from the exact hues.</p>
+<p><b>Neutrals.</b> Paints with very little saturation, and near-blacks and near-whites, have no meaningful hue, so they go in the Neutrals, greys &amp; whites list under the wheel instead.</p>
+</div></div>
+<div class="prose">
+<p><b>Complements and neighbours.</b> Tap a paint and the wheel picks up to six <b>complements</b>: the paints, from the ones you're showing, whose hue is within 22° of the exact opposite, closest first. It also picks up to six <b>neighbours</b> (analogous colours) within 25° of the paint's own hue. Both are chosen by hue only, so they can be lighter or darker than your paint: pick the value you need for the job, dark ones for shading and light ones for highlights. With ${esc(ex.p.n)} and all of Citadel's opaque paints, that gives:</p>
+<div class="grid"><div><h3>Complements</h3>${comp.length ? chipList(comp) : '<p class="s">None within 22°.</p>'}</div><div><h3>Neighbours</h3>${ana.length ? chipList(ana) : '<p class="s">None within 25°.</p>'}</div></div>
+<p><b>The centre disc.</b> The disc in the middle of the wheel blends from the complements, through your paint, out to its neighbours. Each side runs from dark to light and the two sides meet where their shades match, so you can see how the colours would grade into each other on a model.</p>
+<p><b>Ramps and Blends.</b> Ramps mode turns colour theory into steps: for non-metallic metal, object source lighting, gems, skin, zenithal and edge highlights and glazes it sets a target colour for each step (shifting hue and saturation as well as lightness, as described above) and finds the nearest opaque paint for each one. Blends mode lets you pin a few paints and fills the steps between them. See the <a href="/guides/best-paints-for-nmm">technique guides</a> for examples.</p>
+<p><b>Matches between brands.</b> When you tap a paint, its matches in other brands come two ways. A <span class="ck">✓</span> means a published conversion chart lists the pair (the Two Thin Coats comparison chart, Army Painter's Fanatic conversion chart, AK's 3rd Generation equivalence table and the Herrick Games chart). A ≈ means the nearest swatch colour, measured as ΔE: the straight-line distance between the two colours in CIELAB, a colour space built so equal distances look roughly equally different (the 1976 formula, often written ΔE76). Under about 6 is a close match, over about 15 is a loose one. Unlike complements, matches use lightness and saturation as well as hue.</p>
+<p><b>Swatches are estimates.</b> Every swatch is an estimate taken from manufacturer charts, swatch photos and comparison charts, and every screen shows colour a little differently. Finish (matt, satin, metallic), coverage and how a paint dries change how it looks too. Use the wheel to narrow down your choices, then check the real paints before you commit to a whole army.</p>
+<p><a class="btn" href="/">Try it on the colour wheel</a></p>
+</div></section>
+${guideLinks(g)}`;
+  const ld = webPage(path, title, desc, 'Article', {
+    headline: title, image: OG_IMAGE, datePublished: THEORY_DATE, dateModified: THEORY_DATE,
+    author: { '@id': SITE + '/#org' }, publisher: { '@id': SITE + '/#org' }, mainEntityOfPage: SITE + path,
+  });
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [ld] });
+}
+
 // Exported for tools/check_seo.mjs: builds every guide page and the brand guides, returns how many guides there are.
 export function renderGuides(D) {
   GUIDES.forEach(g => {
-    const html = g.conv ? convPage(D, g) : techPage(D, g);
-    if (!html.includes('<table') && !html.includes('class="ramp"')) throw new Error('Empty guide: ' + g.slug);
+    const html = guideHTML(D, g);
+    if (!html.includes('<table') && !html.includes('class="ramp"') && !html.includes('class="wheel"')) throw new Error('Empty guide: ' + g.slug);
     if (g.conv && g.conv.some(s => !brandBy(D, s))) throw new Error('Unknown brand in ' + g.slug);
   });
   D.brands.forEach(b => brandPage(D, b));
@@ -568,12 +688,13 @@ function guideLinks(cur) {
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
   const title = 'Miniature paint conversion charts and paint guides';
-  const desc = 'Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, and the best paints for NMM, skin, OSL and gems, built from ' + n + ' paints. Swatch colours are estimates.';
+  const desc = 'Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, the best paints for NMM, skin, OSL and gems, and colour theory for miniature painters, built from ' + n + ' paints. Swatch colours are estimates.';
   const li = g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`;
   const body = `<h1>Paint guides</h1>
-<p class="prose">Conversion charts and paint lists built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
+<p class="prose">Conversion charts, paint lists and a colour theory primer built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <div class="grid"><section class="panel"><h2>Conversion charts</h2><ul class="m">${GUIDES.filter(g => g.conv).map(li).join('')}</ul></section>
-<section class="panel"><h2>Best paints for…</h2><ul class="m">${GUIDES.filter(g => !g.conv).map(li).join('')}</ul></section></div>
+<section class="panel"><h2>Best paints for…</h2><ul class="m">${GUIDES.filter(g => g.q).map(li).join('')}</ul></section>
+<section class="panel"><h2>Learn</h2><ul class="m">${GUIDES.filter(g => g.learn).map(li).join('')}</ul></section></div>
 <p>Looking for one paint? <a href="/paints">Browse every brand</a>.</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
 }
