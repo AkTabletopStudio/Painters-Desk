@@ -4,6 +4,8 @@
 // They are rendered from the same data.js and app.js the colour wheel uses, read from the static assets,
 // so new paints get a page as soon as they're added to data.js. Nothing here needs a build step.
 
+import { TECH_TEXT } from './tech-guides.js';
+
 const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
 
@@ -95,6 +97,8 @@ export function parse(data, app) {
   const type = typeOf(app);
   const sgFix = [...(app.match(/const SG_FIX=(\[[\s\S]*?\]\]);/) || ['', ''])[1].matchAll(/\['(\w+)','([^']+)','(#[0-9a-f]{6})'\]/g)].map(m => ({ q: m[1], n: m[2], h: m[3], lab: hexLab(m[3]) }));
   const nmmRx = new RegExp(app.match(/const NMM_RX=\/(.*?)\/i;/)[1], 'i');
+  // Technique names as the Ramps mode's Technique picker shows them.
+  const tqFull = Object.fromEntries([...app.matchAll(/\n(\w+):\{name:'[^']*',full:'([^']*)'/g)].map(m => [m[1], m[2]]));
   const brOf = {};
   brands.forEach((b, bi) => { b.slug = BRAND_SLUG[b.name] || slug(b.name); b.groups.forEach(g => brOf[g] = bi) });
 
@@ -122,7 +126,7 @@ export function parse(data, app) {
     br.bySlug.set(s, p);
     br.paints.push(p);
   });
-  return { P, MT, GL, brands, msrc, sgFix };
+  return { P, MT, GL, brands, msrc, sgFix, tqFull };
 }
 
 // Paint types, the same rules as paintType() in app.js (metallic, pearl, contrast, wash, ink, fx, tech, else 'op' for
@@ -254,7 +258,9 @@ ol.ramp em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .schs{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin:12px 0}
 .sch h3{margin:0 0 6px;font-size:17px}.sch svg{display:block;margin:0 auto 6px;color:var(--ink);max-width:100%;height:auto}.sch p{margin:0 0 8px;font-size:15px}
 svg.wheel{width:100%;max-width:340px;height:auto;color:var(--ink);flex:none}
-.prose h3{font-size:17px;margin:4px 0 6px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
+.prose h3{font-size:17px;margin:4px 0 6px}.prose ul,.prose ol{margin:0 0 12px;padding-left:22px;max-width:720px}.prose li{margin:0 0 6px}
+figure{margin:0;flex:0 1 320px;text-align:center}svg.pic{width:100%;max-width:320px;height:auto;color:var(--ink);display:block;margin:0 auto 6px}svg.chart{width:100%;max-width:520px;height:auto;color:var(--fg);flex:none}
+ol.steps li{padding:8px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ol.steps li:first-child{border-top:0}ol.steps em{font-size:15px;color:var(--fg);margin-top:2px}ol.steps .sw{width:30px;height:30px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
 ${THEME.css}</style></head>
 <body><div class="wrap">
 <header><a class="logo" href="/"><img src="/icons/icon-192.png" alt="" width="32" height="32" id="pdi">The Painters Desk</a><nav class="top"><a href="/paints">Paints</a><a href="/guides">Guides</a><a class="btn on" href="/">Open the colour wheel</a></nav></header>
@@ -446,24 +452,15 @@ const GUIDES = [
   conv('vallejo', 'citadel', 'Vallejo', 'Citadel'),
   conv('army-painter', 'citadel', 'Army Painter', 'Citadel'),
   conv('pro-acryl', 'citadel', 'Pro Acryl', 'Citadel'),
-  { slug: 'best-paints-for-nmm', q: 'nmm', title: 'Best paints for non-metallic metal (NMM)', short: 'NMM',
-    intro: 'Non-metallic metal (NMM) paints metal with ordinary opaque colours instead of metallic paint: very dark shadows, a mid tone, and highlights that go almost to white, so the eye reads the contrast as shine. Gold leans brown in the shadows and toward ivory in the highlights; steel stays a cool grey.',
-    how: 'Work from the darkest step up. Keep each band narrower than the one before, and finish with tiny glints where the light hits hardest.' },
-  { slug: 'best-paints-for-skin-tones', q: 'skin', title: 'Best paints for skin tones', short: 'Skin',
-    intro: 'A skin ramp takes a skin colour down into warm, slightly red shadows and up toward a paler, more yellow highlight. Below are ramps for pale, mid and dark skin.',
-    how: 'Basecoat the skin, shade the creases (eye sockets, under the nose and chin, between fingers), then highlight the brow, cheekbones, nose and knuckles, smaller with each step.' },
-  { slug: 'best-paints-for-osl', q: 'osl', title: 'Best paints for object source lighting (OSL)', short: 'OSL',
-    intro: 'Object source lighting (OSL) paints the glow a light source casts on the model around it. The ramp runs from a dull, unlit surface through a saturated glow to an almost white hot core.',
-    how: 'Paint the area around the light dark first, then build the glow outward from the source in thin layers, keeping the brightest steps small and close to the source.' },
-  { slug: 'best-paints-for-gems', q: 'gem', title: 'Best paints for gems and lenses', short: 'Gems',
-    intro: 'Gems and lenses are painted back to front: dark on the side nearest the light, bright on the far side where light comes through, with a white glint opposite the bright reflection.',
-    how: 'Fill the gem with the deepest shadow, blend up in crescents toward the far side, then add the reflected light and a single sharp glint.' },
+  // Technique guides, one per technique in the wheel's Ramps mode; the words are in tech-guides.js.
+  ...Object.entries(TECH_TEXT).map(([q, t]) => ({ ...t, q, published: ['zen', 'edge', 'glaze'].includes(q) ? '2026-10-26' : GUIDE_DATE })),
   { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true },
 ];
 
 const brandBy = (D, s) => D.brands.find(b => b.slug === s);
-const article = (path, title, desc) => webPage(path, title, desc, 'Article', {
-  headline: title, image: OG_IMAGE, datePublished: GUIDE_DATE, dateModified: GUIDE_DATE,
+const TECH_DATE = '2026-10-26';
+const article = (path, title, desc, pub = GUIDE_DATE, mod = pub) => webPage(path, title, desc, 'Article', {
+  headline: title, image: OG_IMAGE, datePublished: pub, dateModified: mod,
   author: { '@id': SITE + '/#org' }, publisher: { '@id': SITE + '/#org' }, mainEntityOfPage: SITE + path,
 });
 
@@ -487,19 +484,20 @@ ${guideLinks(g)}`;
 }
 
 // Technique ramps: the same targets as the Ramps mode on the wheel (TQ in app.js, 7 steps, no tint).
+// tools/check_seo.mjs checks these against TQ, so change both together.
 const lchOf = lab => [lab[0], Math.hypot(lab[1], lab[2]), (Math.atan2(lab[2], lab[1]) * 180 / Math.PI + 360) % 360];
 const lab3 = (L, C, h) => [L, C * Math.cos(h * Math.PI / 180), C * Math.sin(h * Math.PI / 180)];
 const hdS = (a, b) => (b - a + 540) % 360 - 180;
 function rampOf(lab, o) {
   const [L0, C0, h0] = lchOf(lab), out = [];
   o.dk.forEach((r, k) => { const t = k / o.dk.length; out.push({ r, t: lab3(o.Ld + (L0 - o.Ld) * t, o.sC(C0, t), o.sH(h0, t)) }) });
-  out.push({ r: o.baseName || 'Base', t: lab });
+  out.push({ r: o.baseName || 'Base', t: lab, base: 1 });
   o.lt.forEach((r, k) => { const t = (k + 1) / (o.lt.length + 1); out.push({ r, t: lab3(L0 + (o.Lt - L0) * t, o.lC(C0, t), o.lH(h0, t)) }) });
   out.push({ r: o.top, t: lab3(o.topL, o.topC(C0), o.topH ? o.topH(h0) : o.lH(h0, 1)) });
   return out;
 }
 const DK = ['Deep shadow', 'Shadow', 'Dark mid'];
-const TECH = {
+export const TECH = {
   nmm(lab) {
     const [, C0, h0] = lchOf(lab), warm = C0 > 12 && h0 > 20 && h0 < 110, sh = warm ? hdS(h0, 45) * .6 : 0, hl = warm ? hdS(h0, 95) * .5 : 0;
     return rampOf(lab, { dk: DK, lt: ['Highlight', 'Bright highlight'], Ld: 9, Lt: 96, top: 'Glint', topL: 98, topC: () => 3, topH: h => h,
@@ -518,6 +516,22 @@ const TECH = {
     return rampOf(lab, { dk: DK, lt: ['Highlight', 'Bright highlight'], Ld: 18, Lt: 90, top: 'Top highlight', topL: 91, topC: C => C * .22,
       sC: (C, t) => C * (.85 + .15 * t), sH: (h, t) => h + sh * (1 - t), lC: (C, t) => C * (1 - .5 * t), lH: (h, t) => h + hdS(h, 80) * .4 * t });
   },
+  zen(lab) {
+    const L0 = lab[0];
+    return rampOf(lab, { dk: ['Deep shadow', 'Shadow'], lt: ['Highlight 1', 'Highlight 2', 'Highlight 3'], Ld: Math.max(6, L0 * .35), Lt: 92, top: 'Top highlight', topL: Math.min(95, L0 + (95 - L0) * .85), topC: C => C * .35,
+      sC: (C, t) => C * (.6 + .4 * t), sH: h => h, lC: (C, t) => C * (1 - .45 * t), lH: h => h });
+  },
+  edge(lab) {
+    return rampOf(lab, { dk: [], lt: ['Edge 1', 'Edge 2'], Ld: 0, Lt: 90, top: 'Fine edge', topL: lab[0] + (96 - lab[0]) * .85, topC: C => C * .35,
+      sC: C => C, sH: h => h, lC: (C, t) => C * (1 - .4 * t), lH: h => h });
+  },
+  glaze(lab) {
+    const L0 = lab[0], w = [5, 4, 1, 3, 4, 5, 6];
+    const out = rampOf(lab, { dk: ['Deep glaze', 'Shadow glaze'], lt: ['Glaze 1', 'Glaze 2', 'Glaze 3'], Ld: Math.max(8, L0 * .4), Lt: L0 + (90 - L0) * .85, top: 'Final glaze', topL: L0 + (90 - L0) * .85, topC: C => C * .5,
+      sC: (C, t) => C * (.75 + .25 * t), sH: h => h, lC: (C, t) => C * (1 - .4 * t), lH: h => h });
+    out.forEach((x, i) => x.w = w[i]);
+    return out;
+  },
 };
 const labHex = ([L, A, B]) => {
   const fy = (L + 16) / 116, iv = t => t ** 3 > .008856 ? t ** 3 : (t - 16 / 116) / 7.787, X = iv(fy + A / 500) * .95047, Y = iv(fy), Z = iv(fy - B / 200) * 1.08883;
@@ -535,10 +549,41 @@ function fit(T, pool) {
   });
 }
 
+// A small picture of the ramp on a shape that suits the technique, like rampPrev() on the wheel. cs: step colours, darkest first.
+function rampPic(q, cs, id) {
+  const stops = (a, n = a.length) => a.map((c, i) => `<stop offset="${(i / Math.max(1, n - 1)).toFixed(3)}" stop-color="${c}"/>`).join('');
+  const down = [...cs].reverse(), lin = `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops(down)}</linearGradient>`;
+  const svg = (h, a, s) => `<svg class="pic" viewBox="0 0 300 ${h}" role="img" aria-label="${a}">${s}</svg>`;
+  if (q === 'nmm') return svg(90, 'The ramp on a sword blade', `<defs>${lin}</defs><rect x="6" y="38" width="44" height="14" rx="3" fill="#5a3a1a" stroke="currentColor" stroke-width="2.5"/><rect x="48" y="20" width="12" height="50" rx="3" fill="url(#${id})" stroke="currentColor" stroke-width="2.5"/><path d="M60 26 L262 26 L294 45 L262 64 L60 64 Z" fill="url(#${id})" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>`);
+  if (q === 'osl') return svg(120, 'The ramp as light spreading from a source', `<defs><radialGradient id="${id}" cx=".5" cy=".5" r=".5">${stops(down)}</radialGradient></defs><rect x="4" y="4" width="292" height="112" rx="14" fill="${cs[0]}" stroke="currentColor" stroke-width="3"/><ellipse cx="150" cy="60" rx="120" ry="54" fill="url(#${id})"/><circle cx="150" cy="60" r="7" fill="${cs[cs.length - 1]}" stroke="currentColor" stroke-width="2"/>`);
+  if (q === 'gem') return svg(110, 'The ramp on a round gem', `<defs><linearGradient id="${id}" x1=".2" y1="0" x2=".8" y2="1">${stops(cs.slice(0, -1))}</linearGradient></defs><circle cx="150" cy="55" r="46" fill="#7a6a4a" stroke="currentColor" stroke-width="3"/><circle cx="150" cy="55" r="38" fill="url(#${id})" stroke="currentColor" stroke-width="3"/><circle cx="137" cy="40" r="5" fill="${cs[cs.length - 1]}"/>`);
+  if (q === 'edge') {
+    // An armour plate: the base, edge highlights along its top edges and fine dots on the corners.
+    const top = 'M10 40 L32 16 L268 16 L290 40', e = cs.length > 3 ? cs.slice(1, -1) : [cs[1]];
+    return svg(100, 'Edge highlights on an armour plate', `<defs><clipPath id="${id}"><path d="${top} L290 88 L10 88 Z"/></clipPath></defs><path d="${top} L290 88 L10 88 Z" fill="${cs[0]}"/><g clip-path="url(#${id})" fill="none" stroke-linejoin="round">${e.map((c, i) => `<path d="${i ? 'M32 16 L268 16' : top}" stroke="${c}" stroke-width="${i ? 7 : 16}"/>`).join('')}</g><circle cx="33" cy="18" r="3" fill="${cs[cs.length - 1]}"/><circle cx="267" cy="18" r="3" fill="${cs[cs.length - 1]}"/><path d="${top} L290 88 L10 88 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>`);
+  }
+  const w = 292 / cs.length;
+  return svg(60, 'The ramp as stepped bands', down.map((c, i) => `<rect x="${(4 + i * w).toFixed(1)}" y="6" width="${(w + .5).toFixed(1)}" height="48" fill="${c}"/>`).join('') + '<rect x="4" y="6" width="292" height="48" rx="6" fill="none" stroke="currentColor" stroke-width="3"/>');
+}
+
+// Lightness (bars, in the step's colour) and saturation (dashed line) of each step, darkest first.
+function rampChart(T) {
+  const W = 520, H = 220, x0 = 34, y0 = 186, bw = (W - x0 - 10) / T.length, y = v => y0 - v * 1.6;
+  const lc = T.map(s => lchOf(s.t));
+  const bars = T.map((s, i) => `<rect x="${(x0 + i * bw + 4).toFixed(1)}" y="${y(lc[i][0]).toFixed(1)}" width="${(bw - 8).toFixed(1)}" height="${(lc[i][0] * 1.6).toFixed(1)}" fill="${labHex(s.t)}" stroke="currentColor" stroke-width="2"><title>${esc(s.r)}: lightness ${Math.round(lc[i][0])}</title></rect>
+<text x="${(x0 + (i + .5) * bw).toFixed(1)}" y="${y0 + 18}" text-anchor="middle">${i + 1}</text>`).join('');
+  const pts = lc.map((c, i) => `${(x0 + (i + .5) * bw).toFixed(1)},${y(Math.min(100, c[1])).toFixed(1)}`);
+  const grid = [0, 25, 50, 75, 100].map(v => `<line x1="${x0}" x2="${W - 6}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" opacity=".15"/><text x="${x0 - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Lightness and saturation of each step" fill="currentColor" font-size="12">${grid}${bars}
+<polyline points="${pts.join(' ')}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="6 4"/>${pts.map(p => { const [a, b] = p.split(','); return `<circle cx="${a}" cy="${b}" r="4" fill="var(--card)" stroke="currentColor" stroke-width="2"/>` }).join('')}</svg>`;
+}
+
 function techPage(D, g) {
-  const bases = D.sgFix.filter(b => b.q === g.q);
+  const bases = g.bases ? g.bases.map(([n, h]) => ({ n, h, lab: hexLab(h) })) : D.sgFix.filter(b => b.q === g.q);
   const brands = D.brands.map(br => ({ br, pool: br.paints.filter(p => p.ramp) })).filter(x => x.pool.length >= 40);
   const grade = d => d < 6 ? 'close' : d < 12 ? 'fair' : 'loose';
+  const ex = bases[0], T0 = TECH[g.q](ex.lab), ex0 = lchOf(ex.lab);
+  const water = s => s.w ? ` · 1:${s.w} paint to water` : '';
   const sections = bases.map(b => {
     const T = TECH[g.q](b.lab);
     const res = brands.map(x => ({ ...x, R: fit(T, x.pool) })).map(x => ({ ...x, avg: x.R.reduce((a, s) => a + s.d, 0) / x.R.length }));
@@ -546,18 +591,48 @@ function techPage(D, g) {
     return `<section class="panel"><h2>${esc(b.n)}</h2>
 <p class="s">Target ramp (darkest to lightest):</p><div class="chip">${T.map(x => `<i style="background:${labHex(x.t)}" title="${esc(x.r)}"></i>`).join('')}</div>
 <p>Closest fit overall: <b>${esc(top.br.name)}</b> (average ΔE ${top.avg.toFixed(1)} per step).</p>
-<div class="grid">${res.map(x => `<div class="br"><h3><a href="/paints/${x.br.slug}">${esc(x.br.name)}</a></h3><div class="chip">${x.R.map(s => `<i style="background:${s.p ? s.p.h : 'transparent'}"></i>`).join('')}</div><ol class="ramp">${x.R.map(s => s.p ? `<li><i class="sw" style="background:${s.p.h}"></i><span><a href="${s.p.url}">${esc(label(s.p))}</a><em>${esc(s.r)} · ${esc(D.GL[s.p.g])} · ΔE ${s.d.toFixed(0)}, ${grade(s.d)}</em></span></li>` : '').join('')}</ol></div>`).join('')}</div></section>`;
+<div class="grid">${res.map(x => `<div class="br"><h3><a href="/paints/${x.br.slug}">${esc(x.br.name)}</a></h3><div class="chip">${x.R.map(s => `<i style="background:${s.p ? s.p.h : 'transparent'}"></i>`).join('')}</div><ol class="ramp">${x.R.map(s => s.p ? `<li><i class="sw" style="background:${s.p.h}"></i><span><a href="${s.p.url}">${esc(label(s.p))}</a><em>${esc(s.r)} · ${esc(D.GL[s.p.g])} · ΔE ${s.d.toFixed(0)}, ${grade(s.d)}${water(s)}</em></span></li>` : '').join('')}</ol></div>`).join('')}</div></section>`;
   });
-  const path = '/guides/' + g.slug, title = g.title;
-  const desc = `${g.title}: seven-step ${bases.map(b => b.n.toLowerCase()).join(', ')} ramps picked from ${brands.map(x => short(x.br)).join(', ')} paints. Swatch colours are estimates.`;
+  const path = '/guides/' + g.slug, title = g.title, wheel = `/#/?ramp=${g.q}`;
+  const shift = c => c[1] < 4 || ex0[1] < 4 ? '–' : (d => Math.abs(d) < 1 ? '0°' : (d > 0 ? '+' : '−') + Math.abs(d) + '°')(Math.round(hdS(ex0[2], c[2])));
+  const steps = T0.map((s, i) => `<li><i class="sw" style="background:${labHex(s.t)}"></i><span><b>${i + 1}. ${esc(s.r)}</b>${s.w ? ` <span class="s">(1:${s.w} paint to water)</span>` : ''}<em>${g.steps[s.r]}</em></span></li>`).join('');
+  const table = `<div class="tw"><table class="cv"><thead><tr><th>#</th><th>Step</th><th>Lightness</th><th>Saturation</th><th>Hue shift</th></tr></thead><tbody>${T0.map((s, i) => { const c = lchOf(s.t); return `<tr><td>${i + 1}</td><td><i class="sw" style="background:${labHex(s.t)}"></i>${esc(s.r)}</td><td>${Math.round(c[0])}</td><td>${Math.round(c[1])}</td><td>${shift(c)}</td></tr>` }).join('')}</tbody></table></div>`;
   const body = `<h1>${esc(title)}</h1>
-<div class="prose"><p>${esc(g.intro)}</p>
-<p>${esc(g.how)}</p>
-<p>Each ramp below is built the way the Ramps mode on <a href="/">the colour wheel</a> builds one: we set a target colour for each step, then pick the nearest opaque paint in each brand (no metallics, washes or contrast paints, and no paint used twice). ΔE says how far each paint is from its target: close is under 6, fair under 12. Swatch colours are estimates, so test the ramp on a spare model first.
-On the wheel you can build the same ramp from any paint, or only from the paints you own.</p></div>
+<div class="panel hero"><div class="prose" style="flex:1;min-width:260px">${g.intro.map(p => `<p>${p}</p>`).join('')}
+<p><a class="btn" href="${wheel}">Build this ramp on the colour wheel</a></p></div>
+<figure>${rampPic(g.q, T0.map(s => labHex(s.t)), 'pic0')}<figcaption class="s">${esc(ex.n)}: the target ramp from this guide.</figcaption></figure></div>
+
+<section class="panel prose"><h2>What you need</h2><ul>${g.need.map(x => `<li>${x}</li>`).join('')}</ul></section>
+
+<section class="panel"><h2>Step by step</h2>
+<p class="prose">These are the ${T0.length} steps the Ramps mode uses for ${esc(g.name)}, darkest first, with the target colour of each step for the ${esc(ex.n.toLowerCase())}. Thin each paint to the consistency of milk${g.q === 'glaze' ? ' (or thinner, as given)' : ''} and let each layer dry before the next. The <a href="#paints">paint lists below</a> give the closest real paint in each brand.</p>
+<ol class="ramp steps">${steps}</ol></section>
+
+<section class="panel"><h2>The colour behind the ramp</h2>
+<div class="prose">${g.colour.map(p => `<p>${p}</p>`).join('')}</div>
+<div class="hero">${rampChart(T0)}<p class="s" style="flex:1;min-width:200px">Bars: the lightness of each step of the ${esc(ex.n.toLowerCase())} ramp, from 0 (black) to 100 (white), in the step's own colour. Dashed line: its saturation (CIELAB chroma). Numbers match the steps above and the table below.</p></div>
+${table}
+<p class="s">Lightness and saturation are CIELAB values; hue shift is how far each step's hue turns from the base, in CIELAB degrees (– where a step is too grey to have a hue).</p></section>
+
+<section class="panel prose"><h2>How the Ramps mode builds it</h2>
+${g.wheel.map(p => `<p>${p}</p>`).join('')}
+<p>Every technique then picks real paints the same way: for each step it finds the nearest paint among the ones shown on the wheel, by ΔE with lightness counted 1.6 times as much as colour (value contrast is what sells a ramp), and never uses the same paint twice. Only opaque paints are used: no metallics, washes, contrast paints, inks, glazes, primers or fluorescents. Each step is graded Close (ΔE under 6), Fair (under 12) or Loose.</p>
+<h3>Using it on the wheel</h3>
+<ol><li>Open <a href="/">the colour wheel</a> and pick <b>Ramps</b> above the wheel, then <b>${esc(D.tqFull[g.q] || g.short)}</b> under Technique (or <a href="${wheel}">open it straight in this mode</a>).</li>
+<li>Choose ${g.q === 'edge' ? '2 or 3 edges' : '5 or 7 steps'}${g.q === 'edge' ? '' : '; 5 steps leaves out some of the in-between steps for a quicker ramp'}.</li>
+<li>Tap ${g.q === 'osl' ? 'the colour of the light' : 'your base colour'} on the wheel, or in the neutrals list under it. If it's a metallic or effect paint, the ramp starts from the nearest opaque paint instead.</li>
+<li>Untick brands and ranges you don't want, or tick <b>Matches from my paints only</b> once your collection is set up, to build the ramp from the paints you own.</li>
+<li>Tap ↻ on a step to try the next nearest paint, then <b>Save as recipe</b> to keep the ramp, with the step notes above, in your recipes.</li></ol></section>
+
+<section class="panel prose"><h2>Common mistakes</h2><ul>${g.mistakes.map(x => `<li>${x}</li>`).join('')}</ul></section>
+
+<section class="panel prose" id="paints"><h2>The best paints for ${esc(g.name)}, brand by brand</h2>
+<p>Each ramp below is built the way the Ramps mode builds one: the same target colours, then the nearest opaque paint in each brand for each step. ΔE says how far each paint is from its target: close is under 6, fair under 12. Swatch colours are estimates, so test the ramp on a spare model first. On the wheel you can build the same ramp from any paint, or only from the paints you own.</p></section>
 ${sections.join('')}
 ${guideLinks(g)}`;
-  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc)] });
+  const desc = g.desc + ' Swatch colours are estimates.';
+  const howTo = { '@type': 'HowTo', name: title, description: desc, step: T0.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, name: s.r, text: g.steps[s.r].replace(/<[^>]+>/g, '') })) };
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc, g.published || TECH_DATE, TECH_DATE), howTo] });
 }
 
 /* ---------- colour theory guide ---------- */
@@ -662,7 +737,7 @@ ${hueRing(c, 168, 6)}<circle cx="${c}" cy="${c}" r="24" fill="none" stroke="curr
 <p><b>Complements and neighbours.</b> Tap a paint and the wheel picks up to six <b>complements</b>: the paints, from the ones you're showing, whose hue is within 22° of the exact opposite, closest first. It also picks up to six <b>neighbours</b> (analogous colours) within 25° of the paint's own hue. Both are chosen by hue only, so they can be lighter or darker than your paint: pick the value you need for the job, dark ones for shading and light ones for highlights. With ${esc(ex.p.n)} and all of Citadel's opaque paints, that gives:</p>
 <div class="grid"><div><h3>Complements</h3>${comp.length ? chipList(comp) : '<p class="s">None within 22°.</p>'}</div><div><h3>Neighbours</h3>${ana.length ? chipList(ana) : '<p class="s">None within 25°.</p>'}</div></div>
 <p><b>The centre disc.</b> The disc in the middle of the wheel blends from the complements, through your paint, out to its neighbours. Each side runs from dark to light and the two sides meet where their shades match, so you can see how the colours would grade into each other on a model.</p>
-<p><b>Ramps and Blends.</b> Ramps mode turns colour theory into steps: for non-metallic metal, object source lighting, gems, skin, zenithal and edge highlights and glazes it sets a target colour for each step (shifting hue and saturation as well as lightness, as described above) and finds the nearest opaque paint for each one. Blends mode lets you pin a few paints and fills the steps between them. See the <a href="/guides/best-paints-for-nmm">technique guides</a> for examples.</p>
+<p><b>Ramps and Blends.</b> Ramps mode turns colour theory into steps: for <a href="/guides/best-paints-for-nmm">non-metallic metal</a>, <a href="/guides/best-paints-for-osl">object source lighting</a>, <a href="/guides/best-paints-for-gems">gems</a>, <a href="/guides/best-paints-for-skin-tones">skin</a>, <a href="/guides/zenithal-highlighting">zenithal</a> and <a href="/guides/edge-highlighting">edge highlights</a> and <a href="/guides/glazing">glazes</a> it sets a target colour for each step (shifting hue and saturation as well as lightness, as described above) and finds the nearest opaque paint for each one. Blends mode lets you pin a few paints and fills the steps between them. Each technique has its own step-by-step guide with example ramps.</p>
 <p><b>Matches between brands.</b> When you tap a paint, its matches in other brands come two ways. A <span class="ck">✓</span> means a published conversion chart lists the pair (the Two Thin Coats comparison chart, Army Painter's Fanatic conversion chart, AK's 3rd Generation equivalence table and the Herrick Games chart). A ≈ means the nearest swatch colour, measured as ΔE: the straight-line distance between the two colours in CIELAB, a colour space built so equal distances look roughly equally different (the 1976 formula, often written ΔE76). Under about 6 is a close match, over about 15 is a loose one. Unlike complements, matches use lightness and saturation as well as hue.</p>
 <p><b>Swatches are estimates.</b> Every swatch is an estimate taken from manufacturer charts, swatch photos and comparison charts, and every screen shows colour a little differently. Finish (matt, satin, metallic), coverage and how a paint dries change how it looks too. Use the wheel to narrow down your choices, then check the real paints before you commit to a whole army.</p>
 <p><a class="btn" href="/">Try it on the colour wheel</a></p>
@@ -694,12 +769,12 @@ function guideLinks(cur) {
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
   const title = 'Miniature paint conversion charts and paint guides';
-  const desc = 'Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, the best paints for NMM, skin, OSL and gems, and colour theory for miniature painters, built from ' + n + ' paints. Swatch colours are estimates.';
+  const desc = 'Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, step-by-step guides to NMM, OSL, gems, skin, zenithal highlights, edge highlights and glazing with the best paints for each, and colour theory for miniature painters, built from ' + n + ' paints. Swatch colours are estimates.';
   const li = g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`;
   const body = `<h1>Paint guides</h1>
-<p class="prose">Conversion charts, paint lists and a colour theory primer built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
+<p class="prose">Conversion charts, technique guides and a colour theory primer built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <div class="grid"><section class="panel"><h2>Conversion charts</h2><ul class="m">${GUIDES.filter(g => g.conv).map(li).join('')}</ul></section>
-<section class="panel"><h2>Best paints for…</h2><ul class="m">${GUIDES.filter(g => g.q).map(li).join('')}</ul></section>
+<section class="panel"><h2>Painting techniques</h2><ul class="m">${GUIDES.filter(g => g.q).map(li).join('')}</ul></section>
 <section class="panel"><h2>Learn</h2><ul class="m">${GUIDES.filter(g => g.learn).map(li).join('')}</ul></section></div>
 <p>Looking for one paint? <a href="/paints">Browse every brand</a>.</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });

@@ -111,7 +111,7 @@ glaze:{name:'Glazes',full:'Glazing blend',sum:'Glazing blend built on the Painte
   return NMO.t?tintAt(out,Math.max(8,L0*.4),Math.max(10,C0*.4),(h0+180)%360):out},
  tip:{'Deep glaze':'Very thin, built up in the deepest recesses over several coats.','Shadow glaze':'Thin coats over the shaded areas, letting each dry.','Base':'Thinned a little so it goes on smooth. Cover the whole area.','Glaze 1':'Thin coats over the lit two thirds. Wipe most of the paint off the brush first.','Glaze 2':'Thinner, over a smaller area inside the last.','Glaze 3':'Thinner again, over a smaller area.','Final glaze':'The thinnest, only on the highest points. Several coats build it up.'}}};
 // Ramp techniques with their own /guides page (worker/seo.js GUIDES).
-const TQ_GUIDE={nmm:'best-paints-for-nmm',osl:'best-paints-for-osl',skin:'best-paints-for-skin-tones',gem:'best-paints-for-gems'};
+const TQ_GUIDE={nmm:'best-paints-for-nmm',osl:'best-paints-for-osl',skin:'best-paints-for-skin-tones',gem:'best-paints-for-gems',zen:'zenithal-highlighting',edge:'edge-highlighting',glaze:'glazing'};
 const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
 /* ---------- Blend mode ----------
    A blend starts from the wheel's own picks (two complements on the shadow side, two neighbours on the light side,
@@ -478,3 +478,7 @@ function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)retu
  history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
  if(CH.includes(p)){if(sel!==p)pick(p)}else neutralShow(p);document.getElementById('w').scrollIntoView({block:'start'})}
 paintLink();addEventListener('hashchange',paintLink);
+// Links from the technique guides (/guides/...) open the wheel at #/?ramp=<technique>: Ramps mode on that technique.
+function rampLink(){const m=location.hash.match(/[?&]ramp=(\w+)/);if(!m)return;history.replaceState(null,'','#/');if(!TQ[m[1]])return;
+ NMO.q=m[1];nmmSkip=[];if(MODE!=='nmm')setMode('nmm');else{nmmSave();nmmUI();draw()}document.getElementById('w').scrollIntoView({block:'start'})}
+rampLink();addEventListener('hashchange',rampLink);
