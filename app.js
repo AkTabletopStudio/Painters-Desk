@@ -219,7 +219,8 @@ document.getElementById('nSteps').onchange=e=>{NMO.n=+e.target.value;nmmSkip=[];
 document.getElementById('nTint').onchange=e=>{NMO.t=e.target.checked;nmmSkip=[];nmmSave();draw()};
 nmmUI();
 // Centre disc: two shade-matched ramps laid along the complement→selected axis. The complements are one ramp and the selected paint plus its
-// neighbours the other; each runs dark to light by the smoothest path through its paints, and the two meet where their shades are closest.
+// neighbours the other; each runs evenly dark to light, and at each shade its colour is the paints of about that shade averaged (the selected
+// paint counts triple), so muted and bright paints of the same shade blend instead of striping. The two ramps meet where their shades are closest.
 // Colours are mixed in OKLab (like blended paint, not muddy RGB) and big colour changes get more room on the disc.
 const okLab=h=>{const n=parseInt(h.slice(1),16),l=[n>>16,n>>8&255,n&255].map(v=>{v/=255;return v>.04045?((v+.055)/1.055)**2.4:v/12.92}),
  L=Math.cbrt(.4122214708*l[0]+.5363325363*l[1]+.0514459929*l[2]),M=Math.cbrt(.2119034982*l[0]+.6806995451*l[1]+.1073969566*l[2]),S=Math.cbrt(.0883024619*l[0]+.2817188376*l[1]+.6299787005*l[2]);
@@ -227,14 +228,12 @@ const okLab=h=>{const n=parseInt(h.slice(1),16),l=[n>>16,n>>8&255,n&255].map(v=>
 const okHex=([L,a,b])=>{const l=(L+.3963377774*a+.2158037573*b)**3,m=(L-.1055613458*a-.0638541728*b)**3,s=(L-.0894841775*a-1.291485548*b)**3;
  return'#'+[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s].map(v=>{v=Math.max(0,Math.min(1,v));v=v>.0031308?1.055*v**(1/2.4)-.055:12.92*v;return Math.round(v*255).toString(16).padStart(2,'0')}).join('')};
 const okD=(a,b,w)=>Math.hypot(w*(a[0]-b[0]),a[1]-b[1],a[2]-b[2]);
-function discStops(sel,comp,ana){const o=new Map([sel,...comp,...ana].map(p=>[p,okLab(p.h)]));
- const path=g=>{const u=[...g].sort((x,y)=>o.get(x)[0]-o.get(y)[0]);if(u.length<4)return u;const A=u[0],Z=u[u.length-1];let best=null,bc=1e9;
-  const go=(cur,rest,cost,acc)=>{if(cost>=bc)return;if(!rest.length){const t=cost+okD(o.get(cur),o.get(Z),2);if(t<bc){bc=t;best=acc}return}
-   rest.forEach((p,i)=>go(p,rest.filter((_,j)=>j!==i),cost+okD(o.get(cur),o.get(p),2),[...acc,p]))};
-  go(A,u.slice(1,-1),0,[]);return[A,...best,Z]};
- const C=path(comp),F=path([sel,...ana]);let pick=[[],F];
- if(C.length){let bd=1e9;for(const c of[C,[...C].reverse()])for(const f of[F,[...F].reverse()]){const d=Math.abs(o.get(c[c.length-1])[0]-o.get(f[0])[0]);if(d<bd){bd=d;pick=[c,f]}}}
- const seq=[...pick[0],...pick[1]].map(p=>o.get(p)),d=[0];for(let i=1;i<seq.length;i++)d.push(d[i-1]+.04+okD(seq[i-1],seq[i],1.5));
+function discStops(sel,comp,ana){
+ const ramp=g=>{const q=g.map(p=>[okLab(p.h),p===sel?3:1]);if(!q.length)return[];const Ls=q.map(x=>x[0][0]),lo=Math.min(...Ls),hi=Math.max(...Ls),sg=Math.max(.04,(hi-lo)/5),n=Math.round((hi-lo)/.03)+1,out=[];
+  for(let i=0;i<n;i++){const L=n<2?lo:lo+(hi-lo)*i/(n-1);let W=0,A=0,B=0;q.forEach(([c,w])=>{w*=Math.exp(-.5*((c[0]-L)/sg)**2);W+=w;A+=w*c[1];B+=w*c[2]});out.push([L,A/W,B/W])}return out};
+ const C=ramp(comp),F=ramp([sel,...ana]);let pick=[[],F];
+ if(C.length){let bd=1e9;for(const c of[C,[...C].reverse()])for(const f of[F,[...F].reverse()]){const d=Math.abs(c[c.length-1][0]-f[0][0]);if(d<bd){bd=d;pick=[c,f]}}}
+ const seq=[...pick[0],...pick[1]],d=[0];for(let i=1;i<seq.length;i++)d.push(d[i-1]+.04+okD(seq[i-1],seq[i],1.5));
  const off=d.map(v=>seq.length<2?0:v/d[d.length-1]),out=[];
  seq.forEach((c,i)=>{out.push([okHex(c),off[i]]);if(i<seq.length-1)for(let k=1;k<6;k++){const t=k/6;out.push([okHex(c.map((v,j)=>v+(seq[i+1][j]-v)*t)),off[i]+(off[i+1]-off[i])*t])}});
  return out}
