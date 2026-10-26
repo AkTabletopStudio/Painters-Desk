@@ -41,7 +41,7 @@ export const JOBS = [
   ['NMM, gems and glints', 'A size 0 or 1 kolinsky round', 'Tiny crisp dots and lines need a point that doesn\'t split.', '/guides/best-paints-for-nmm'],
   ['Eyes and fine detail', 'A small round (0, 00) with a good point', 'Control. Use the smallest brush that still holds a little paint.', ''],
   ['Zenithal and broad highlights', 'A large round or soft drybrush', 'Covers big areas from one direction quickly.', '/guides/zenithal-highlighting'],
-  ['Drybrushing', 'A drybrush, synthetic or goat hair', 'The scrubbing would destroy any other brush.', ''],
+  ['Drybrushing', 'A drybrush, synthetic or goat hair', 'The scrubbing would destroy any other brush.', '/guides/drybrushing'],
   ['Metallics', 'An old or cheap synthetic round', 'Metal flakes lodge in the heel and are hard to wash out.', ''],
   ['Glue, varnish, texture paste', 'Your oldest brush', 'It will be ruined.', ''],
 ];

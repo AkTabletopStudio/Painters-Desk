@@ -454,8 +454,8 @@ const GUIDES = [
   conv('vallejo', 'citadel', 'Vallejo', 'Citadel'),
   conv('army-painter', 'citadel', 'Army Painter', 'Citadel'),
   conv('pro-acryl', 'citadel', 'Pro Acryl', 'Citadel'),
-  // Technique guides, one per technique in the wheel's Ramps mode; the words are in tech-guides.js.
-  ...Object.entries(TECH_TEXT).map(([q, t]) => ({ ...t, q, published: ['zen', 'edge', 'glaze'].includes(q) ? '2026-10-26' : GUIDE_DATE })),
+  // Technique guides, one per technique in the wheel's Ramps mode plus drybrushing; the words are in tech-guides.js.
+  ...Object.entries(TECH_TEXT).map(([q, t]) => ({ ...t, q, published: ['zen', 'edge', 'glaze', 'dry'].includes(q) ? '2026-10-26' : GUIDE_DATE })),
   { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true, label: 'Colour theory',
     blurb: 'Hue, value and saturation, colour schemes, and how the colour wheel picks complements and matches.' },
   { slug: 'miniature-paint-brushes', page: brushTypesPage, brush: 1, title: 'Brush types for miniature painting', label: 'Brush types',
@@ -540,6 +540,15 @@ export const TECH = {
     return out;
   },
 };
+// Guide ramps: the Ramps techniques plus guides the wheel has no technique for yet (no step in TQ, so not checked against it).
+const RAMPS = {
+  ...TECH,
+  dry(lab) {
+    const L0 = lab[0], warm = (h, t) => h + hdS(h, 85) * .15 * t;
+    return rampOf(lab, { dk: [], lt: ['Drybrush 1', 'Drybrush 2'], Ld: 0, Lt: 82, baseName: 'Basecoat', top: 'Final dusting', topL: L0 + (92 - L0) * .8, topC: C => C * .33,
+      sC: C => C, sH: h => h, lC: (C, t) => C * (1 - .45 * t), lH: warm, topH: h => warm(h, 1) });
+  },
+};
 const labHex = ([L, A, B]) => {
   const fy = (L + 16) / 116, iv = t => t ** 3 > .008856 ? t ** 3 : (t - 16 / 116) / 7.787, X = iv(fy + A / 500) * .95047, Y = iv(fy), Z = iv(fy - B / 200) * 1.08883;
   const s = v => { v = v > .0031308 ? 1.055 * v ** (1 / 2.4) - .055 : 12.92 * v; return Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0') };
@@ -569,6 +578,12 @@ function rampPic(q, cs, id) {
     const top = 'M10 40 L32 16 L268 16 L290 40', e = cs.length > 3 ? cs.slice(1, -1) : [cs[1]];
     return svg(100, 'Edge highlights on an armour plate', `<defs><clipPath id="${id}"><path d="${top} L290 88 L10 88 Z"/></clipPath></defs><path d="${top} L290 88 L10 88 Z" fill="${cs[0]}"/><g clip-path="url(#${id})" fill="none" stroke-linejoin="round">${e.map((c, i) => `<path d="${i ? 'M32 16 L268 16' : top}" stroke="${c}" stroke-width="${i ? 7 : 16}"/>`).join('')}</g><circle cx="33" cy="18" r="3" fill="${cs[cs.length - 1]}"/><circle cx="267" cy="18" r="3" fill="${cs[cs.length - 1]}"/><path d="${top} L290 88 L10 88 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>`);
   }
+  if (q === 'dry') {
+    // Rocks: the basecoat, then each drybrush layer catching less of the top of each rock.
+    const rocks = [[50, 66, 42, 30], [128, 58, 40, 40], [206, 70, 36, 26], [262, 62, 30, 34]];
+    return svg(110, 'Drybrush layers on rocks', `<defs>${rocks.map(([x, y, rx, ry], i) => `<clipPath id="${id}${i}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}"/></clipPath>`).join('')}</defs>
+<rect x="4" y="80" width="292" height="26" rx="6" fill="${cs[0]}" stroke="currentColor" stroke-width="3"/>${rocks.map(([x, y, rx, ry], i) => `<g clip-path="url(#${id}${i})">${cs.map((c, k) => `<ellipse cx="${x - k * rx * .12}" cy="${y - k * ry * .42}" rx="${rx}" ry="${ry}" fill="${c}"/>`).join('')}</g><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="none" stroke="currentColor" stroke-width="3"/>`).join('')}`);
+  }
   const w = 292 / cs.length;
   return svg(60, 'The ramp as stepped bands', down.map((c, i) => `<rect x="${(4 + i * w).toFixed(1)}" y="6" width="${(w + .5).toFixed(1)}" height="48" fill="${c}"/>`).join('') + '<rect x="4" y="6" width="292" height="48" rx="6" fill="none" stroke="currentColor" stroke-width="3"/>');
 }
@@ -593,10 +608,10 @@ function techPage(D, g) {
   const bases = guideBases(D, g);
   const brands = D.brands.map(br => ({ br, pool: br.paints.filter(p => p.ramp) })).filter(x => x.pool.length >= 40);
   const grade = d => d < 6 ? 'close' : d < 12 ? 'fair' : 'loose';
-  const ex = bases[0], T0 = TECH[g.q](ex.lab), ex0 = lchOf(ex.lab);
+  const ex = bases[0], T0 = RAMPS[g.q](ex.lab), ex0 = lchOf(ex.lab), onWheel = !!TECH[g.q];
   const water = s => s.w ? ` · 1:${s.w} paint to water` : '';
   const sections = bases.map(b => {
-    const T = TECH[g.q](b.lab);
+    const T = RAMPS[g.q](b.lab);
     const res = brands.map(x => ({ ...x, R: fit(T, x.pool) })).map(x => ({ ...x, avg: x.R.reduce((a, s) => a + s.d, 0) / x.R.length }));
     const top = [...res].sort((a, b) => a.avg - b.avg)[0];
     return `<section class="panel"><h2>${esc(b.n)}</h2>
@@ -610,13 +625,13 @@ function techPage(D, g) {
   const table = `<div class="tw"><table class="cv"><thead><tr><th>#</th><th>Step</th><th>Lightness</th><th>Saturation</th><th>Hue shift</th></tr></thead><tbody>${T0.map((s, i) => { const c = lchOf(s.t); return `<tr><td>${i + 1}</td><td><i class="sw" style="background:${labHex(s.t)}"></i>${esc(s.r)}</td><td>${Math.round(c[0])}</td><td>${Math.round(c[1])}</td><td>${shift(c)}</td></tr>` }).join('')}</tbody></table></div>`;
   const body = `<h1>${esc(title)}</h1>
 <div class="panel hero"><div class="prose" style="flex:1;min-width:260px">${g.intro.map(p => `<p>${p}</p>`).join('')}
-<p><a class="btn" href="${wheel}">Build this ramp on the colour wheel</a></p></div>
+<p>${onWheel ? `<a class="btn" href="${wheel}">Build this ramp on the colour wheel</a>` : `<a class="btn" href="#paints">The best paints in every brand</a>`}</p></div>
 <figure>${rampPic(g.q, T0.map(s => labHex(s.t)), 'pic0')}<figcaption class="s">${esc(ex.n)}: the target ramp from this guide.</figcaption></figure></div>
 
 <section class="panel prose"><h2>What you need</h2><ul>${g.need.map(x => `<li>${x}</li>`).join('')}</ul></section>
 
 <section class="panel"><h2>Step by step</h2>
-<p class="prose">These are the ${T0.length} steps the Ramps mode uses for ${esc(g.name)}, darkest first, with the target colour of each step for the ${esc(ex.n.toLowerCase())}. Thin each paint to the consistency of milk${g.q === 'glaze' ? ' (or thinner, as given)' : ''} and let each layer dry before the next. The <a href="#paints">paint lists below</a> give the closest real paint in each brand.</p>
+<p class="prose">These are the ${T0.length} steps ${onWheel ? 'the Ramps mode uses for' : 'of'} ${esc(g.name)}, darkest first, with the target colour of each step for the ${esc(ex.n.toLowerCase())}. ${g.stepNote || `Thin each paint to the consistency of milk${g.q === 'glaze' ? ' (or thinner, as given)' : ''} and let each layer dry before the next.`} The <a href="#paints">paint lists below</a> give the closest real paint in each brand.</p>
 <ol class="ramp steps">${steps}</ol></section>
 
 <section class="panel"><h2>The colour behind the ramp</h2>
@@ -625,20 +640,21 @@ function techPage(D, g) {
 ${table}
 <p class="s">Lightness and saturation are CIELAB values; hue shift is how far each step's hue turns from the base, in CIELAB degrees (– where a step is too grey to have a hue).</p></section>
 
-<section class="panel prose"><h2>How the Ramps mode builds it</h2>
+<section class="panel prose"><h2>${onWheel ? 'How the Ramps mode builds it' : 'How we built the ramp'}</h2>
 ${g.wheel.map(p => `<p>${p}</p>`).join('')}
-<p>Every technique then picks real paints the same way: for each step it finds the nearest paint among the ones shown on the wheel, by ΔE with lightness counted 1.6 times as much as colour (value contrast is what sells a ramp), and never uses the same paint twice. Only opaque paints are used: no metallics, washes, contrast paints, inks, glazes, primers or fluorescents. Each step is graded Close (ΔE under 6), Fair (under 12) or Loose.</p>
-<h3>Using it on the wheel</h3>
+<p>${onWheel ? 'Every technique then picks' : 'The paint lists below then pick'} real paints the same way${onWheel ? '' : ' as the Ramps mode'}: for each step it finds the nearest paint among the ones shown on the wheel, by ΔE with lightness counted 1.6 times as much as colour (value contrast is what sells a ramp), and never uses the same paint twice. Only opaque paints are used: no metallics, washes, contrast paints, inks, glazes, primers or fluorescents. Each step is graded Close (ΔE under 6), Fair (under 12) or Loose.</p>
+${onWheel ? `<h3>Using it on the wheel</h3>
 <ol><li>Open <a href="/">the colour wheel</a> and pick <b>Ramps</b> above the wheel, then <b>${esc(D.tqFull[g.q] || g.short)}</b> under Technique (or <a href="${wheel}">open it straight in this mode</a>).</li>
 <li>Choose ${g.q === 'edge' ? '2 or 3 edges' : '5 or 7 steps'}${g.q === 'edge' ? '' : '; 5 steps leaves out some of the in-between steps for a quicker ramp'}.</li>
 <li>Tap ${g.q === 'osl' ? 'the colour of the light' : 'your base colour'} on the wheel, or in the neutrals list under it. If it's a metallic or effect paint, the ramp starts from the nearest opaque paint instead.</li>
 <li>Untick brands and ranges you don't want, or tick <b>Matches from my paints only</b> once your collection is set up, to build the ramp from the paints you own.</li>
-<li>Tap ↻ on a step to try the next nearest paint, then <b>Save as recipe</b> to keep the ramp, with the step notes above, in your recipes.</li></ol></section>
+<li>Tap ↻ on a step to try the next nearest paint, then <b>Save as recipe</b> to keep the ramp, with the step notes above, in your recipes.</li></ol>` : `<h3>Finding your own colours on the wheel</h3>
+<p>Until there is a ${esc(g.short)} technique, <a href="/#/?ramp=edge">Ramps mode with Edge highlights</a> and 3 edges builds a similar light ramp from any base colour: tap your ${g.q === 'dry' ? 'basecoat' : 'base colour'} and use the edges as your ${g.q === 'dry' ? 'drybrush layers' : 'lighter steps'}. Untick brands you don't want, or tick <b>Matches from my paints only</b> to build it from the paints you own.</p>`}</section>
 
 <section class="panel prose"><h2>Common mistakes</h2><ul>${g.mistakes.map(x => `<li>${x}</li>`).join('')}</ul></section>
 
 <section class="panel prose" id="paints"><h2>The best paints for ${esc(g.name)}, brand by brand</h2>
-<p>Each ramp below is built the way the Ramps mode builds one: the same target colours, then the nearest opaque paint in each brand for each step. ΔE says how far each paint is from its target: close is under 6, fair under 12. Swatch colours are estimates, so test the ramp on a spare model first. On the wheel you can build the same ramp from any paint, or only from the paints you own.</p></section>
+<p>Each ramp below is built the way the Ramps mode builds one: ${onWheel ? 'the same target colours' : 'the target colours above'}, then the nearest opaque paint in each brand for each step. ΔE says how far each paint is from its target: close is under 6, fair under 12. Swatch colours are estimates, so test the ramp on a spare model first. ${onWheel ? 'On the wheel you can build the same ramp from any paint, or only from the paints you own.' : ''}</p></section>
 ${sections.join('')}
 ${guideLinks(g)}`;
   const desc = g.desc + ' Swatch colours are estimates.';
@@ -814,7 +830,7 @@ ${guideLinks(g)}`;
 function bestBrushesPage(D, g) {
   const path = '/guides/' + g.slug, title = g.title;
   const desc = 'The best brushes for miniature painting, by job: everyday synthetics, kolinsky sable rounds such as Winsor & Newton Series 7, Raphaël 8404, Rosemary & Co Series 33 and Artis Opus Series S, detail brushes, drybrushes and wash brushes.';
-  const sec = x => `<section class="panel"><h2>${x.h}</h2><p class="s">${x.s}</p>
+  const sec = x => `<section class="panel" id="${slug(x.h)}"><h2>${x.h}</h2><p class="s">${x.s}</p>
 <ul class="m u">${x.rows.map(([n, h, t, l, src]) => `<li><b>${n}</b><em>${h} · ${l}</em>${t}${src ? ` <a href="${src}" rel="nofollow noopener" target="_blank">Source</a>` : ''}</li>`).join('')}</ul></section>`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>There is no single best brush: there is a best brush for each job, and a good kit is a mix of cheap and expensive. Below are well-known brushes that miniature painters use, grouped by job. For what the hair types and shapes mean, see <a href="/guides/miniature-paint-brushes">brush types for miniature painting</a>.</p>
@@ -859,8 +875,8 @@ function guideLinks(cur) {
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
   const title = 'Miniature painting guides and paint conversion charts';
-  const desc = 'Colour theory for miniature painters, step-by-step guides to edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, built from ' + n + ' paints. Swatch colours are estimates.';
-  const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${TECH[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
+  const desc = 'Colour theory for miniature painters, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, built from ' + n + ' paints. Swatch colours are estimates.';
+  const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${RAMPS[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
   const charts = (k, h) => `<div><h3>${h}</h3><ul class="m">${GUIDES.filter(g => g.conv && g.conv[k] === 'citadel').map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div>`;
   const body = `<h1>Paint guides</h1>
 <p class="prose">Guides to colour, painting techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
