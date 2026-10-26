@@ -50,7 +50,7 @@ export async function seo(request, env, url) {
 }
 
 function send(body, type = 'text/html; charset=utf-8', status = 200) {
-  return new Response(body, { status, headers: { 'content-type': type, 'cache-control': 'public, max-age=3600' } });
+  return new Response(body, { status, headers: { 'content-type': type, 'cache-control': 'public, max-age=0, must-revalidate' } });
 }
 
 /* ---------- data (parsed once per Worker instance) ---------- */
