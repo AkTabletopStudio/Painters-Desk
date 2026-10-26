@@ -228,14 +228,17 @@ const okLab=h=>{const n=parseInt(h.slice(1),16),l=[n>>16,n>>8&255,n&255].map(v=>
 const okHex=([L,a,b])=>{const l=(L+.3963377774*a+.2158037573*b)**3,m=(L-.1055613458*a-.0638541728*b)**3,s=(L-.0894841775*a-1.291485548*b)**3;
  return'#'+[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s].map(v=>{v=Math.max(0,Math.min(1,v));v=v>.0031308?1.055*v**(1/2.4)-.055:12.92*v;return Math.round(v*255).toString(16).padStart(2,'0')}).join('')};
 const okD=(a,b,w)=>Math.hypot(w*(a[0]-b[0]),a[1]-b[1],a[2]-b[2]);
+const DISC_X=.25;
 function discStops(sel,comp,ana){
  const ramp=g=>{const q=g.map(p=>[okLab(p.h),p===sel?3:1]);if(!q.length)return[];const Ls=q.map(x=>x[0][0]),lo=Math.min(...Ls),hi=Math.max(...Ls),sg=Math.max(.04,(hi-lo)/5),n=Math.round((hi-lo)/.03)+1,out=[];
   for(let i=0;i<n;i++){const L=n<2?lo:lo+(hi-lo)*i/(n-1);let W=0,A=0,B=0;q.forEach(([c,w])=>{w*=Math.exp(-.5*((c[0]-L)/sg)**2);W+=w;A+=w*c[1];B+=w*c[2]});out.push([L,A/W,B/W])}return out};
  const C=ramp(comp),F=ramp([sel,...ana]);let pick=[[],F];
  if(C.length){let bd=1e9;for(const c of[C,[...C].reverse()])for(const f of[F,[...F].reverse()]){const d=Math.abs(c[c.length-1][0]-f[0][0]);if(d<bd){bd=d;pick=[c,f]}}}
- const seq=[...pick[0],...pick[1]],d=[0];for(let i=1;i<seq.length;i++)d.push(d[i-1]+.04+okD(seq[i-1],seq[i],1.5));
- const off=d.map(v=>seq.length<2?0:v/d[d.length-1]),out=[];
- seq.forEach((c,i)=>{out.push([okHex(c),off[i]]);if(i<seq.length-1)for(let k=1;k<6;k++){const t=k/6;out.push([okHex(c.map((v,j)=>v+(seq[i+1][j]-v)*t)),off[i]+(off[i+1]-off[i])*t])}});
+ // The crossover from the complements to the selected side always gets DISC_X of the disc, so it reads as a blend rather than a line.
+ const seq=[...pick[0],...pick[1]],jx=pick[0].length,g=[];for(let i=1;i<seq.length;i++)g.push(.04+okD(seq[i-1],seq[i],1.5));
+ if(jx&&g.length>1){const o=g.reduce((s,v,i)=>i===jx-1?s:s+v,0);g.forEach((v,i)=>g[i]=i===jx-1?DISC_X:v/o*(1-DISC_X))}
+ const d=[0];g.forEach(v=>d.push(d[d.length-1]+v));const off=d.map(v=>seq.length<2?0:v/d[d.length-1]),out=[];
+ seq.forEach((c,i)=>{out.push([okHex(c),off[i]]);if(i<seq.length-1){const K=i===jx-1?16:6;for(let k=1;k<K;k++){const t=k/K;out.push([okHex(c.map((v,j)=>v+(seq[i+1][j]-v)*t)),off[i]+(off[i+1]-off[i])*t])}}});
  return out}
 const svg=document.getElementById('w');let sel=null;
 function draw(){let s='';
