@@ -3,8 +3,48 @@
 // HTML is allowed (it's our own text). Step text is keyed by the step names the Ramps mode uses, so keep the two in step.
 // label and blurb are for the /guides list; level orders it, easiest first.
 // bases: example colours for techniques that have no fixed bases in SG_FIX (app.js). They're target colours, not paints.
+// A guide whose key isn't in TQ (dry) has no Ramps mode: its ramp is RAMPS.dry in seo.js and its page leaves out the wheel steps.
+// stepNote replaces the usual "thin to milk" line on the step-by-step list.
 
 export const TECH_TEXT = {
+  dry: {
+    slug: 'drybrushing', label: 'Drybrushing', level: 0, blurb: 'Fur, stone, chainmail and texture in minutes: almost-dry paint dusted over the raised detail.', short: 'Drybrushing', name: 'drybrushing',
+    title: 'How to drybrush miniatures, with paint ramps',
+    desc: 'How to drybrush miniatures: the basecoat and three drybrush layers for fur, stone and scales, the colour theory behind a drybrush ramp, the best drybrushes, the common mistakes, and the closest paints in every brand.',
+    bases: [['Grey stone', '#4a4b50'], ['Brown fur', '#4b3626'], ['Green scales', '#2f4a2c']],
+    stepNote: 'Don\'t thin the paint: drybrushing uses paint straight from the pot, with almost all of it wiped off the brush. Let the basecoat dry completely, then work up through the drybrush steps, each lighter, softer and smaller than the last.',
+    intro: [
+      'Drybrushing picks out raised detail with a brush that has almost no paint left on it. You load the brush, wipe nearly all the paint off onto kitchen roll, then flick it lightly across the model. The few pigment grains left on the bristles catch only on the ridges and edges, and the recesses stay dark. Fur, hair, stone, scales, chainmail, bases and rough terrain come alive in minutes.',
+      'It is the first highlighting technique most painters learn, because it is fast, forgiving and works best on exactly the textured surfaces that are slow to highlight by hand. Two or three drybrush layers, each lighter and lighter-handed than the last, over a dark basecoat (and a wash, if you like) is a complete, tabletop-ready finish.',
+    ],
+    need: [
+      'A dark basecoat and two or three lighter paints in the same colour family for the drybrush layers (the ramps below). Thick, cheap paint is fine; Citadel\'s Dry range and similar "dry" paints are made thick for exactly this, but any ordinary paint works.',
+      'A drybrush: a soft, round, domed one gives smooth results, a stiff flat one gives a rougher, grittier look. Never use your good brush, as drybrushing wears hair out fast. See <a href="/guides/miniature-paint-brushes">brush types</a> and <a href="/guides/best-brushes-for-miniature-painting#drybrushes">the best drybrushes</a>.',
+      'Kitchen roll or a paper towel to wipe the brush on, and a dry palette or a pot lid to load from (not a wet palette: the paint needs to be dry, not damp).',
+      'Optional: a dark wash over the basecoat before you start, to deepen the recesses.',
+    ],
+    steps: {
+      'Basecoat': 'Paint the whole area in the dark basecoat and let it dry. This is the colour the recesses will stay. If you like, give it a dark wash and let that dry too: it fills the deepest gaps and makes the drybrush layers stand out more.',
+      'Drybrush 1': 'Dip just the tips of the bristles in the first drybrush colour, then wipe almost all of it off on kitchen roll, until a stroke on the back of your hand leaves only a faint dusty mark. Flick the brush back and forth across the area, firmly enough to catch every raised texture. Build it up over several passes rather than loading more paint.',
+      'Drybrush 2': 'Wipe the brush even drier and use lighter strokes, so this layer catches only the higher ridges and edges. Leave the first drybrush showing on the lower texture. On fur, brush across the direction of the hair, not along it, so the bristles catch the strands.',
+      'Final dusting': 'Barely any paint and the lightest touch, only on the highest points and on the areas that face the light: the tops of shoulders and heads, the upper edges of rocks, the tips of fur. A small brush helps keep it where you want it.',
+    },
+    colour: [
+      'A drybrush ramp is a value ramp: each layer is lighter than the one below, because it only shows on the raised texture that would catch the light. The basecoat is dark on purpose (around lightness 25 to 35 for most colours) so the recesses read as shadow, and the final dusting climbs toward lightness 80 to 90.',
+      'Saturation drops as the layers get lighter, down to about a third of the basecoat\'s by the final dusting. Drybrushing lays dry, broken specks of paint over a rough surface, which already looks dusty and slightly chalky; a bright, saturated light layer makes that worse. A muted, slightly warm light colour (a bone or a pale sand, rather than pure white) looks like light falling on the texture, the same warm-light idea as in the <a href="/guides/colour-theory">colour theory guide</a>.',
+      'Because each layer only shows where the texture is high enough to catch it, the jumps between drybrush steps can be bigger than between layering steps. The texture does the blending: the eye mixes the specks of each colour with the colour underneath.',
+    ],
+    wheel: [
+      'The colour wheel doesn\'t have a drybrushing technique in Ramps mode yet, so the ramps on this page are worked out the same way the Ramps techniques are. Your basecoat is the darkest step. The two drybrush steps climb a third and two thirds of the way from it toward lightness 82, losing saturation as they go (to 85% and 70% of the basecoat\'s), and the final dusting is 80% of the way from your basecoat to lightness 92, at a third of its saturation. The hue turns 15% of the way toward yellow by the final dusting (only a few degrees for most colours): the warm light that keeps the top layers from looking chalky.',
+    ],
+    mistakes: [
+      'Too much paint on the brush. If the stroke leaves a smooth line or a patch rather than dusty specks, wipe more off. It is the most common drybrushing mistake, and the easiest to fix: keep wiping.',
+      'Going straight to white. A white final layer on a dark basecoat looks chalky and grey. Use a light, muted version of the colour, or a bone, and keep it small.',
+      'Drybrushing everything the same. Keep the top layers to the parts that face up and out; the undersides stay darker, which makes the model read as lit from above.',
+      'Using a good brush. Drybrushing splays and wears the hair. Keep a separate drybrush, or an old brush you have retired.',
+      'Getting dust on smooth areas. Drybrushing looks great on texture and blotchy on smooth panels and faces. Drybrush first, then paint the smooth parts, so you can tidy up any stray dust.',
+    ],
+  },
   nmm: {
     slug: 'best-paints-for-nmm', label: 'Non-metallic metal (NMM)', level: 7, blurb: 'Gold and steel from ordinary paints: extreme contrast from near black to a white glint.', short: 'NMM', name: 'non-metallic metal',
     title: 'How to paint non-metallic metal (NMM), with the best paints',
