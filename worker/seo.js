@@ -237,7 +237,8 @@ i.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);flex:n
 .m em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .ck{color:#2a9d5c;font-weight:700}
 ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ul.u li:first-child{border-top:0}
-ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}
+ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}ul.m.list{padding-left:0}ul.m.list li{display:block}
+ul.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 20px}ul.gl li{display:block;padding:6px 0}ul.gl b{font-size:17px}ul.gl .chip{height:12px;margin:6px 0 4px;max-width:240px}.prose h3,.panel h3{font-size:17px;margin:4px 0 6px}
 footer{font-size:12px;color:var(--mut);margin-top:24px}
 nav.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 nav.top a:not(.btn){color:#1b1b1b;text-decoration:none;padding:8px 14px;border-radius:14px;font-size:15px;font-weight:700;background:#fff;border:3px solid var(--ink)}
@@ -442,7 +443,7 @@ Each paint page lists the conversion-chart equivalents and the nearest swatch co
 /* ---------- guides: conversion charts and technique paint lists ---------- */
 
 const GUIDE_DATE = '2026-10-25';
-const conv = (a, b, an, bn) => ({ slug: `${a}-to-${b}`, conv: [a, b], title: `${an} to ${bn} conversion chart` });
+const conv = (a, b, an, bn) => ({ slug: `${a}-to-${b}`, conv: [a, b], title: `${an} to ${bn} conversion chart`, label: `${an} → ${bn}` });
 const GUIDES = [
   conv('citadel', 'vallejo', 'Citadel', 'Vallejo'),
   conv('citadel', 'army-painter', 'Citadel', 'Army Painter'),
@@ -454,7 +455,8 @@ const GUIDES = [
   conv('pro-acryl', 'citadel', 'Pro Acryl', 'Citadel'),
   // Technique guides, one per technique in the wheel's Ramps mode; the words are in tech-guides.js.
   ...Object.entries(TECH_TEXT).map(([q, t]) => ({ ...t, q, published: ['zen', 'edge', 'glaze'].includes(q) ? '2026-10-26' : GUIDE_DATE })),
-  { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true },
+  { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true, label: 'Colour theory',
+    blurb: 'Hue, value and saturation, colour schemes, and how the colour wheel picks complements and matches.' },
 ];
 
 const brandBy = (D, s) => D.brands.find(b => b.slug === s);
@@ -578,8 +580,12 @@ function rampChart(T) {
 <polyline points="${pts.join(' ')}" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="6 4"/>${pts.map(p => { const [a, b] = p.split(','); return `<circle cx="${a}" cy="${b}" r="4" fill="var(--card)" stroke="currentColor" stroke-width="2"/>` }).join('')}</svg>`;
 }
 
+// Example colours for a technique guide: its own bases, or the fixed bases the Suggested paints panel uses (SG_FIX in app.js).
+const guideBases = (D, g) => g.bases ? g.bases.map(([n, h]) => ({ n, h, lab: hexLab(h) })) : D.sgFix.filter(b => b.q === g.q);
+const guideBase = (D, g) => guideBases(D, g)[0];
+
 function techPage(D, g) {
-  const bases = g.bases ? g.bases.map(([n, h]) => ({ n, h, lab: hexLab(h) })) : D.sgFix.filter(b => b.q === g.q);
+  const bases = guideBases(D, g);
   const brands = D.brands.map(br => ({ br, pool: br.paints.filter(p => p.ramp) })).filter(x => x.pool.length >= 40);
   const grade = d => d < 6 ? 'close' : d < 12 ? 'fair' : 'loose';
   const ex = bases[0], T0 = TECH[g.q](ex.lab), ex0 = lchOf(ex.lab);
@@ -761,21 +767,26 @@ export function renderGuides(D) {
   return GUIDES.length;
 }
 
+// The guides in the order the /guides list shows them: colour theory, techniques from easiest to hardest, then conversion
+// charts (from Citadel, then to Citadel).
+const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level), ...GUIDES.filter(g => g.conv)];
+
 function guideLinks(cur) {
-  const li = g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`;
-  return `<section class="panel"><h2>More guides</h2><ul class="m">${GUIDES.filter(g => g !== cur).map(li).join('')}</ul></section>`;
+  const li = g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`;
+  return `<section class="panel"><h2>More guides</h2><ul class="m list">${guideOrder().filter(g => g !== cur).map(li).join('')}</ul></section>`;
 }
 
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
-  const title = 'Miniature paint conversion charts and paint guides';
-  const desc = 'Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, step-by-step guides to NMM, OSL, gems, skin, zenithal highlights, edge highlights and glazing with the best paints for each, and colour theory for miniature painters, built from ' + n + ' paints. Swatch colours are estimates.';
-  const li = g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`;
+  const title = 'Miniature painting guides and paint conversion charts';
+  const desc = 'Colour theory for miniature painters, step-by-step guides to edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, and Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, built from ' + n + ' paints. Swatch colours are estimates.';
+  const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${TECH[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
+  const charts = (k, h) => `<div><h3>${h}</h3><ul class="m">${GUIDES.filter(g => g.conv && g.conv[k] === 'citadel').map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div>`;
   const body = `<h1>Paint guides</h1>
-<p class="prose">Conversion charts, technique guides and a colour theory primer built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
-<div class="grid"><section class="panel"><h2>Conversion charts</h2><ul class="m">${GUIDES.filter(g => g.conv).map(li).join('')}</ul></section>
-<section class="panel"><h2>Painting techniques</h2><ul class="m">${GUIDES.filter(g => g.q).map(li).join('')}</ul></section>
-<section class="panel"><h2>Learn</h2><ul class="m">${GUIDES.filter(g => g.learn).map(li).join('')}</ul></section></div>
+<p class="prose">Guides to colour and painting techniques, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
+<section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
+<section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
+<section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}</div></section>
 <p>Looking for one paint? <a href="/paints">Browse every brand</a>.</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
 }

@@ -1,11 +1,12 @@
 // Text for the technique guides (/guides/<slug>), one per technique in the wheel's Ramps mode (TQ in app.js).
 // The pages are built in seo.js (techPage): the ramps, charts and paint picks come from the data, this file is only the words.
 // HTML is allowed (it's our own text). Step text is keyed by the step names the Ramps mode uses, so keep the two in step.
+// label and blurb are for the /guides list; level orders it, easiest first.
 // bases: example colours for techniques that have no fixed bases in SG_FIX (app.js). They're target colours, not paints.
 
 export const TECH_TEXT = {
   nmm: {
-    slug: 'best-paints-for-nmm', short: 'NMM', name: 'non-metallic metal',
+    slug: 'best-paints-for-nmm', label: 'Non-metallic metal (NMM)', level: 7, blurb: 'Gold and steel from ordinary paints: extreme contrast from near black to a white glint.', short: 'NMM', name: 'non-metallic metal',
     title: 'How to paint non-metallic metal (NMM), with the best paints',
     desc: 'How to paint non-metallic metal (NMM) on miniatures: the seven steps from deep shadow to glint, the colour theory behind gold and steel NMM, how The Painters Desk builds an NMM ramp, and the closest paints in every brand.',
     intro: [
@@ -46,7 +47,7 @@ export const TECH_TEXT = {
   },
 
   osl: {
-    slug: 'best-paints-for-osl', short: 'OSL', name: 'object source lighting',
+    slug: 'best-paints-for-osl', label: 'Object source lighting (OSL)', level: 6, blurb: 'Paint the glow a lantern, sword or spell casts on the model around it.', short: 'OSL', name: 'object source lighting',
     title: 'How to paint object source lighting (OSL), with the best paints',
     desc: 'How to paint object source lighting (OSL) on miniatures: building a glow from an unlit surface to a hot core, the colour theory behind OSL, how The Painters Desk builds an OSL ramp, and the closest paints in every brand.',
     intro: [
@@ -87,7 +88,7 @@ export const TECH_TEXT = {
   },
 
   gem: {
-    slug: 'best-paints-for-gems', short: 'Gems', name: 'gems and lenses',
+    slug: 'best-paints-for-gems', label: 'Gems and lenses', level: 5, blurb: 'Dark near the light, bright on the far side, and one sharp glint.', short: 'Gems', name: 'gems and lenses',
     title: 'How to paint gems and lenses, with the best paints',
     desc: 'How to paint gems and lenses on miniatures: the back-to-front ramp from deep shadow to reflected light and glint, the colour theory behind it, how The Painters Desk builds a gem ramp, and the closest paints in every brand.',
     intro: [
@@ -128,7 +129,7 @@ export const TECH_TEXT = {
   },
 
   skin: {
-    slug: 'best-paints-for-skin-tones', short: 'Skin', name: 'skin tones',
+    slug: 'best-paints-for-skin-tones', label: 'Skin tones', level: 4, blurb: 'Warm shadows and pale highlights for pale, mid and dark skin.', short: 'Skin', name: 'skin tones',
     title: 'How to paint skin tones, with the best paints',
     desc: 'How to paint skin on miniatures: shading and highlighting pale, mid and dark skin from deep shadow to top highlight, the colour theory behind skin ramps, how The Painters Desk builds a skin ramp, and the closest paints in every brand.',
     intro: [
@@ -167,7 +168,7 @@ export const TECH_TEXT = {
   },
 
   zen: {
-    slug: 'zenithal-highlighting', short: 'Zenithal', name: 'zenithal and volumetric highlights',
+    slug: 'zenithal-highlighting', label: 'Zenithal highlights', level: 2, blurb: 'Light from above: every panel and fold dark at the bottom, light at the top.', short: 'Zenithal', name: 'zenithal and volumetric highlights',
     title: 'Zenithal and volumetric highlighting: how to paint it, with paint ramps',
     desc: 'How to paint zenithal and volumetric highlights on miniatures: light from above on panels, folds and armour, the colour theory behind the ramp, how The Painters Desk builds a zenithal ramp, and the closest paints in every brand.',
     bases: [['Blue armour', '#2b4f8f'], ['Red cloak', '#8e1f24'], ['Green fatigues', '#4f6630']],
@@ -207,7 +208,7 @@ export const TECH_TEXT = {
   },
 
   edge: {
-    slug: 'edge-highlighting', short: 'Edge highlights', name: 'edge highlights',
+    slug: 'edge-highlighting', label: 'Edge highlighting', level: 1, blurb: 'Crisp lines along armour and vehicle edges: the quickest way to a sharp, finished model.', short: 'Edge highlights', name: 'edge highlights',
     title: 'How to edge highlight miniatures, with paint ramps',
     desc: 'How to edge highlight miniatures: one, two or three edge highlights and fine dots on armour and vehicles, the colour theory behind them, how The Painters Desk picks edge highlights for a base colour, and the closest paints in every brand.',
     bases: [['Black armour', '#2b2b30'], ['Blue armour', '#2b4f8f'], ['Red armour', '#8e1f24']],
@@ -245,7 +246,7 @@ export const TECH_TEXT = {
   },
 
   glaze: {
-    slug: 'glazing', short: 'Glazing', name: 'glazing',
+    slug: 'glazing', label: 'Glazing', level: 3, blurb: 'Smooth blends from thin, transparent layers, with a water ratio for each step.', short: 'Glazing', name: 'glazing',
     title: 'How to glaze miniatures: glazing blends with water ratios',
     desc: 'How to glaze miniatures: smooth blends built from thin, transparent layers, with a paint-to-water ratio for each step, the colour theory behind glazing, how The Painters Desk builds a glazing blend, and the closest paints in every brand.',
     bases: [['Red cloth', '#9a2328'], ['Blue cloth', '#2d4f99'], ['Green cloth', '#3f7a3a']],
