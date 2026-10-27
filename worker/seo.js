@@ -539,16 +539,14 @@ export const TECH = {
     out.forEach((x, i) => x.w = w[i]);
     return out;
   },
-};
-// Guide ramps: the Ramps techniques plus guides the wheel has no technique for yet (no step in TQ, so not checked against it).
-const RAMPS = {
-  ...TECH,
   dry(lab) {
     const L0 = lab[0], warm = (h, t) => h + hdS(h, 85) * .15 * t;
     return rampOf(lab, { dk: [], lt: ['Drybrush 1', 'Drybrush 2'], Ld: 0, Lt: 82, baseName: 'Basecoat', top: 'Final dusting', topL: L0 + (92 - L0) * .8, topC: C => C * .33,
       sC: C => C, sH: h => h, lC: (C, t) => C * (1 - .45 * t), lH: warm, topH: h => warm(h, 1) });
   },
 };
+// Guide ramps: every technique guide now has a Ramps technique, so these are the same as TECH.
+const RAMPS = TECH;
 const labHex = ([L, A, B]) => {
   const fy = (L + 16) / 116, iv = t => t ** 3 > .008856 ? t ** 3 : (t - 16 / 116) / 7.787, X = iv(fy + A / 500) * .95047, Y = iv(fy), Z = iv(fy - B / 200) * 1.08883;
   const s = v => { v = v > .0031308 ? 1.055 * v ** (1 / 2.4) - .055 : 12.92 * v; return Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0') };
@@ -645,8 +643,8 @@ ${g.wheel.map(p => `<p>${p}</p>`).join('')}
 <p>${onWheel ? 'Every technique then picks' : 'The paint lists below then pick'} real paints the same way${onWheel ? '' : ' as the Ramps mode'}: for each step it finds the nearest paint among the ones shown on the wheel, by ΔE with lightness counted 1.6 times as much as colour (value contrast is what sells a ramp), and never uses the same paint twice. Only opaque paints are used: no metallics, washes, contrast paints, inks, glazes, primers or fluorescents. Each step is graded Close (ΔE under 6), Fair (under 12) or Loose.</p>
 ${onWheel ? `<h3>Using it on the wheel</h3>
 <ol><li>Open <a href="/">the colour wheel</a> and pick <b>Ramps</b> above the wheel, then <b>${esc(D.tqFull[g.q] || g.short)}</b> under Technique (or <a href="${wheel}">open it straight in this mode</a>).</li>
-<li>Choose ${g.q === 'edge' ? '2 or 3 edges' : '5 or 7 steps'}${g.q === 'edge' ? '' : '; 5 steps leaves out some of the in-between steps for a quicker ramp'}.</li>
-<li>Tap ${g.q === 'osl' ? 'the colour of the light' : 'your base colour'} on the wheel, or in the neutrals list under it. If it's a metallic or effect paint, the ramp starts from the nearest opaque paint instead.</li>
+<li>Choose ${g.q === 'edge' ? '2 or 3 edges' : g.q === 'dry' ? '2 or 3 drybrush layers' : '5 or 7 steps'}${g.q === 'edge' || g.q === 'dry' ? '' : '; 5 steps leaves out some of the in-between steps for a quicker ramp'}.</li>
+<li>Tap ${g.q === 'osl' ? 'the colour of the light' : g.q === 'dry' ? 'your basecoat' : 'your base colour'} on the wheel, or in the neutrals list under it. If it's a metallic or effect paint, the ramp starts from the nearest opaque paint instead.</li>
 <li>Untick brands and ranges you don't want, or tick <b>Matches from my paints only</b> once your collection is set up, to build the ramp from the paints you own.</li>
 <li>Tap ↻ on a step to try the next nearest paint, then <b>Save as recipe</b> to keep the ramp, with the step notes above, in your recipes.</li></ol>` : `<h3>Finding your own colours on the wheel</h3>
 <p>Until there is a ${esc(g.short)} technique, <a href="/#/?ramp=edge">Ramps mode with Edge highlights</a> and 3 edges builds a similar light ramp from any base colour: tap your ${g.q === 'dry' ? 'basecoat' : 'base colour'} and use the edges as your ${g.q === 'dry' ? 'drybrush layers' : 'lighter steps'}. Untick brands you don't want, or tick <b>Matches from my paints only</b> to build it from the paints you own.</p>`}</section>

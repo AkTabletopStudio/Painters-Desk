@@ -3,7 +3,6 @@
 // HTML is allowed (it's our own text). Step text is keyed by the step names the Ramps mode uses, so keep the two in step.
 // label and blurb are for the /guides list; level orders it, easiest first.
 // bases: example colours for techniques that have no fixed bases in SG_FIX (app.js). They're target colours, not paints.
-// A guide whose key isn't in TQ (dry) has no Ramps mode: its ramp is RAMPS.dry in seo.js and its page leaves out the wheel steps.
 // stepNote replaces the usual "thin to milk" line on the step-by-step list.
 
 export const TECH_TEXT = {
@@ -35,7 +34,8 @@ export const TECH_TEXT = {
       'Because each layer only shows where the texture is high enough to catch it, the jumps between drybrush steps can be bigger than between layering steps. The texture does the blending: the eye mixes the specks of each colour with the colour underneath.',
     ],
     wheel: [
-      'The colour wheel doesn\'t have a drybrushing technique in Ramps mode yet, so the ramps on this page are worked out the same way the Ramps techniques are. Your basecoat is the darkest step. The two drybrush steps climb a third and two thirds of the way from it toward lightness 82, losing saturation as they go (to 85% and 70% of the basecoat\'s), and the final dusting is 80% of the way from your basecoat to lightness 92, at a third of its saturation. The hue turns 15% of the way toward yellow by the final dusting (only a few degrees for most colours): the warm light that keeps the top layers from looking chalky.',
+      'The Drybrushing technique in Ramps mode starts from your basecoat as the darkest step. The two drybrush steps climb a third and two thirds of the way from it toward lightness 82, losing saturation as they go (to 85% and 70% of the basecoat\'s), and the final dusting is 80% of the way from your basecoat to lightness 92, at a third of its saturation. The hue turns 15% of the way toward yellow by the final dusting (only a few degrees for most colours): the warm light that keeps the top layers from looking chalky.',
+      'Pick 2 or 3 drybrush layers: with 2, a single drybrush step sits halfway between the basecoat and the final dusting. If you already have the paint you want to drybrush with, tap that and tick <b>My pick is the first drybrush layer</b>: the ramp keeps your paint as the first layer and finds a darker, slightly duller basecoat to go under it, at a little under half its lightness.',
     ],
     mistakes: [
       'Too much paint on the brush. If the stroke leaves a smooth line or a patch rather than dusty specks, wipe more off. It is the most common drybrushing mistake, and the easiest to fix: keep wiping.',
