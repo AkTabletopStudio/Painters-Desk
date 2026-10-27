@@ -37,7 +37,7 @@ for(let i=0;i<CH.length;i++){const a=CH[i],k0=ck(a.x,a.y);for(let gx=-G;gx<=G;gx
 a.x+=(a.ox-a.x)*.008;a.y+=(a.oy-a.y)*.008;const dx=a.x-CX,dy=a.y-CY,d=Math.hypot(dx,dy);if(d>455||d<125){const t=Math.min(455,Math.max(125,d))/d;a.x=CX+dx*t;a.y=CY+dy*t}}}}
 function lines(n){let w=n.split(' ').map(x=>AB[x]||x);if(w.length===1)return w;let best=1,bm=1e9;for(let k=1;k<w.length;k++){const m=Math.max(w.slice(0,k).join(' ').length,w.slice(k).join(' ').length);if(m<bm){bm=m;best=k}}return[w.slice(0,best).join(' '),w.slice(best).join(' ')]}
 function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
-/* ---------- Ramp mode (NMM, OSL, gems, skin, zenithal, edge highlights, glazes) ----------
+/* ---------- Ramp mode (NMM, OSL, gems, skin, zenithal, edge highlights, glazes, drybrushing) ----------
    Tap a paint and it builds a light ramp for the chosen technique. Each technique sets its own stops in Lab/LCh
    (how dark and light it goes, how chroma and hue drift, and what the optional tint does). Each stop then takes the
    nearest ticked opaque paint by ΔE (lightness weighted, since value contrast is what sells a ramp). Swatches are estimates. */
@@ -109,9 +109,18 @@ glaze:{name:'Glazes',full:'Glazing blend',sum:'Glazing blend built on the Painte
    sC:(C,t)=>C*(.75+.25*t),sH:h=>h,lC:(C,t)=>C*(1-.4*t),lH:h=>h});
   out.forEach((x,i)=>x.w=w[i]);
   return NMO.t?tintAt(out,Math.max(8,L0*.4),Math.max(10,C0*.4),(h0+180)%360):out},
- tip:{'Deep glaze':'Very thin, built up in the deepest recesses over several coats.','Shadow glaze':'Thin coats over the shaded areas, letting each dry.','Base':'Thinned a little so it goes on smooth. Cover the whole area.','Glaze 1':'Thin coats over the lit two thirds. Wipe most of the paint off the brush first.','Glaze 2':'Thinner, over a smaller area inside the last.','Glaze 3':'Thinner again, over a smaller area.','Final glaze':'The thinnest, only on the highest points. Several coats build it up.'}}};
+ tip:{'Deep glaze':'Very thin, built up in the deepest recesses over several coats.','Shadow glaze':'Thin coats over the shaded areas, letting each dry.','Base':'Thinned a little so it goes on smooth. Cover the whole area.','Glaze 1':'Thin coats over the lit two thirds. Wipe most of the paint off the brush first.','Glaze 2':'Thinner, over a smaller area inside the last.','Glaze 3':'Thinner again, over a smaller area.','Final glaze':'The thinnest, only on the highest points. Several coats build it up.'}},
+dry:{name:'Drybrush',full:'Drybrushing',sum:'Drybrushing layers built on the Painters Desk wheel.',prev:'rocks',tint:'My pick is the first drybrush layer',steps:['2 layers','3 layers'],
+ hint:'Tap your basecoat to build drybrush layers over it.',
+ targets(b){const L0=lch(b)[0],warm=(h,t)=>h+hdS(h,85)*.15*t,lay=L7()?['Drybrush 1','Drybrush 2']:['Drybrush'];
+  // Each layer lighter, softer and a touch warmer, ending in a pale final dusting at a third of the saturation.
+  const o={Ld:0,Lt:82,top:'Final dusting',topL:L0+(92-L0)*.8,topC:C=>C*.33,sC:C=>C,sH:h=>h,lC:(C,t)=>C*(1-.45*t),lH:warm,topH:h=>warm(h,1)};
+  if(!NMO.t)return rampOf(b,{...o,dk:[],lt:lay,baseName:'Basecoat'});
+  // The pick is the first drybrush layer, over a darker, slightly duller basecoat.
+  return rampOf(b,{...o,dk:['Basecoat'],lt:lay.slice(1),baseName:lay[0],Ld:Math.max(8,L0*.45),sC:C=>C*.85})},
+ tip:{'Basecoat':'The dark colour the recesses stay. Cover the whole area and let it dry (a dark wash over it helps).','Drybrush':'Wipe almost all the paint off, then flick across the area to catch every raised texture.','Drybrush 1':'Wipe almost all the paint off, then flick across the area to catch every raised texture.','Drybrush 2':'Drier brush, lighter strokes: only the higher ridges and edges.','Final dusting':'Barely any paint, only on the highest points that face the light.'}}};
 // Ramp techniques with their own /guides page (worker/seo.js GUIDES).
-const TQ_GUIDE={nmm:'best-paints-for-nmm',osl:'best-paints-for-osl',skin:'best-paints-for-skin-tones',gem:'best-paints-for-gems',zen:'zenithal-highlighting',edge:'edge-highlighting',glaze:'glazing'};
+const TQ_GUIDE={nmm:'best-paints-for-nmm',osl:'best-paints-for-osl',skin:'best-paints-for-skin-tones',gem:'best-paints-for-gems',zen:'zenithal-highlighting',edge:'edge-highlighting',glaze:'glazing',dry:'drybrushing'};
 const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
 /* ---------- Blend mode ----------
    A blend starts from the wheel's own picks (two complements on the shadow side, two neighbours on the light side,
@@ -193,6 +202,9 @@ if(T.prev==='blade')return`<svg class="blade" viewBox="0 0 300 90" role="img" ar
 if(T.prev==='osl')return`<svg class="blade" viewBox="0 0 300 120" role="img" aria-label="Ramp preview as light spreading from a source"><defs>${rampGrad('nb',R,1)}</defs><rect x="4" y="4" width="292" height="112" rx="14" fill="${st[0].p.h}" stroke="#1b1b1b" stroke-width="3"/><ellipse cx="150" cy="60" rx="120" ry="54" fill="url(#nb)"/><circle cx="150" cy="60" r="7" fill="${st[st.length-1].p.h}" stroke="#1b1b1b" stroke-width="2"/></svg>`;
 if(T.prev==='gem'){const lin=st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-2)).toFixed(3)}" stop-color="${x.p.h}"/>`).slice(0,-1).join('');
  return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Ramp preview on a round gem"><defs><linearGradient id="nb" x1=".2" y1="0" x2=".8" y2="1">${lin}</linearGradient></defs><circle cx="150" cy="55" r="46" fill="#7a6a4a" stroke="#1b1b1b" stroke-width="3"/><circle cx="150" cy="55" r="38" fill="url(#nb)" stroke="#1b1b1b" stroke-width="3"/><circle cx="137" cy="40" r="5" fill="${st[st.length-1].p.h}"/></svg>`}
+if(T.prev==='rocks'){const rk=[[50,66,42,30],[128,58,40,40],[206,70,36,26],[262,62,30,34]];
+ // Rocks: the basecoat, then each drybrush layer catching less of the top of each rock.
+ return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Ramp preview as drybrush layers on rocks"><defs>${rk.map(([x,y,rx,ry],i)=>`<clipPath id="nr${i}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}"/></clipPath>`).join('')}</defs><rect x="4" y="80" width="292" height="26" rx="6" fill="${st[0].p.h}" stroke="#1b1b1b" stroke-width="3"/>${rk.map(([x,y,rx,ry],i)=>`<g clip-path="url(#nr${i})">${st.map((s,k)=>`<ellipse cx="${x-k*rx*.12}" cy="${y-k*ry*.42}" rx="${rx}" ry="${ry}" fill="${s.p.h}"/>`).join('')}</g><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="none" stroke="#1b1b1b" stroke-width="3"/>`).join('')}</svg>`}
 const w=292/st.length;return`<svg class="blade" viewBox="0 0 300 60" role="img" aria-label="Ramp preview as stepped bands">${st.map((x,i)=>`<rect x="${(4+i*w).toFixed(1)}" y="6" width="${w.toFixed(1)}" height="48" fill="${x.p.h}"/>`).join('')}<rect x="4" y="6" width="292" height="48" rx="6" fill="none" stroke="#1b1b1b" stroke-width="3"/></svg>`}
 function nmmPanel(b,R){const el=document.getElementById('sel'),T=TQN(),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const q=d=>d<6?['close','Close']:d<12?['fair','Fair']:['loose','Loose'],metal=!nmmOK(b),wt=x=>T.glaze?`<span class="nwt" title="Paint to water">1:${x.w} 💧</span>`:'';
