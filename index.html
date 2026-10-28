@@ -49,7 +49,7 @@ svg{width:100%;height:auto;display:block}
 .chip i{width:24px;height:24px;border-radius:50%;border:2px solid var(--ink);display:block;box-sizing:border-box}
 h2{font:400 17px/1.2 var(--hf);margin:10px 0 6px}
 .strip{display:flex;flex-wrap:wrap;gap:8px}
-.strip .chip{cursor:pointer}
+.strip .chip{cursor:pointer}.strip .chip.inr{outline:3px dashed var(--ink);outline-offset:2px}
 .chip:hover,.strip .chip:focus-visible{background:var(--yel);color:#1b1b1b}
 label{font-size:14px;color:var(--fg)}
 input[type=checkbox]{accent-color:var(--pur);width:18px;height:18px;vertical-align:-3px}
@@ -350,6 +350,9 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>28 October 2026</h2><ul>
+<li><span class="tg up">Better</span><b>Greys and whites in ramps now show on the wheel.</b> When a ramp or blend uses a grey or white from the Neutrals list, it gets a dashed dot on the wheel along the base paint's line (darker near the middle, lighter at the rim), so the ramp's path joins up. Those paints are also marked in the Neutrals panel, and its header says how many the ramp uses. Tap a dashed dot to inspect that paint.</li>
+</ul></div>
 <div class="panel cl"><h2>27 October 2026</h2><ul>
 <li><span class="tg nw">New</span><b>Drybrushing ramps.</b> Ramps mode has a new Drybrushing technique: tap your basecoat and get 2 or 3 drybrush layers and a final dusting, each lighter, softer and a touch warmer than the last. Already have the paint you drybrush with? Tick <b>My pick is the first drybrush layer</b> and it finds a darker basecoat to go under it. The <a href="guides/drybrushing">drybrushing guide</a> now opens it on the wheel.</li>
 </ul></div>

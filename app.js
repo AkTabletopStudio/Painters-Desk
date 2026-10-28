@@ -150,8 +150,7 @@ const mixHex=x=>x.base||!x.m?x.p.h:labHex(mixLab(x));
 const blendTag=p=>{const b=BL.b;if(!CH.includes(b)||!CH.includes(p))return'Neutral';if(hd(p.H,(b.H+180)%360)<=30)return'Complement';if(hd(p.H,b.H)<=30)return'Neighbour';return'Other hue'};
 function blendFill(p){if(!ACT||!BL)return false;if(p!==BL.b){if(ACT.ins)BL.s.splice(ACT.i,0,{p,sp:p,m:0,man:1});else BL.s[ACT.i]={...BL.s[ACT.i],p,man:1}}ACT=null;draw();return true}
 // Wheel overlay: the blend as a path through its paints on the wheel, and the centre disc as the blend in the painter's order.
-function blendWheel(){const st=BL.s,on=st.filter(x=>CH.includes(x.p));let s='';
-if(on.length>1)s+=`<polyline points="${on.map(x=>x.p.x+','+x.p.y).join(' ')}" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" opacity=".6"/>`;
+function blendWheel(){const st=BL.s;let s=stepLine(st.map(x=>x.p),BL.b);
 const b=BL.b,ax=(CH.includes(b)?b.H:0)*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
 return s+`<defs><linearGradient id="bg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${mixHex(x)}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#bg)" stroke="#1b1b1b" stroke-width="3"><title>Your blend</title></circle>`}
 function blendPanel(){const el=document.getElementById('sel'),b=BL.b,st=BL.s,i0=st.findIndex(x=>x.base),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -192,9 +191,17 @@ return'#'+s(3.2406*X-1.5372*Y-.4986*Z)+s(-.9689*X+1.8758*Y+.0415*Z)+s(.0557*X-.2
 // Gradient stops, lightest first. OSL draws radially (source in the middle); the rest top (light) to bottom (dark).
 const rampStops=R=>{const st=R.filter(x=>x.p).reverse();return st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${x.p.h}"/>`).join('')};
 const rampGrad=(id,R,rad)=>rad?`<radialGradient id="${id}" cx=".5" cy=".5" r=".5">${rampStops(R)}</radialGradient>`:`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${rampStops(R)}</linearGradient>`;
-// Wheel overlay: the ramp as a path through the paints that sit on the wheel, and the centre disc painted as the ramp.
-function nmmWheel(R){const on=R.filter(x=>x.p&&CH.includes(x.p)),T=TQN();let s='';
-if(on.length>1)s+=`<polyline points="${on.map(x=>x.p.x+','+x.p.y).join(' ')}" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" opacity=".6"/>`;
+// Greys and whites have no hue, so a ramp or blend step that uses one gets a dashed dot on the base paint's spoke, placed by lightness
+// like the rest of the wheel (dark in the middle, light at the rim). OFF holds those dots for draw(); stepPts gives every step a point.
+let OFF=[];
+function stepPts(ps,b){const h=CH.includes(b)?b.H:(ps.find(p=>CH.includes(p))||{H:0}).H,a=U(h)*Math.PI/180-Math.PI/2,o=[];
+ ps.forEach(p=>{if(!CH.includes(p)&&!o.some(x=>x.p===p))o.push({p,r:135+Math.min(1,Math.max(0,(p.L-.1)/.85))*320})});
+ o.sort((x,y)=>x.r-y.r).forEach((x,i)=>{if(i)x.r=Math.max(x.r,o[i-1].r+44)});
+ OFF=o.map(x=>[x.p,CX+x.r*Math.cos(a),CY+x.r*Math.sin(a)]);
+ return ps.map(p=>{if(CH.includes(p))return[p.x,p.y];const q=OFF.find(x=>x[0]===p);return[q[1],q[2]]})}
+const stepLine=(ps,b)=>{const q=stepPts(ps,b);return q.length>1?`<polyline points="${q.map(x=>x.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" opacity=".6"/>`:''};
+// Wheel overlay: the ramp as a path through its paints (greys and whites on the base paint's spoke), and the centre disc painted as the ramp.
+function nmmWheel(R){const T=TQN();let s=stepLine(R.filter(x=>x.p).map(x=>x.p),NB);
 return s+`<defs>${rampGrad('ng',R,T.prev==='osl')}</defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#ng)" stroke="#1b1b1b" stroke-width="3"><title>${T.full} ramp</title></circle>`}
 // Small preview of the ramp on a shape that suits the technique.
 function rampPrev(R,T){const st=R.filter(x=>x.p);
@@ -253,7 +260,7 @@ function discStops(sel,comp,ana){
  seq.forEach((c,i)=>{out.push([okHex(c),off[i]]);if(i<seq.length-1){const K=i===jx-1?16:6;for(let k=1;k<K;k++){const t=k/K;out.push([okHex(c.map((v,j)=>v+(seq[i+1][j]-v)*t)),off[i]+(off[i+1]-off[i])*t])}}});
  return out}
 const svg=document.getElementById('w');let sel=null;
-function draw(){let s='';
+function draw(){let s='';OFF=[];
 for(let h=0;h<360;h+=10){const a0=U(h-5)*Math.PI/180-Math.PI/2,a1=U(h+5)*Math.PI/180-Math.PI/2,R=480,r=110;
 s+=`<path d="M${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}L${CX+R*Math.cos(a0)} ${CY+R*Math.sin(a0)}A${R} ${R} 0 0 1 ${CX+R*Math.cos(a1)} ${CY+R*Math.sin(a1)}L${CX+r*Math.cos(a1)} ${CY+r*Math.sin(a1)}A${r} ${r} 0 0 0 ${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}Z" fill="hsl(${h},65%,50%)" opacity=".16"/>`}
 [.2,.5,.8].forEach(l=>s+=`<circle cx="${CX}" cy="${CY}" r="${140+l*300}" fill="none" stroke="currentColor" opacity=".18" stroke-dasharray="4 6"/>`);
@@ -276,8 +283,11 @@ const st=(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-das
 const sw=p===sel?5:comp.includes(p)?4:2;
 s+=`<g class="dot" data-i="${p.i}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))?' stroke="#fff" stroke-width="4"':''}/>`+
 (show?`<g transform="translate(${p.x} ${p.y}) scale(${kk}) translate(${-p.x} ${-p.y})">`+ls.map((t,i)=>`<text x="${p.x}" y="${p.y-(ls.length*8-4)/1+i*8.5-2+4}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${p.x}" y="${p.y+20-(ls.length>1?1:-3)-(ls.length>1?0:0)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c})</title></g>`});
+OFF.forEach(([p,x,y])=>{const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';s+=`<g class="dot ndot" data-i="${p.i}"><circle cx="${x}" cy="${y}" r="${R0+3}" fill="none" stroke="#1b1b1b" stroke-width="3"/><circle cx="${x}" cy="${y}" r="${R0}" fill="${p.h}" stroke="#fff" stroke-width="4" stroke-dasharray="5 4"/>`+
+ (show?`<g transform="translate(${x} ${y}) scale(${kk}) translate(${-x} ${-y})">`+ls.map((t,i)=>`<text x="${x}" y="${y-(ls.length*8-4)+i*8.5+2}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${x}" y="${y+20-(ls.length>1?1:-3)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c}) · a grey or white from the Neutrals list</title></g>`});
 svg.innerHTML=s;
-svg.querySelectorAll('.dot').forEach(e=>e.onclick=()=>pick(P[+e.dataset.i]));
+svg.querySelectorAll('.dot').forEach(e=>e.onclick=()=>e.classList.contains('ndot')?neutralShow(P[+e.dataset.i]):pick(P[+e.dataset.i]));
+neuMark(MX?'blend':'ramp');
 const chip=p=>`<span class="chip"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`;
 if(R){nmmPanel(NBp,R);return}
 if(MX){blendPanel();return}
@@ -287,8 +297,10 @@ document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips
 function pick(p){if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
-document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));
-document.getElementById('neuN').textContent=NE.length===1?'(1 paint)':`(${NE.length} paints)`}
+document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));neuMark()}
+// Marks the neutrals list chips that the ramp or blend on the wheel uses, and counts them in the panel header.
+function neuMark(w){const ins=new Set(OFF.map(x=>x[0].i));let n=0;document.querySelectorAll('#neu .chip').forEach(e=>{const h=ins.has(+e.dataset.i);e.classList.toggle('inr',h);n+=h});
+document.getElementById('neuN').textContent=(NE.length===1?'(1 paint':`(${NE.length} paints`)+(n?` · ${n} in this ${w||'ramp'})`:')')}
 function tyUI(){const b=document.getElementById('hTy'),n=HIDE_T.size;b.textContent=n?`Paint types (${n} hidden)`:'Paint types';b.setAttribute('aria-pressed',n>0)}
 (()=>{const d=document.getElementById('tyDlg'),cnt={};P.forEach(p=>{const t=paintType(p);cnt[t]=(cnt[t]||0)+1});
 document.getElementById('tyList').innerHTML=`<label class="tyr"><input type="checkbox" checked disabled><span><b>Base & layer paints</b> <em>${cnt.op}</em><small>Opaque paints, always shown</small></span></label>`+
