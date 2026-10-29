@@ -48,13 +48,12 @@ async function wheelSync(){
  else if(OWN.size){P.forEach(p=>p.on=OWN.has(p.k));boxes();refresh()}}
 
 async function loadMe(){
- // The extra tabs only show once there is a way to sign in (or someone is already signed in).
+ // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
  try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
  if(ME){try{OWN=new Set((await api('/collection')).paints)}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
  if(ME)await wheelSync();else onSelSave=null;
- document.querySelectorAll('#nav a[data-v]').forEach(a=>{if(a.dataset.v!=='wheel'&&a.dataset.v!=='welcome')a.hidden=!API});
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
- $('acct').innerHTML=ME?avHTML(ME)+esc(ME.name):'Sign in';
+ $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
  $('mine').hidden=!ME;
  $('fbBtn').hidden=!API;
  askUpdates();
@@ -73,6 +72,7 @@ function route(){
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'))));
+ {const s=document.querySelector('#nav .secs'),o=s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8}
  if(view==='welcome')renderWelcome();
  else if(view==='paints')renderPaints();
  else if(view==='recipes')renderRecipes();
@@ -178,7 +178,7 @@ function renderAccount(){
  $('pSave').onclick=async()=>{if(busy){$('pMsg').textContent='Please wait for the picture to finish uploading.';return}
   $('pSave').disabled=true;$('pMsg').className='s';$('pMsg').textContent='Saving…';
   try{ME=(await api('/me/profile',{method:'PUT',body:{name:$('pName').value,bio:$('pBio').value,link:$('pLink').value.trim(),favourites:fav,icon}})).user;INFO.user=ME;
-   $('acct').innerHTML=avHTML(ME)+esc(ME.name);renderAccount();$('pMsg').textContent='Saved.'}
+   $('acct').innerHTML=avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>';$('acct').title=ME.name;renderAccount();$('pMsg').textContent='Saved.'}
   catch(e){$('pMsg').className='err';$('pMsg').textContent=e.message;$('pSave').disabled=false}};
  $('pwSet').onsubmit=async e=>{e.preventDefault();$('sGo').disabled=true;$('sMsg').className='s';$('sMsg').textContent='';
   try{await api('/me/password',{method:'PUT',body:{password:$('sPw').value,current:$('sCur')?.value,email:$('sEmail')?.value}});

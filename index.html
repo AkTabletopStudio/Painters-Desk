@@ -79,13 +79,7 @@ details.br{margin:6px 0}details.br>summary{padding:5px 0;font-weight:700;font-si
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mt .ck{background:#17403b}:root:not([data-theme="light"]) .mt .ck b{color:#7fe7dc}}
 .mt button{font-size:13.5px;padding:6px 12px;border-radius:999px;margin:6px 8px 0 0}
 b.own{color:#c98a00;font-size:13px}
-nav.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 6px;padding-bottom:12px}
-nav.top a{color:#1b1b1b;text-decoration:none;padding:8px 16px;border-radius:14px;font-size:15px;font-weight:700;background:#fff;border:3px solid var(--ink)}
-nav.top a.on{background:var(--yel);box-shadow:4px 4px 0 var(--sh)}
-nav.top a:hover{background:var(--yel)}
-nav.top .sp{flex:1}
-nav.top #acct{background:var(--pur);color:#fff;box-shadow:4px 4px 0 var(--sh)}nav.top #acct.on,nav.top #acct:hover{background:#6a22d0}
-nav.top img,.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;border:2px solid var(--ink);box-sizing:border-box}
+.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;border:2px solid var(--ink);box-sizing:border-box}
 .btn.pri{background:var(--yel);color:#1b1b1b}.btn.dan{background:var(--red);color:#1b1b1b}
 dialog.pd{background:var(--card);color:var(--fg);border:3px solid var(--ink);border-radius:20px;box-shadow:6px 6px 0 var(--sh);padding:20px;max-width:min(420px,calc(100vw - 32px));box-sizing:border-box}dialog.pd::backdrop{background:rgba(27,27,27,.45)}dialog.pd h2{font-family:var(--hf);font-weight:400;font-size:20px;margin:0 0 8px}dialog.pd p{margin:0 0 16px;color:var(--mut)}dialog.pd .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 #foot{margin-bottom:64px}
@@ -171,10 +165,8 @@ img.av{object-fit:cover}
 .panel h3{font-size:15px;margin:16px 0 4px}
 .f input[type=email],.f input[type=password]{width:100%;box-sizing:border-box}
 :focus-visible{outline:3px solid var(--blu);outline-offset:2px}
-nav.top a.home{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 6px;font:400 15px var(--hf)}
 .ngl{font-size:14px;font-weight:700;color:inherit}
 .glinks{margin:10px 0 0}.glinks a{color:inherit;font-weight:700}
-nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
 .hero{display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin:10px 0 22px}
 .hero .logo{width:132px;height:132px;flex:none;border:3px solid var(--ink);border-radius:30px;box-shadow:6px 6px 0 var(--sh);background:var(--card);overflow:hidden}
 .hero .logo img{width:100%;height:100%;display:block}
@@ -232,6 +224,23 @@ button.bsw{cursor:pointer;padding:0}.bsw:hover{outline:3px solid var(--yel)}.bbt
 @media (max-width:520px){.sgs i{width:14px;height:14px}.sgs u{inset:2px}.sgq{font-size:13px}}
 .nwt{display:inline-block!important;margin-top:2px;font-size:11px!important;font-weight:700;border:2px solid var(--ink);border-radius:999px;padding:0 6px;background:#dff1fa;color:#1b1b1b!important}
 #nTintL[hidden]{display:none}
+/* Top nav: the same buttons on every page. seo.js copies this and the themes below onto the paint and guide pages.
+   On phones the sections sit in one row under the logo that swipes sideways. */
+nav.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 6px;padding-bottom:12px}
+nav.top .secs{display:contents}
+nav.top a{color:#1b1b1b;text-decoration:none;padding:8px 16px;border-radius:14px;font-size:15px;font-weight:700;background:#fff;border:3px solid var(--ink);white-space:nowrap}
+nav.top a.on{background:var(--yel);box-shadow:4px 4px 0 var(--sh)}
+nav.top a:hover{background:var(--yel)}
+nav.top .sp{flex:1}
+nav.top #acct{background:var(--pur);color:#fff;box-shadow:4px 4px 0 var(--sh)}nav.top #acct.on,nav.top #acct:hover{background:#6a22d0}
+nav.top img{width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;border:2px solid var(--ink);box-sizing:border-box}
+nav.top a.home{display:inline-flex;align-items:center;gap:8px;padding:5px 14px 5px 6px;font:400 15px var(--hf)}
+nav.top a.home img{width:30px;height:30px;border-radius:8px;margin:0}
+nav.top button.thb{font:inherit;font-weight:700;font-size:15px;padding:8px 14px;border-radius:14px;background:var(--navbg,#fff);color:var(--navfg,#1b1b1b);border:3px solid var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+nav.top button.thb:hover{background:var(--yel);color:#1b1b1b}
+@media (max-width:700px){nav.top{gap:8px}nav.top a{padding:7px 12px}nav.top a.home{padding:4px 10px 4px 4px}nav.top a.home img{width:26px;height:26px}
+ nav.top button.thb{padding:7px 10px}nav.top .tl{display:none}nav.top #acct{max-width:42vw;overflow:hidden;text-overflow:ellipsis}nav.top #acct .an{display:none}nav.top #acct .av{margin:0}
+ nav.top .secs{display:flex;order:9;width:100%;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 6px 8px 2px;margin:0 -2px}nav.top .secs::-webkit-scrollbar{display:none}nav.top .secs a{flex:none}}
 /* Site themes (data-look on <html>). Paint Pot is the default and has no attribute. */
 @font-face{font-family:Orbitron;src:url(fonts/orbitron-700.woff2) format('woff2');font-weight:700;font-display:swap}
 @font-face{font-family:'Pirata One';src:url(fonts/pirata-one.woff2) format('woff2');font-weight:400;font-display:swap}
@@ -312,8 +321,6 @@ button.bsw{cursor:pointer;padding:0}.bsw:hover{outline:3px solid var(--yel)}.bbt
 :root[data-look="dwarf"] nav.top a{text-transform:uppercase;letter-spacing:1px;font-size:13px}
 :root[data-look="dwarf"] nav.top a.home{font-family:Cinzel,serif;text-transform:none;letter-spacing:.5px;font-size:15px}
 :root[data-look="dwarf"] nav.top #acct{color:#f1e6cc}
-nav.top button.thb{font:inherit;font-weight:700;font-size:15px;padding:8px 14px;border-radius:14px;background:var(--navbg,#fff);color:var(--navfg,#1b1b1b);border:3px solid var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-nav.top button.thb:hover{background:var(--yel);color:#1b1b1b}
 :root[data-look="grim"] nav.top button.thb{border-radius:3px;text-transform:uppercase;letter-spacing:1px;font-size:13px}
 :root[data-look="cyber"] nav.top button.thb{font-family:Orbitron,Rubik,sans-serif;text-transform:uppercase;font-size:13px}
 .thg{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:12px;margin:0 0 16px}
@@ -333,7 +340,7 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 .tho b{display:block;padding:8px 10px 2px;font-size:16px;font-weight:400}
 .tho small{display:block;padding:0 10px 10px;color:var(--mut);font-size:12px}
 </style></head><body><div class="wrap">
-<nav class="top" id="nav"><a href="#/welcome" data-v="welcome" class="home" title="Welcome"><img src="icons/icon-192.png" alt="" class="pdi" data-def="icons/icon-192.png">Painters Desk</a><a href="#/" data-v="wheel">Colour wheel</a><a href="guides" title="Conversion charts, technique guides and colour theory">Guides</a><a href="#/paints" data-v="paints" hidden>My paints</a><a href="#/recipes" data-v="recipes" hidden>Recipes &amp; tutorials</a><span class="sp"></span><button type="button" class="thb" id="thBtn" aria-haspopup="dialog" title="Change the site theme"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:inline;width:18px"><path fill="currentColor" d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A5.6 5.6 0 0 0 22 10c0-4.4-4.5-8-10-8zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Theme</button><a href="#/account" data-v="account" id="acct" hidden>Sign in</a></nav>
+<nav class="top" id="nav"><a href="/#/welcome" data-v="welcome" class="home" title="Welcome"><img src="/icons/icon-192.png" alt="" class="pdi" data-def="/icons/icon-192.png">Painters Desk</a><span class="secs"><a href="/#/" data-v="wheel">Colour wheel</a><a href="/paints" data-v="list" title="Every paint by brand, with its closest matches">Paints</a><a href="/guides" data-v="guides" title="Conversion charts, technique guides and colour theory">Guides</a><a href="/#/recipes" data-v="recipes" title="Recipes, tutorials, palettes and commission painters">Recipes</a><a href="/#/paints" data-v="paints" title="The paints you own">My paints</a></span><span class="sp"></span><button type="button" class="thb" id="thBtn" aria-haspopup="dialog" title="Change the site theme" aria-label="Theme"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" style="display:inline;width:18px"><path fill="currentColor" d="M12 2a10 10 0 0 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1.1.9-2 2-2h2.4A5.6 5.6 0 0 0 22 10c0-4.4-4.5-8-10-8zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg><span class="tl">Theme</span></button><a href="/#/account" data-v="account" id="acct">Sign in</a></nav>
 <section id="v-welcome" hidden>
 <div class="hero"><div class="logo" id="wLogo"><img src="icons/icon-512.png" alt="The Painters Desk icon" class="pdi" data-def="icons/icon-512.png"><script>pdIcon()</script></div>
 <div><h1>Welcome to The Painters Desk</h1>
@@ -350,6 +357,9 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>29 October 2026</h2><ul>
+<li><span class="tg up">Better</span><b>The same buttons on every page.</b> The top bar now has Colour wheel, Paints, Guides, Recipes, My paints, Theme and Sign in everywhere, including the paint pages and guides, and the page you are on is highlighted. Nothing pops in after the page loads. On a phone the sections sit in one row under the logo that you swipe sideways.</li>
+</ul></div>
 <div class="panel cl"><h2>28 October 2026</h2><ul>
 <li><span class="tg up">Better</span><b>Greys and whites in ramps now show on the wheel.</b> When a ramp or blend uses a grey or white from the Neutrals list, it gets a dashed dot on the wheel along the base paint's line (darker near the middle, lighter at the rim), so the ramp's path joins up. Those paints are also marked in the Neutrals panel, and its header says how many the ramp uses. Tap a dashed dot to inspect that paint.</li>
 </ul></div>
