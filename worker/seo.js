@@ -28,6 +28,13 @@ export async function seo(request, env, url) {
   let r;
   if (p === '/sitemap.xml') r = send(sitemap(D), 'application/xml; charset=utf-8');
   else if (p === '/paints') r = send(indexPage(D));
+  else if (p === '/paints/search.json') return send(searchIndex(D), 'application/json; charset=utf-8');
+  else if (p === '/paints/search') {
+    // The search box without JavaScript: one hit goes straight to the paint, otherwise a list of hits.
+    const q = (url.searchParams.get('q') || '').slice(0, 80), hits = findPaints(searchList(D), q);
+    if (hits.length === 1) return Response.redirect(url.origin + hits[0].u, 302);
+    r = send(searchPage(D, q, hits));
+  }
   else if (p === '/paints/find') {
     // The colour wheel links a selected paint here by its key (range|code|name); send it on to that paint's page.
     const [g, c, ...n] = (url.searchParams.get('k') || '').split('|');
@@ -186,7 +193,7 @@ const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painter
 const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png' };
 
 // ld: extra schema.org objects for this page (the breadcrumb trail is always added). og: 'website' or 'article'.
-function page({ title, desc, path, crumbs, body, ld = [], og = 'website' }) {
+function page({ title, desc, path, crumbs, body, ld = [], og = 'website', q = '' }) {
   const graph = {
     '@context': 'https://schema.org',
     '@graph': [{
@@ -224,6 +231,16 @@ body::before{content:"";display:block;height:12px;margin:0 -16px 14px;background
 a{color:inherit}
 .btn{display:inline-block;font:700 15px Rubik,sans-serif;background:var(--yel);color:#1b1b1b;border:3px solid var(--ink);border-radius:12px;padding:8px 14px;box-shadow:3px 3px 0 var(--sh);text-decoration:none}
 nav.crumbs{font-size:14px;color:var(--mut);margin:14px 0 0}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+form.psch{position:relative;display:flex;gap:8px;margin:6px 0 0;max-width:640px}
+form.psch input{flex:1;min-width:0;font:inherit;padding:10px 14px;border:3px solid var(--ink);border-radius:14px;background:linear-gradient(var(--card),var(--card)),var(--bg);color:var(--fg)}
+:root[data-look=grim] :is(form.psch input,#psl){border-radius:3px}:root[data-look=dwarf] :is(form.psch input,#psl){border-radius:2px}
+form.psch .btn{cursor:pointer}
+#psl{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);list-style:none;margin:0;padding:6px;background:linear-gradient(var(--card),var(--card)),var(--bg);border:3px solid var(--ink);border-radius:14px;box-shadow:5px 5px 0 var(--sh);max-height:min(60vh,440px);overflow-y:auto}
+#psl a{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:10px;text-decoration:none}
+#psl li[aria-selected=true] a,#psl a:hover{background:color-mix(in srgb,var(--yel) 35%,transparent)}
+ul.m.sr{columns:2 300px}ul.m.sr li{break-inside:avoid}
+#psl em{display:block;font-style:normal;font-size:13px;color:var(--mut)}#psl .none{padding:6px 8px;color:var(--mut)}
 h1{font:400 clamp(28px,5vw,44px)/1.1 var(--hf);margin:10px 0}
 h2{font:400 22px/1.2 var(--hf);margin:0 0 8px}
 p.s{color:var(--mut);font-size:14px;margin:0 0 12px}
@@ -266,7 +283,7 @@ figure{margin:0;flex:0 1 320px;text-align:center}svg.pic{width:100%;max-width:32
 ol.steps li{padding:8px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ol.steps li:first-child{border-top:0}ol.steps em{font-size:15px;color:var(--fg);margin-top:2px}ol.steps .sw{width:30px;height:30px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
 ${THEME.css}</style></head>
 <body><div class="wrap navw">${THEME.nav.replace(`data-v="${path.startsWith('/guides') ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
-<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
+${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
 Chart-listed matches come from the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart; the rest are a nearest-colour calculation.
@@ -341,6 +358,74 @@ ${usedInHTML(p, rs)}`;
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
     ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` } })],
   });
+}
+
+/* ---------- paint search (the box at the top of every /paints page) ---------- */
+
+// Every paint as [name, code, brand, range, swatch, address], fetched once by the search box from /paints/search.json.
+function searchList(D) {
+  if (D.search) return D.search;
+  return D.search = D.brands.flatMap(b => b.paints.map(p => [p.n, p.c, short(b), D.GL[p.g] || '', p.h, p.url]));
+}
+function searchIndex(D) {
+  return D.searchJSON || (D.searchJSON = JSON.stringify(searchList(D)));
+}
+
+// Shared by the Worker (no-JavaScript results page) and the browser (the drop-down): the browser gets this function's
+// source, so both always agree. Every word typed must start a word of the paint's name, code, brand or range
+// (or appear inside the name); names that start with what was typed come first.
+function findPaints(L, q, max) {
+  var norm = function (t) { return String(t).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9.]+/g, ' ').trim() };
+  var w = norm(q), ws = w.split(' ').filter(Boolean), out = [];
+  if (!ws.length) return out;
+  for (var i = 0; i < L.length; i++) {
+    var e = L[i], n = norm(e[0]), c = norm(e[1]), hay = ' ' + n + ' ' + c + ' ' + norm(e[2] + ' ' + e[3]), ok = true;
+    for (var k = 0; k < ws.length && ok; k++) ok = hay.indexOf(' ' + ws[k]) >= 0 || (ws[k].length > 2 && n.indexOf(ws[k]) >= 0);
+    if (!ok) continue;
+    var s = n === w || c === w ? 0 : n.indexOf(w) === 0 || c.indexOf(w) === 0 ? 1 : (' ' + n).indexOf(' ' + ws[0]) >= 0 ? 2 : 3;
+    out.push({ s: s, n: e[0], c: e[1], b: e[2], r: e[3], h: e[4], u: e[5] });
+  }
+  out.sort(function (a, b) { return a.s - b.s || a.n.length - b.n.length || (a.n < b.n ? -1 : a.n > b.n ? 1 : 0) });
+  return max ? out.slice(0, max) : out;
+}
+
+function searchBox(q) {
+  return `<form class="psch" action="/paints/search" method="get" role="search">
+<label for="psq" class="vh">Find a paint</label>
+<input id="psq" name="q" type="search" value="${esc(q)}" placeholder="Find a paint: name or code, e.g. Mephiston Red" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="psl" aria-autocomplete="list">
+<button class="btn" type="submit">Go</button>
+<ul id="psl" role="listbox" hidden></ul></form>
+<script>(function(){${findPaints.toString()}
+var d=document,f=d.querySelector('form.psch'),q=d.getElementById('psq'),ul=d.getElementById('psl'),L=null,hits=[],on=-1,ld;
+function load(){return ld||(ld=fetch('/paints/search.json').then(function(r){return r.json()}).then(function(x){L=x}).catch(function(){ld=null}))}
+function show(i){on=i;[].forEach.call(ul.children,function(li,k){li.setAttribute('aria-selected',k===on?'true':'false');if(k===on)li.scrollIntoView({block:'nearest'})});
+ if(on>=0)q.setAttribute('aria-activedescendant','ps'+on);else q.removeAttribute('aria-activedescendant')}
+function close(){ul.hidden=true;q.setAttribute('aria-expanded','false');show(-1)}
+function draw(){if(!L){load().then(draw);return}hits=findPaints(L,q.value,10);ul.textContent='';
+ if(!q.value.trim()){close();return}
+ if(!hits.length){var e=d.createElement('li');e.className='none';e.textContent='No paints match';ul.append(e)}
+ hits.forEach(function(h,k){var li=d.createElement('li'),a=d.createElement('a'),i=d.createElement('i'),t=d.createElement('span'),em=d.createElement('em');
+  li.id='ps'+k;li.setAttribute('role','option');a.href=h.u;a.tabIndex=-1;i.className='sw';i.style.background=h.h;t.textContent=h.n+(h.c?' ('+h.c+')':'');em.textContent=h.b+' · '+h.r;
+  t.append(em);a.append(i,t);li.append(a);ul.append(li)});
+ ul.hidden=false;q.setAttribute('aria-expanded','true');show(hits.length?0:-1)}
+q.addEventListener('focus',load);q.addEventListener('input',draw);
+q.addEventListener('keydown',function(e){if(ul.hidden&&e.key!=='ArrowDown')return;
+ if(e.key==='ArrowDown'){e.preventDefault();if(ul.hidden)draw();else show(Math.min(on+1,hits.length-1))}
+ else if(e.key==='ArrowUp'){e.preventDefault();show(Math.max(on-1,0))}
+ else if(e.key==='Escape'){close()}});
+f.addEventListener('submit',function(e){if(on>=0&&hits[on]&&!ul.hidden){e.preventDefault();location.href=hits[on].u}});
+d.addEventListener('click',function(e){if(!f.contains(e.target))close()})})()</script>`;
+}
+
+function searchPage(D, q, hits) {
+  const top = hits.slice(0, 100);
+  const body = `<h1>${q.trim() ? `Paints matching “${esc(q)}”` : 'Find a paint'}</h1>
+${q.trim() ? `<p class="s">${hits.length ? `${hits.length} paint${hits.length === 1 ? '' : 's'}${hits.length > top.length ? `, showing the first ${top.length}` : ''}.` : 'No paints match. Try part of the name, or the paint code.'}</p>` : '<p class="s">Type part of a paint name or its code.</p>'}
+${top.length ? `<div class="panel"><ul class="m sr">${top.map(h => `<li><i class="sw" style="background:${h.h}"></i><span><a href="${h.u}">${esc(h.n + (h.c ? ' (' + h.c + ')' : ''))}</a><em>${esc(h.b + ' · ' + h.r)}</em></span></li>`).join('')}</ul></div>` : ''}`;
+  return page({
+    title: 'Find a paint', desc: 'Search miniature paints by name or code.', path: '/paints/search', q, body,
+    crumbs: [['Paints', '/paints'], ['Search', '/paints/search']],
+  }).replace('<meta name="description"', '<meta name="robots" content="noindex"><meta name="description"');
 }
 
 /* ---------- brand guides ---------- */
