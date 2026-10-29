@@ -372,7 +372,7 @@ function searchIndex(D) {
 }
 
 // Shared by the Worker (no-JavaScript results page) and the browser (the drop-down): the browser gets this function's
-// source, so both always agree. Every word typed must start a word of the paint's name, code, brand or range
+// source, so both always agree. Wrangler's bundler wraps inner functions in __name(), so the page defines a stand-in __name. Every word typed must start a word of the paint's name, code, brand or range
 // (or appear inside the name); names that start with what was typed come first.
 function findPaints(L, q, max) {
   var norm = function (t) { return String(t).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9.]+/g, ' ').trim() };
@@ -395,7 +395,7 @@ function searchBox(q) {
 <input id="psq" name="q" type="search" value="${esc(q)}" placeholder="Find a paint: name or code, e.g. Mephiston Red" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="psl" aria-autocomplete="list">
 <button class="btn" type="submit">Go</button>
 <ul id="psl" role="listbox" hidden></ul></form>
-<script>(function(){${findPaints.toString()}
+<script>(function(){var __name=function(f){return f};${findPaints.toString()}
 var d=document,f=d.querySelector('form.psch'),q=d.getElementById('psq'),ul=d.getElementById('psl'),L=null,hits=[],on=-1,ld;
 function load(){return ld||(ld=fetch('/paints/search.json').then(function(r){return r.json()}).then(function(x){L=x}).catch(function(){ld=null}))}
 function show(i){on=i;[].forEach.call(ul.children,function(li,k){li.setAttribute('aria-selected',k===on?'true':'false');if(k===on)li.scrollIntoView({block:'nearest'})});
