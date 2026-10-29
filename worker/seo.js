@@ -14,7 +14,8 @@ let DATA = null;
 // The site themes (Neon 1984, Grimdark, Forest, Dwarven) come from index.html, so these pages follow the look a visitor
 // picked on the colour wheel. The look is applied in the browser from localStorage, so every visitor and search engine
 // gets the same HTML.
-let THEME = { js: '', css: '' };
+const NAV0 = '<nav class="top"><a href="/">Colour wheel</a><a href="/paints">Paints</a><a href="/guides">Guides</a></nav>';
+let THEME = { js: '', css: '', nav: NAV0, dlg: '' };
 
 export function isSeoPath(p) {
   return p === '/sitemap.xml' || p === '/paints' || p.startsWith('/paints/') || p === '/guides' || p.startsWith('/guides/');
@@ -70,13 +71,16 @@ async function load(env, url) {
 export function theme(index) {
   try {
     const js = index.match(/<script>var l='cyber'[\s\S]*?<\/script>/)[0];
-    const a = index.indexOf('/* Site themes'), b = index.indexOf('</style>', a);
+    const a = index.indexOf('/* Top nav'), b = index.indexOf('</style>', a);
     if (a < 0 || b < 0) throw new Error('theme CSS not found');
     const css = index.slice(a, b).replace(/url\((?!["']?(?:data:|https?:|\/))(["']?)/g, 'url($1/');
-    return { js, css };
+    // The app's top nav and theme picker, so every page has the same buttons. Links in them are already absolute.
+    const nav = index.match(/<nav class="top" id="nav">[\s\S]*?<\/nav>/)[0];
+    const dlg = index.match(/<dialog class="pd th" id="thDlg"[\s\S]*?<\/dialog>/)[0].replace(/url\((?!["']?(?:data:|https?:|\/))/g, 'url(/');
+    return { js, css, nav, dlg };
   } catch (e) {
     console.error(e);
-    return { js: '', css: '' };
+    return { js: '', css: '', nav: NAV0, dlg: '' };
   }
 }
 
@@ -216,11 +220,8 @@ ${THEME.js}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Rubik,system-ui,-apple-system,Segoe UI,sans-serif;padding:0 16px 24px}
 body::before{content:"";display:block;height:12px;margin:0 -16px 14px;background:linear-gradient(90deg,var(--red) 0 16.66%,var(--org) 0 33.33%,var(--yel) 0 50%,var(--tea) 0 66.66%,var(--blu) 0 83.33%,var(--pur) 0)}
-.wrap{max-width:960px;margin:auto}
+.wrap{max-width:960px;margin:auto}.navw{max-width:1100px}@media (min-width:1000px){.navw{max-width:1440px}}
 a{color:inherit}
-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
-header .logo{font:400 18px var(--hf);text-decoration:none;display:flex;align-items:center;gap:8px}
-header .logo img{width:32px;height:32px}
 .btn{display:inline-block;font:700 15px Rubik,sans-serif;background:var(--yel);color:#1b1b1b;border:3px solid var(--ink);border-radius:12px;padding:8px 14px;box-shadow:3px 3px 0 var(--sh);text-decoration:none}
 nav.crumbs{font-size:14px;color:var(--mut);margin:14px 0 0}
 h1{font:400 clamp(28px,5vw,44px)/1.1 var(--hf);margin:10px 0}
@@ -241,9 +242,9 @@ ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(-
 ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}ul.m.list{padding-left:0}ul.m.list li{display:block}
 ul.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 20px}ul.gl li{display:block;padding:6px 0}ul.gl b{font-size:17px}ul.gl .chip{height:12px;margin:6px 0 4px;max-width:240px}.prose h3,.panel h3{font-size:17px;margin:4px 0 6px}
 footer{font-size:12px;color:var(--mut);margin-top:24px}
-nav.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-nav.top a:not(.btn){color:#1b1b1b;text-decoration:none;padding:8px 14px;border-radius:14px;font-size:15px;font-weight:700;background:#fff;border:3px solid var(--ink)}
-nav.top a:not(.btn):hover{background:var(--yel)}
+.av{width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;border:2px solid var(--ink);box-sizing:border-box}img.av{object-fit:cover}
+.av.ini{display:inline-flex;align-items:center;justify-content:center;background:var(--yel);color:#1b1b1b;font:400 12px/1 var(--hf)}
+dialog.pd{background:var(--card);color:var(--fg);border:3px solid var(--ink);border-radius:20px;box-shadow:6px 6px 0 var(--sh);padding:20px;max-width:min(420px,calc(100vw - 32px));box-sizing:border-box}dialog.pd::backdrop{background:rgba(27,27,27,.45)}dialog.pd h2{font-family:var(--hf);font-weight:400;font-size:20px;margin:0 0 8px}dialog.pd p{margin:0 0 16px;color:var(--mut)}dialog.pd .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 .prose p,p.prose{margin:0 0 12px;max-width:720px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
 .stats div{border:2px solid var(--ink);border-radius:12px;padding:8px 10px}.stats b{display:block;font:400 22px var(--hf)}
@@ -264,8 +265,7 @@ svg.wheel{width:100%;max-width:340px;height:auto;color:var(--ink);flex:none}
 figure{margin:0;flex:0 1 320px;text-align:center}svg.pic{width:100%;max-width:320px;height:auto;color:var(--ink);display:block;margin:0 auto 6px}svg.chart{width:100%;max-width:520px;height:auto;color:var(--fg);flex:none}
 ol.steps li{padding:8px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ol.steps li:first-child{border-top:0}ol.steps em{font-size:15px;color:var(--fg);margin-top:2px}ol.steps .sw{width:30px;height:30px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
 ${THEME.css}</style></head>
-<body><div class="wrap">
-<header><a class="logo" href="/"><img src="/icons/icon-192.png" alt="" width="32" height="32" id="pdi">The Painters Desk</a><nav class="top"><a href="/paints">Paints</a><a href="/guides">Guides</a><a class="btn on" href="/">Open the colour wheel</a></nav></header>
+<body><div class="wrap navw">${THEME.nav.replace(`data-v="${path.startsWith('/guides') ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
 <nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
@@ -273,7 +273,16 @@ Chart-listed matches come from the Two Thin Coats Paint Comparison Chart 2024, t
 The Painters Desk is unofficial and not affiliated with or endorsed by any paint brand. Paint names are trademarks of their owners.
 <a href="/paints">All brands</a> · <a href="/guides">Guides</a> · <a href="/privacy">Privacy policy</a> · <a href="/terms">Site rules</a></p></footer>
 </div>
-<script>(function(){var l=document.documentElement.dataset.look;if(l)document.getElementById('pdi').src='/icons/themes/'+l+'.svg'})()</script>
+${THEME.dlg}
+<script>(function(){var d=document,h=d.documentElement,g=d.getElementById('thDlg'),os=g?g.querySelectorAll('.tho'):[];
+function ic(){var l=h.dataset.look;d.querySelectorAll('img.pdi').forEach(function(m){m.src=l?'/icons/themes/'+l+'.svg':m.dataset.def})}ic();
+var s=d.querySelector('nav.top .secs'),o=s&&s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8;
+function mark(){var l=h.dataset.look||'';os.forEach(function(o){o.setAttribute('aria-checked',o.dataset.look===l?'true':'false')})}
+var b=d.getElementById('thBtn');if(b&&g){b.onclick=function(){mark();g.showModal()};d.getElementById('thOk').onclick=function(){g.close()};g.onclick=function(e){if(e.target===g)g.close()};
+ os.forEach(function(o){o.onclick=function(){var v=o.dataset.look;if(v)h.dataset.look=v;else delete h.dataset.look;try{localStorage.setItem('pd-look',v)}catch(e){}mark();ic()}})}
+var a=d.getElementById('acct');if(a)fetch('/api/me').then(function(r){return r.json()}).then(function(r){var u=r.user,e;if(!u)return;
+ if(u.avatar){e=d.createElement('img');e.src=u.avatar;e.alt='';e.className='av'}else{e=d.createElement('span');e.className='av ini';e.textContent=(u.name||'?').trim().charAt(0).toUpperCase()}
+ var n=d.createElement('span');n.className='an';n.textContent=u.name;a.title=u.name;a.textContent='';a.append(e,n)}).catch(function(){})})()</script>
 </body></html>`;
 }
 

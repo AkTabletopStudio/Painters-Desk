@@ -31,6 +31,7 @@ const types = {}; D.P.forEach(p => types[p.t] = (types[p.t] || 0) + 1);
 const guides = renderGuides(D);
 const th = theme(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 if (!th.js || !th.css.includes('data-look="cyber"')) throw new Error('Could not read the site themes from index.html');
+if (!th.nav.includes('id="acct"') || !th.dlg.includes('id="thOk"')) throw new Error('Could not read the top nav or theme picker from index.html');
 if (/url\((?!["']?(data:|https?:|\/))/.test(th.css)) throw new Error('Relative url() left in theme CSS');
 console.log(`${guides} guides, types ${JSON.stringify(types)}`);
 console.log(`${D.P.length} paints, ${urls.length} pages, ${D.brands.length} brands, ${gl} ranges, ${Object.keys(D.MT).length} chart-matched paints`);
