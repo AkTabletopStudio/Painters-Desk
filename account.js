@@ -5,6 +5,11 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const BYKEY=new Map(P.map(p=>[p.k,p]));
+// Paints renamed after people had already saved them: old key -> current key. Migration 0014 rewrites the stored keys;
+// until it runs, a collection still holding an old key is moved across the first time it loads.
+const RENAMED={'M|S13|Dark Sea Blue':'M|S13|Dark Sea Ben','E|E019|Pthalo Turquoise Light':'E|E019|Phthalo Turquoise Light'};
+// The owned set only holds keys of paints that exist, so "N paints owned" matches what the wheel can show.
+const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
@@ -50,7 +55,7 @@ async function wheelSync(){
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
  try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
- if(ME){try{OWN=new Set((await api('/collection')).paints)}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
+ if(ME){try{const ks=(await api('/collection')).paints;OWN=ownSet(ks);const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
  if(ME)await wheelSync();else onSelSave=null;
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
@@ -259,7 +264,7 @@ let pend={add:new Set(),remove:new Set()},saveT=0;
 function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
  clearTimeout(saveT);saveT=setTimeout(flush,500)}
 async function flush(){const b={add:[...pend.add],remove:[...pend.remove]};pend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
- try{OWN=new Set((await api('/collection',{method:'PUT',body:b})).paints);const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
+ try{OWN=ownSet((await api('/collection',{method:'PUT',body:b})).paints);const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
 function renderPaints(){
  const el=$('v-paints');
  if(!ME){el.innerHTML='<h1>My paints</h1>'+signInLink('Your collection is saved to your account.');return}
