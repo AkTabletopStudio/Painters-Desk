@@ -26,7 +26,9 @@ let HIDE_T=new Set(['wash','ink','fx','tech','pearl']);try{const s=localStorage.
 // Pearls came later: hide them once for people who already saved their types (pd-ty-pearl marks it done).
 try{if(localStorage.getItem('pd-ty-pearl')===null){HIDE_T.add('pearl');localStorage.setItem('pd-ty-pearl','1')}}catch(e){}
 const shown=p=>!HIDE_T.has(paintType(p));
-function layout(){const vis=p=>p.on&&shown(p);CH=P.filter(p=>vis(p)&&p.g!=='B'&&p.S>=.14&&p.L>.07&&p.L<.95);const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
+// On the wheel: HSL saturation 0.14+, or Lab chroma 8+ so dull but clearly tinted paints (Wyvern Green) aren't listed as neutrals.
+const onWheel=p=>p.g!=='B'&&(p.S>=.14||Math.hypot(p.lab[1],p.lab[2])>=8)&&p.L>.07&&p.L<.95;
+function layout(){const vis=p=>p.on&&shown(p);CH=P.filter(p=>vis(p)&&onWheel(p));const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
 const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
 CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});

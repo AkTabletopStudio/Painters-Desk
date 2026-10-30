@@ -768,7 +768,8 @@ function hslOf(h) {
   return { H, S: d ? d / (1 - Math.abs(2 * L - 1)) : 0, L };
 }
 const hueD = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d };
-const onWheel = p => p.S >= .14 && p.L > .07 && p.L < .95;
+// Same test as app.js: HSL saturation 0.14+ or Lab chroma 8+, and not too dark or light.
+const onWheel = p => (p.S >= .14 || Math.hypot(p.lab[1], p.lab[2]) >= 8) && p.L > .07 && p.L < .95;
 // Point on a wheel of radius r around (c, c), 0 degrees at the top and going clockwise, as on the site.
 const pol = (c, r, deg) => [c + r * Math.cos((deg - 90) * Math.PI / 180), c + r * Math.sin((deg - 90) * Math.PI / 180)].map(v => +v.toFixed(1));
 
@@ -791,7 +792,7 @@ function theoryPage(D, g) {
   const cit = D.brands.find(b => b.slug === 'citadel');
   // Opaque Citadel paints on the wheel, leaving out Air (the same colours again, thinned) and any repeated names.
   const seen = new Set();
-  const pool = cit.paints.filter(p => p.t === 'op' && !/\bair\b/i.test(D.GL[p.g]) && !seen.has(p.n) && seen.add(p.n)).map(p => ({ p, ...hslOf(p.h) })).filter(onWheel);
+  const pool = cit.paints.filter(p => p.t === 'op' && !/\bair\b/i.test(D.GL[p.g]) && !seen.has(p.n) && seen.add(p.n)).map(p => ({ p, lab: p.lab, ...hslOf(p.h) })).filter(onWheel);
   // The opaque Citadel paint closest to a hue, preferring mid-tone, fairly saturated paints so the examples read clearly.
   const near = (h, used) => pool.filter(x => !used.has(x.p)).map(x => ({ x, k: hueD(x.H, h) * 1.5 + Math.abs(x.L - .42) * 60 + Math.max(0, .45 - x.S) * 80 }))
     .sort((a, b) => a.k - b.k)[0]?.x;
