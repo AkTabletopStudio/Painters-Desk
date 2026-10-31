@@ -13,7 +13,7 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
@@ -98,6 +98,7 @@ function route(){
  else if(view==='painters')renderPainters();
  else if(view==='inbox')renderInbox(id,sub);
  else if(view==='people')renderPeople();
+ else if(view==='forum')renderForum(id,sub);
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -174,6 +175,9 @@ function renderAccount(){
  <p><label><input type="checkbox" id="mMail"${ME.dm_mail?' checked':''}> Email me when I get a message or a reply to my feedback</label> <span class="s" id="mMsg"></span></p>
  <p class="s">${ME.email&&ME.email_verified?'One email per conversation, until you open it again.':'We only email confirmed addresses.'} People you already talk with can still reply when new conversations are off. Block someone from your conversation with them to stop them for good.</p>
  <div id="mBlk"></div></div>`:''}
+ ${INFO.forum&&INFO.mail&&ME.email?`<div class="panel"><h2>Forum</h2><p><a class="btn" href="#/forum/following">Threads I follow</a></p>
+ <p><label><input type="checkbox" id="fMailAll"${ME.forum_mail?' checked':''}> Email me about new replies in forum threads I follow</label> <span class="s" id="fMailM"></span></p>
+ <p class="s">One email per thread until you open it again. You follow threads you start or reply to, and you can turn emails off for one thread on its page.</p></div>`:''}
  <div class="panel" id="cmP"><h2>Commission painting</h2><p class="s">Loading…</p></div>
  ${ME.admin?`<div class="panel"><h2>Moderation <span class="tag">admin</span></h2><p class="s">Reports from the Report button, photos refused at upload, and the newest photos. Hide or delete a photo, or block an account.</p><div class="row"><a class="btn" href="#/admin">Open moderation</a>${INFO.messages?'<a class="btn" href="#/inbox?team">Read and answer feedback</a>':''}</div></div>`:''}
  ${ME.admin?`<div class="panel" id="annP"><h2>Send an update email <span class="tag">admin</span></h2>
@@ -212,6 +216,8 @@ function renderAccount(){
   catch(e){c.checked=!c.checked;$('uMsg').className='err';$('uMsg').textContent=e.message}c.disabled=false};
  if(ME.admin)annPanel();
  if(INFO.messages)msgPanel();
+ if($('fMailAll'))$('fMailAll').onchange=async()=>{const m=$('fMailM');m.className='s';m.textContent='Saving…';
+  try{ME=(await api('/me/forum',{method:'PUT',body:{forum_mail:$('fMailAll').checked}})).user;INFO.user=ME;m.textContent='Saved.'}catch(e){m.className='err';m.textContent=e.message}};
  if($('pFind'))$('pFind').onchange=async()=>{const c=$('pFind');c.disabled=true;$('pFindM').className='s';
   try{ME=(await api('/me/findable',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('pFindM').textContent=c.checked?'You\'re in the list.':'Hidden from the list. Your profile page is still public.'}
   catch(e){c.checked=!c.checked;$('pFindM').className='err';$('pFindM').textContent=e.message}c.disabled=false};
@@ -714,7 +720,7 @@ document.addEventListener('error',e=>{const i=e.target;if(i.tagName==='IMG'&&/\/
 let REP=null;
 function openReport(kind,id,name){const D=$('rpDlg'),F=$('rpForm');REP={kind,id};F.reset();
  $('rpErr').textContent='';$('rpBody').hidden=false;$('rpSend').hidden=false;$('rpSend').disabled=false;$('rpNo').textContent='Cancel';$('rpDone').hidden=true;
- $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:kind==='message'?`this message from ${name}`:`"${name}"`;D.showModal()}
+ $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:kind==='message'?`this message from ${name}`:kind==='forum'?`a post in "${name}"`:`"${name}"`;D.showModal()}
 $('rpNo').onclick=()=>$('rpDlg').close();
 $('rpForm').onsubmit=async e=>{e.preventDefault();const F=$('rpForm');$('rpErr').textContent='';$('rpSend').disabled=true;
  try{await api('/reports',{method:'POST',body:{kind:REP.kind,id:REP.id,reason:F.rpReason.value,note:$('rpNote').value,website:$('rpWeb').value}});
@@ -730,23 +736,25 @@ async function renderAdmin(){
  let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
  const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
  const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
- const where=w=>w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const where=w=>w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
  const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
   <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
   <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
   <div class="row"><button class="btn sm" type="button" data-hide="${i.hidden?0:1}">${i.hidden?'Show again':'Hide'}</button><button class="btn sm dan" type="button" data-delimg>Delete</button></div></div>`;
  const what=r=>r.kind==='upload'?`A photo by ${pers(r.user)} was refused at upload: ${esc(r.note)}`
   :r.kind==='user'?`Profile of ${pers(r.user)}`
+  :r.kind==='forum'?(r.post?`Forum ${r.post.first?'opening post':'reply'} in <a href="#/forum/t/${esc(r.post.thread.id)}?p=${esc(r.post.id)}">${esc(r.post.thread.title)}</a> by ${pers(r.user)||'a deleted account'}${r.post.hidden?' <span class="tag dang">removed</span>':''}`:'A forum post that has since been deleted')
   :r.kind==='message'?(r.message?`Private message from ${pers(r.user)||'a deleted account'}`:'A message that has since been deleted')
   :r.target?`<a href="#/recipe/${esc(r.target.id)}">${esc(r.target.title)}</a> (${esc(r.target.kind)}, ${esc(r.target.visibility)}) by ${pers(r.user)}`:'A recipe that has since been deleted';
  const by=r=>r.kind==='upload'?'':r.reporter?` · reported by ${pers(r.reporter)}`:' · reported by someone not signed in';
  const repCard=r=>`<div class="panel mrep" data-rep="${esc(r.id)}"><h3>${esc(r.label)}</h3>
   <p class="s">${what(r)} · ${fmtDate(r.created_at)}${by(r)}</p>
   ${r.message?`<div class="msg them">${esc(r.message.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
+  ${r.post?.body?`<div class="msg them">${esc(r.post.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
   ${r.kind!=='upload'&&r.note?`<div class="steps">${esc(r.note)}</div>`:''}
   ${r.images.length?`<div class="mgrid">${r.images.map(imgCard).join('')}</div>`:''}
-  <div class="row">${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
- el.innerHTML=`<h1>Moderation</h1>${INFO.messages?'<p><a class="btn" href="#/inbox?team">Read and answer feedback</a></p>':''}<p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
+  <div class="row">${r.post?`<button class="btn sm${r.post.hidden?'':' dan'}" type="button" data-fhide="${esc(r.post.id)}" data-on="${r.post.hidden?0:1}">${r.post.hidden?'Restore post':'Remove post'}</button>`:''}${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
+ el.innerHTML=`<h1>Moderation</h1>${INFO.messages?'<p><a class="btn" href="#/inbox?team">Read and answer feedback</a></p>':''}<p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Removing a forum post hides it from everyone but admins, and you can restore it. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
  <h2>Open reports (${d.reports.length})</h2>${d.reports.map(repCard).join('')||'<p class="s">No open reports.</p>'}
  <h2>Newest photos</h2><div class="mgrid">${d.images.map(imgCard).join('')||'<p class="s">No photos yet.</p>'}</div>`;
  const act=async(b,fn)=>{b.disabled=true;try{await fn();renderAdmin()}catch(e){b.disabled=false;b.parentElement.insertAdjacentHTML('beforeend',`<span class="err">${esc(e.message)}</span>`)}};
@@ -757,6 +765,7 @@ async function renderAdmin(){
  el.querySelectorAll('[data-delimg]').forEach(b=>b.onclick=()=>twice(b,'Click again to delete')&&act(b,()=>api('/admin/images/'+imgOf(b),{method:'DELETE'})));
  el.querySelectorAll('[data-delrec]').forEach(b=>b.onclick=()=>twice(b,'Click again to delete for good')&&act(b,()=>api('/recipes/'+b.dataset.delrec,{method:'DELETE'})));
  el.querySelectorAll('[data-blk]').forEach(b=>b.onclick=()=>(b.dataset.on!=='1'||twice(b,'Click again to block'))&&act(b,()=>api('/admin/users/'+b.dataset.blk,{method:'PUT',body:{blocked:b.dataset.on==='1'}})));
+ el.querySelectorAll('[data-fhide]').forEach(b=>b.onclick=()=>act(b,()=>api('/forum/posts/'+b.dataset.fhide,{method:'PUT',body:{hidden:b.dataset.on==='1'}})));
  el.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>act(b,()=>api('/admin/reports/'+b.closest('[data-rep]').dataset.rep,{method:'PUT',body:{status:'done'}})))}
 
 /* ---------- painters list ---------- */
@@ -789,12 +798,12 @@ async function renderPeople(){
 /* ---------- messages ---------- */
 // One inbox for replies to feedback and private messages between painters. #/inbox lists them, #/inbox/<id> opens
 // one, #/inbox/u/<user id> starts or continues one with that painter, and #/inbox?team (admins) lists all feedback.
-let UNREAD=0,TEAMN=0;
+let UNREAD=0,TEAMN=0,FORUMN=0;
 async function unread(){
  const show=!!(INFO&&INFO.messages&&(ME||fbToken()));$('inb').hidden=!show;
- if(!show){UNREAD=TEAMN=0;drawBadge();return}
- try{const d=await api('/inbox/unread');UNREAD=d.n;TEAMN=d.team}catch(e){}drawBadge()}
-function drawBadge(){const n=UNREAD+TEAMN,b=$('inbN');b.hidden=!n;b.textContent=n>99?'99+':n;$('inb').title=n?`Messages (${n} new)`:'Messages'}
+ if(!show){UNREAD=TEAMN=FORUMN=0;drawBadge();return}
+ try{const d=await api('/inbox/unread');UNREAD=d.n;TEAMN=d.team;FORUMN=d.forum||0}catch(e){}drawBadge()}
+function drawBadge(){const n=UNREAD+TEAMN+FORUMN,b=$('inbN');b.hidden=!n;b.textContent=n>99?'99+':n;$('inb').title=n?`Messages (${n} new)`:'Messages'}
 setInterval(()=>{if(document.visibilityState==='visible'&&!$('inb').hidden)unread()},120000);
 const ago=t=>{const d=(Date.now()-t)/60000;return d<1?'just now':d<60?Math.floor(d)+' min ago':d<1440?Math.floor(d/60)+' h ago':fmtDate(t)};
 const convWho=c=>c.other?.team?{name:c.other.name,avatar:c.other.avatar}:c.other||{name:'(deleted account)'};
@@ -813,7 +822,11 @@ async function renderInbox(id,sub){
  const intro=team?'Everything sent with the Feedback button, open ones first. Replies show in the sender\'s Messages, and go by email when they gave one.'
   :ME?'Replies to your feedback, and conversations with other painters. To message a painter, <a href="#/people">find them</a> and press Message on their profile.'
   :'Replies to feedback you sent from this browser. <a href="#/account">Sign in</a> to message other painters and keep your replies on every device.';
- el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1>${tabs}<p class="s">${intro}</p><div class="convs">${d.conversations.map(row).join('')||`<p class="s">${team?'No feedback yet.':'Nothing here yet.'}</p>`}</div>`}
+ el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1>${tabs}<p class="s">${intro}</p>${!team&&ME&&INFO.forum?'<div id="fUpd"></div>':''}<div class="convs">${d.conversations.map(row).join('')||`<p class="s">${team?'No feedback yet.':'Nothing here yet.'}</p>`}</div>`;
+ // New replies in forum threads you follow sit above the conversations.
+ if($('fUpd'))api('/forum/updates').then(f=>{const B=$('fUpd');if(!B||!f.threads.length)return;
+  B.innerHTML=`<h2>Forum replies</h2><div class="convs">${f.threads.map(threadRow).join('')}</div><p><button class="lnk" type="button" id="fUpdR">Mark all as read</button> · <a href="#/forum/following">All threads I follow</a></p>`;
+  $('fUpdR').onclick=async()=>{try{await api('/forum/updates',{method:'POST'});B.innerHTML='';unread()}catch(e){}}}).catch(()=>{})}
 async function inboxWith(uid){
  const el=$('v-inbox');
  if(!ME){el.innerHTML='<h1>Messages</h1>'+signInLink('You need an account to message other painters.');return}
@@ -867,6 +880,205 @@ async function msgPanel(){
   B.innerHTML=d.blocks.length?`<h3>Blocked</h3>${d.blocks.map(b=>`<div class="row">${who(b)}<button class="btn sm" type="button" data-ub="${esc(b.id)}">Unblock</button></div>`).join('')}`:'';
   B.querySelectorAll('[data-ub]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/blocks/'+b.dataset.ub,{method:'PUT',body:{blocked:false}});draw()}catch(e){b.disabled=false}})};
  draw()}
+
+/* ---------- forum ---------- */
+// #/forum lists the categories and the latest threads, with a search box. #/forum/c/<id> is one category,
+// #/forum/t/<id> one thread, #/forum/new/<category> starts a thread, and #/forum/following lists the threads you follow.
+const F_PHOTOS=6,F_PAINTS=12,F_RECIPES=3;
+const linkify=s=>esc(s).replace(/\bhttps?:\/\/[^\s<]+[^\s<.,;:!?)\]]/g,u=>`<a href="${u}" target="_blank" rel="noopener nofollow ugc">${u}</a>`);
+const nReplies=n=>`${n.toLocaleString()} ${n===1?'reply':'replies'}`;
+const fNotOpen='<h1>Forum</h1><p class="s">The forum isn\'t open yet. Check back soon.</p>';
+let fCats=null;
+async function forumCats(){if(!fCats)fCats=(await api('/forum')).categories;return fCats}
+// One thread in a list: its first photo (else the author's picture), title, tags and the latest activity.
+const threadRow=t=>`<a class="conv fth${t.unread?' new':''}" href="#/forum/t/${esc(t.id)}">${t.photo?`<img class="fthumb" src="${imgURL(t.photo)}" alt="" loading="lazy">`:avHTML(t.author)}<span class="cv"><b>${esc(t.title)}</b>
+ ${t.pinned?'<span class="tag tpin">📌 Pinned</span>':''}${t.locked?'<span class="tag">🔒 Locked</span>':''}<span class="tag fcat">${esc(t.category.name)}</span>${t.unread?'<span class="tag dang">new replies</span>':''}
+ <span class="s">by ${esc(t.author.name)} · ${nReplies(t.replies)} · ${bottle(1)} ${t.votes}${t.replies&&t.last_name?` · last reply by ${esc(t.last_name)}`:''}</span>${t.hit?`<span class="s fhit">${esc(t.hit)}</span>`:''}</span><span class="s cvt">${ago(t.last_at)}</span></a>`;
+async function renderForum(id,sub){
+ const el=$('v-forum');
+ if(!INFO.forum){el.innerHTML=fNotOpen;return}
+ if(id==='t')return forumThread(sub);
+ if(id==='new')return forumNew(sub);
+ if(id==='c'||id==='following')return forumList(id==='c'?sub:'',id==='following');
+ el.innerHTML='<h1>Forum</h1><p class="s">Loading…</p>';
+ let d;try{d=await api('/forum');fCats=d.categories}catch(e){el.innerHTML=`<h1>Forum</h1><p class="err">${esc(e.message)}</p>`;return}
+ if(d.unavailable){el.innerHTML=fNotOpen;return}
+ const cat=c=>`<a class="conv fcrow" href="#/forum/c/${esc(c.id)}"><span class="cv"><b>${esc(c.name)}</b><span class="s">${esc(c.description)}</span></span><span class="s cvt">${plural(c.threads,'thread')}${c.last_at?'<br>'+ago(c.last_at):''}</span></a>`;
+ const pend=c=>`<div class="row" data-pc="${esc(c.id)}"><b>${esc(c.name)}</b><span class="s">${esc(c.description)}${c.by?` · suggested by <a href="#/u/${esc(c.by.id)}">${esc(c.by.name)}</a>`:''}</span>
+  <button class="btn sm pri" type="button" data-ok>Approve</button><button class="btn sm dan" type="button" data-no>Decline</button></div>`;
+ el.innerHTML=`<h1>Forum</h1>
+ <p class="s">Talk paint with other painters: show your work, ask for help with a colour scheme, compare brands and swap techniques. Be kind, and keep to the <a href="terms" target="_blank">site rules</a>.</p>
+ <div class="row">${ME?'<a class="btn pri" href="#/forum/new">+ New thread</a><a class="btn" href="#/forum/following">★ Threads I follow</a>':'<a class="btn" href="#/account">Sign in to post</a>'}</div>
+ <div class="bar"><input id="fq" type="search" placeholder="Search the forum" aria-label="Search the forum"></div>
+ <div id="fRes" hidden></div>
+ <div id="fMain">
+ ${d.pending?.length?`<div class="panel"><h2>Suggested categories <span class="tag">admin</span></h2>${d.pending.map(pend).join('')}</div>`:''}
+ <h2>Categories</h2><div class="convs">${d.categories.map(cat).join('')}</div>
+ ${ME?.admin?'<p><button class="btn" type="button" id="fMan">Manage categories</button></p><div id="fManP"></div>':ME?'<p><button class="lnk" type="button" id="fSug">Missing a category? Suggest one</button></p><div id="fSugP"></div>':''}
+ <h2>Latest</h2><div class="convs">${d.threads.map(threadRow).join('')||'<p class="s">No threads yet. Start the first one.</p>'}</div></div>`;
+ let t=0,seq=0;$('fq').oninput=()=>{clearTimeout(t);t=setTimeout(async()=>{const q=$('fq').value.trim(),R=$('fRes'),my=++seq;
+  R.hidden=q.length<2;$('fMain').hidden=!R.hidden;if(R.hidden)return;R.innerHTML='<p class="s">Searching…</p>';
+  try{const r=await api('/forum/search?q='+encodeURIComponent(q));if(my!==seq)return;R.innerHTML=`<h2>Results</h2><div class="convs">${r.threads.map(threadRow).join('')||'<p class="s">Nothing matches that. Try other words.</p>'}</div>`}
+  catch(e){R.innerHTML=`<p class="err">${esc(e.message)}</p>`}},300)};
+ el.querySelectorAll('[data-pc]').forEach(r=>{const id=r.dataset.pc,act=async(b,fn)=>{b.disabled=true;try{await fn();fCats=null;renderForum()}catch(e){b.disabled=false;r.insertAdjacentHTML('beforeend',`<span class="err">${esc(e.message)}</span>`)}};
+  r.querySelector('[data-ok]').onclick=e=>act(e.target,()=>api('/forum/categories/'+id,{method:'PUT',body:{status:'live'}}));
+  r.querySelector('[data-no]').onclick=e=>act(e.target,()=>api('/forum/categories/'+id,{method:'DELETE'}))});
+ const catForm=(box,admin)=>{box.innerHTML=`<form class="panel"><h3>${admin?'Add a category':'Suggest a category'}</h3><label class="f"><span>Name</span><input class="inp" id="fcN" maxlength="50" required></label>
+  <label class="f"><span>What goes in it</span><input class="inp" id="fcD" maxlength="200"></label><label class="fbhp" aria-hidden="true">Website<input type="text" id="fcW" tabindex="-1" autocomplete="off"></label>
+  <div class="row"><button class="btn pri" type="submit">${admin?'Add':'Send suggestion'}</button><span class="s" id="fcM"></span></div>${admin?'':'<p class="s">An admin looks at each suggestion before it appears.</p>'}</form>`;
+  box.querySelector('form').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;$('fcM').className='s';
+   try{await api('/forum/categories',{method:'POST',body:{name:$('fcN').value,description:$('fcD').value,website:$('fcW').value}});
+    if(admin){fCats=null;renderForum()}else box.innerHTML='<p class="ok">Thanks! Your suggestion has been sent to the admins.</p>'}
+   catch(err){$('fcM').className='err';$('fcM').textContent=err.message;b.disabled=false}}};
+ if($('fSug'))$('fSug').onclick=()=>catForm($('fSugP'),false);
+ if($('fMan'))$('fMan').onclick=()=>{const P=$('fManP');$('fMan').hidden=true;
+  P.innerHTML=`<div class="panel"><h2>Manage categories <span class="tag">admin</span></h2><p class="s">Lower numbers come first. A category can only be removed once it has no threads.</p>
+  ${d.categories.map(c=>`<div class="row fman" data-mc="${esc(c.id)}"><input class="inp" value="${esc(c.sort)}" type="number" aria-label="Order" style="width:80px"><input class="inp" value="${esc(c.name)}" maxlength="50" aria-label="Name" style="flex:1 1 160px"><input class="inp" value="${esc(c.description)}" maxlength="200" aria-label="Description" style="flex:3 1 240px">
+   <button class="btn sm pri" type="button" data-sv>Save</button>${c.threads?'':'<button class="btn sm dan" type="button" data-rm>Remove</button>'}<span class="s" data-m></span></div>`).join('')}<div id="fAdd"></div></div>`;
+  catForm($('fAdd'),true);
+  P.querySelectorAll('[data-mc]').forEach(r=>{const id=r.dataset.mc,[so,nm,ds]=r.querySelectorAll('input'),m=r.querySelector('[data-m]');
+   r.querySelector('[data-sv]').onclick=async()=>{m.className='s';m.textContent='Saving…';try{await api('/forum/categories/'+id,{method:'PUT',body:{sort:so.value,name:nm.value,description:ds.value}});fCats=null;m.textContent='Saved.'}catch(e){m.className='err';m.textContent=e.message}};
+   const rm=r.querySelector('[data-rm]');if(rm)rm.onclick=async()=>{if(!rm.dataset.c){rm.dataset.c=1;rm.textContent='Click again to remove';return}try{await api('/forum/categories/'+id,{method:'DELETE'});fCats=null;r.remove()}catch(e){m.className='err';m.textContent=e.message}}})}}
+
+let fSort='active';
+async function forumList(cid,following){
+ const el=$('v-forum');
+ if(following&&!ME){el.innerHTML='<h1>Threads I follow</h1>'+signInLink('Follow threads to keep up with new replies.');return}
+ el.innerHTML='<p class="s">Loading…</p>';
+ const sb=(k,t)=>`<button class="btn${fSort===k?' pri':''}" data-fs="${k}" type="button">${t}</button>`;
+ let off=0,first=true;
+ async function load(more){
+  let d;try{d=await api(`/forum/threads?c=${encodeURIComponent(cid)}&sort=${fSort}&offset=${off}${following?'&following=1':''}`)}
+  catch(e){el.innerHTML=`<p><a href="#/forum">← Forum</a></p><p class="err">${esc(e.message)}</p>`;return}
+  if(first){first=false;const c=d.category;
+   el.innerHTML=`<p><a href="#/forum">← Forum</a></p><h1>${following?'Threads I follow':esc(c.name)}</h1>${c?.description?`<p class="s">${esc(c.description)}</p>`:''}
+   ${following?'<p class="s">You follow threads you start or reply to, and any you press Follow on. New replies show in Messages.</p>':''}
+   <div class="row">${sb('active','Latest activity')}${sb('new','Newest')}${sb('top','Most upvoted')}<span class="sp" style="flex:1"></span>${ME?`<a class="btn pri" href="#/forum/new${c?'/'+esc(c.id):''}">+ New thread</a>`:'<a class="btn" href="#/account">Sign in to post</a>'}</div>
+   <div class="convs" id="fList"></div><div class="row" id="fMoreR" hidden><button class="btn" type="button" id="fMore">Show more</button></div>`;
+   el.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{fSort=b.dataset.fs;forumList(cid,following)});
+   $('fMore').onclick=()=>load(true)}
+  const L=$('fList'),h=d.threads.map(threadRow).join('');
+  L.innerHTML=more?L.innerHTML+h:(h||`<p class="s">${following?'You aren\'t following any threads yet.':'No threads here yet. Start the first one.'}</p>`);
+  off+=d.threads.length;$('fMoreR').hidden=!d.more}
+ load(false)}
+
+// The writing box for a new thread, a reply or an edit: text, photos, tagged paints and tagged recipes.
+// init: {body,images,paints,recipes}; opts: {title, cats, cat, label, cancel}. send(data) posts it.
+function forumComposer(box,init,opts,send){
+ const st={images:[...(init.images||[])],paints:[...(init.paints||[])],recipes:[...(init.recipes||[])]};let busy=0;
+ box.innerHTML=`<form class="panel fcomp">${opts.cats?`<label class="f"><span>Category</span><select class="inp fcs" required><option value="">Pick a category</option>${opts.cats.map(c=>`<option value="${esc(c.id)}"${c.id===opts.cat?' selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`:''}
+ ${opts.title!==undefined?`<label class="f"><span>Title</span><input class="inp fti" maxlength="120" required value="${esc(opts.title)}"></label>`:''}
+ <label class="f"><span>${opts.label||'Your post'}</span><textarea class="inp fbody" maxlength="8000">${esc(init.body||'')}</textarea></label>
+ <div class="pgal ed fph"></div><div class="chips fpc"></div><div class="frc"></div>
+ <div class="row"><label class="btn fupl">📷 Add photos<input type="file" accept="image/*" multiple hidden></label><button class="btn" type="button" data-tp>🎨 Tag paints</button><button class="btn" type="button" data-tr>🧪 Tag a recipe</button></div>
+ <div class="fps" hidden></div>
+ <div class="frs" hidden><input class="inp" type="search" placeholder="Search public recipes, tutorials and palettes"><div class="res" hidden></div></div>
+ <label class="fbhp" aria-hidden="true">Website<input type="text" class="fweb" tabindex="-1" autocomplete="off"></label>
+ <div class="row"><button class="btn pri" type="submit">${opts.go||'Post'}</button>${opts.cancel?'<button class="btn" type="button" data-cx>Cancel</button>':''}<span class="s fmsg" role="alert"></span></div>
+ <p class="s">Up to ${F_PHOTOS} photos, ${F_PAINTS} paints and ${F_RECIPES} recipes. Photos are checked automatically when they upload.</p></form>`;
+ const q=s=>box.querySelector(s),msg=(t,err)=>{const m=q('.fmsg');m.className=err?'err fmsg':'s fmsg';m.textContent=t};
+ const draw=()=>{
+  q('.fph').innerHTML=st.images.map((id,i)=>`<div><img src="${imgURL(id)}" alt=""><button class="x" type="button" data-xi="${i}" title="Remove photo">×</button></div>`).join('');
+  q('.fpc').innerHTML=st.paints.map(k=>pchip(k,true)).join('');
+  q('.frc').innerHTML=st.recipes.map((r,i)=>`<span class="chip"><span class="tag ${kindOf(r).c}">${kindOf(r).t}</span>${esc(r.title)} <span class="x" data-xr="${i}" title="Remove">×</span></span>`).join('');
+  q('.fph').querySelectorAll('[data-xi]').forEach(b=>b.onclick=()=>{st.images.splice(+b.dataset.xi,1);draw()});
+  q('.fpc').querySelectorAll('.x').forEach(x=>x.onclick=()=>{st.paints=st.paints.filter(k=>k!==x.closest('.chip').dataset.k);draw()});
+  q('.frc').querySelectorAll('[data-xr]').forEach(x=>x.onclick=()=>{st.recipes.splice(+x.dataset.xr,1);draw()})};
+ draw();
+ q('.fupl input').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
+  for(const f of fs){if(st.images.length>=F_PHOTOS){msg(`Up to ${F_PHOTOS} photos a post.`,1);break}
+   busy++;msg('Uploading photo…');try{st.images.push(await uploadPhoto(f));draw();msg('')}catch(err){msg(err.message,1)}busy--}};
+ q('[data-tp]').onclick=()=>{const b=q('.fps');b.hidden=!b.hidden;if(!b.hidden&&!b.firstChild)paintSearch(b,()=>st.paints,k=>{if(st.paints.length>=F_PAINTS){msg(`Up to ${F_PAINTS} paints a post.`,1);return}st.paints.push(k);draw();b.querySelector('input[type=search]').value='';b.querySelector('.res').hidden=true});if(!b.hidden)b.querySelector('input').focus()};
+ q('[data-tr]').onclick=()=>{const b=q('.frs');b.hidden=!b.hidden;if(!b.hidden)b.querySelector('input').focus()};
+ {const I=q('.frs input'),R=q('.frs .res');let t=0;
+  I.oninput=()=>{clearTimeout(t);t=setTimeout(async()=>{const s=I.value.trim();if(!s){R.hidden=true;return}
+   try{const d=await api('/recipes?scope=public&limit=10&q='+encodeURIComponent(s));R.hidden=false;
+    R.innerHTML=d.recipes.map(r=>`<div class="pi" data-rid="${esc(r.id)}">${r.cover?`<img src="${imgURL(r.cover)}" alt="" class="fri">`:stripHTML(r.layers||[],'mini')}<span>${esc(r.title)} <em>${kindOf(r).t} by ${esc(r.author.name)}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No public recipes match.</div>';
+    R.querySelectorAll('[data-rid]').forEach(x=>x.onclick=()=>{const r=d.recipes.find(y=>y.id===x.dataset.rid);
+     if(st.recipes.length>=F_RECIPES){msg(`Up to ${F_RECIPES} recipes a post.`,1);return}
+     if(!st.recipes.some(y=>y.id===r.id))st.recipes.push({id:r.id,kind:r.kind,title:r.title,author:r.author.name,layers:r.layers||[],cover:r.cover});I.value='';R.hidden=true;draw()})}catch(e){}},250)}}
+ if(q('[data-cx]'))q('[data-cx]').onclick=opts.cancel;
+ q('.fbody').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))q('form').requestSubmit()};
+ q('form').onsubmit=async e=>{e.preventDefault();if(busy){msg('Please wait for the photos to finish uploading.',1);return}
+  const b=e.submitter||q('[type=submit]');b.disabled=true;msg(opts.going||'Posting…');
+  try{await send({category:q('.fcs')?.value,title:q('.fti')?.value,body:q('.fbody').value,images:st.images,paints:st.paints,recipes:st.recipes.map(r=>r.id),website:q('.fweb').value})}
+  catch(err){msg(err.message,1);b.disabled=false}};
+ return box}
+
+async function forumNew(cid){
+ const el=$('v-forum');
+ if(!ME){el.innerHTML='<h1>New thread</h1>'+signInLink('Threads are posted from your account.');return}
+ let cats;try{cats=await forumCats()}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p>`;return}
+ el.innerHTML=`<p><a href="#/forum${cid?'/c/'+esc(cid):''}">← ${cid?esc(cats.find(c=>c.id===cid)?.name||'Forum'):'Forum'}</a></p><h1>New thread</h1><div id="fNew"></div>`;
+ forumComposer($('fNew'),{},{cats,cat:cid,title:'',label:'What do you want to say?',go:'Post thread'},async d=>{const r=await api('/forum/threads',{method:'POST',body:d});fCats=null;location.hash='#/forum/t/'+r.id})}
+
+// One post: who and when, the text, photos, tagged paints and recipes, then upvote and the author/moderator buttons.
+function postHTML(p,th){
+ const head=`<div class="fwho">${p.author.id?who(p.author):`<b>${esc(p.author.name)}</b>`} · <span class="s" title="${new Date(p.created_at).toLocaleString()}">${ago(p.created_at)}</span>${p.edited_at?' <span class="s">(edited)</span>':''}</div>`;
+ if(p.deleted)return `<div class="fpost gone" data-p="${esc(p.id)}">${head}<p class="s">${p.first?'The opening post was deleted.':'This post was deleted.'}</p></div>`;
+ if(p.removed)return `<div class="fpost gone" data-p="${esc(p.id)}"><p class="s">This post was removed by a moderator.</p></div>`;
+ const vote=p.mine?`<span class="btn sm vote" aria-disabled="true" title="Upvotes from other painters">${bottle(1)} ${p.votes}</span>`
+  :ME?`<button class="btn sm vote${p.voted?' on':''}" type="button" data-vt aria-pressed="${p.voted}">${bottle()}<span>${p.voted?'Upvoted':'Upvote'} · ${p.votes}</span></button>`
+  :`<a class="btn sm vote" href="#/account" title="Sign in to upvote">${bottle()}Upvote · ${p.votes}</a>`;
+ const mod=ME?.admin?(p.hiddenByMod?'<span class="tag dang">removed</span> ':'')+(p.authorBlocked?'<span class="tag dang">author blocked</span> ':''):'';
+ const content=`${mod}${p.body?`<div class="fbody">${linkify(p.body)}</div>`:''}
+  ${p.images.length?`<div class="pgal">${p.images.map(id=>`<a href="${imgURL(id)}" target="_blank"><img src="${imgURL(id)}" alt="Photo" loading="lazy"></a>`).join('')}</div>`:''}
+  ${p.paints.length?`<div class="chips fpp">${p.paints.map(k=>pchip(k)).join('')}</div>`:''}
+  ${p.recipes.map(r=>`<a class="lrec frec" href="#/recipe/${esc(r.id)}">${r.kind==='tutorial'?(r.cover?`<img class="rthumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''):stripHTML(r.layers)}<span class="tag ${kindOf(r).c}">${kindOf(r).t}</span><b>${esc(r.title)}</b> <span class="s">by ${esc(r.author)}</span></a>`).join('')}`;
+ return `<div class="fpost${p.first?' first':''}" data-p="${esc(p.id)}" id="post-${esc(p.id)}">${head}
+ ${p.blockedByMe?`<p class="s">From a painter you blocked. <button class="lnk" type="button" data-sh>Show it anyway</button></p><div hidden data-bc>${content}</div>`:content}
+ <div class="row">${vote}${p.mine&&!(th.locked&&!ME.admin)?'<button class="lnk" type="button" data-ed>Edit</button>':''}${p.mine||ME?.admin?'<button class="lnk" type="button" data-dl>Delete</button>':''}
+ ${ME?.admin?`<button class="lnk" type="button" data-hd="${p.hiddenByMod?0:1}">${p.hiddenByMod?'Restore':'Remove'}</button>`:''}${!p.mine?'<button class="lnk rpb" type="button" data-rp>⚑ Report</button>':''}<span class="err" data-er></span></div></div>`}
+
+async function forumThread(id){
+ const el=$('v-forum');
+ let d;try{d=await api('/forum/threads/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p><a href="#/forum">← Forum</a></p><p class="err">${esc(e.message)}</p>`;return}
+ const th=d.thread,own=ME&&th.author.id===ME.id,admin=!!ME?.admin,F=d.follow;
+ const replies=d.posts.filter(p=>!p.first).length;
+ el.innerHTML=`<p><a href="#/forum/c/${esc(th.category.id)}">← ${esc(th.category.name)}</a></p>
+ <h1 id="fTt">${esc(th.title)}</h1>
+ <p class="s">${th.pinned?'<span class="tag tpin">📌 Pinned</span>':''}${th.locked?'<span class="tag">🔒 Locked</span>':''}<span class="tag fcat">${esc(th.category.name)}</span>started ${fmtDate(th.created_at)} · ${nReplies(replies)}</p>
+ <div class="row">${ME?`<button class="btn${F?' on':''}" type="button" id="fFol" aria-pressed="${!!F}">${F?'★ Following':'☆ Follow thread'}</button>${d.mail&&ME.email?`<label class="s" id="fMailL"${F?'':' hidden'}><input type="checkbox" id="fMail"${F?.mail?' checked':''}> Email me about new replies</label>`:''}`:'<a class="btn" href="#/account">☆ Sign in to follow</a>'}
+  ${own||admin?'<button class="btn" type="button" id="fEdT">Edit title</button>':''}
+  ${admin?`<button class="btn" type="button" id="fPin">${th.pinned?'Unpin':'📌 Pin'}</button><button class="btn" type="button" id="fLock">${th.locked?'Unlock':'🔒 Lock'}</button>`:''}
+  ${own||admin?`<select class="inp" id="fMove" aria-label="Move to category" style="width:auto"></select>`:''}
+  ${admin||(own&&!replies)?'<button class="btn dan" type="button" id="fDelT">Delete thread</button>':''}<span class="s" id="fAct"></span></div>
+ <div id="fPosts">${d.posts.map(p=>postHTML(p,th)).join('')}</div>
+ <div id="fReply"></div>`;
+ const act=async(fn,after)=>{try{await fn();after()}catch(e){$('fAct').className='err';$('fAct').textContent=e.message}};
+ const R=$('fReply');
+ if(d.why==='signin')R.innerHTML=signInLink('Registered painters can reply.');
+ else if(d.why)R.innerHTML=`<p class="s">${esc(d.why)}</p>`;
+ else forumComposer(R,{},{label:'Reply',go:'Post reply'},async x=>{await api(`/forum/threads/${id}/posts`,{method:'POST',body:x});await forumThread(id);$('fPosts').lastElementChild?.scrollIntoView({block:'center'});unread()});
+ unread();
+ // Following, and whether it emails.
+ if($('fFol'))$('fFol').onclick=()=>act(async()=>{const r=await api(`/forum/threads/${id}/follow`,{method:'PUT',body:{on:!d.follow,mail:true}});d.follow=r.follow},()=>{
+  const b=$('fFol'),on=!!d.follow;b.textContent=on?'★ Following':'☆ Follow thread';b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);
+  if($('fMailL')){$('fMailL').hidden=!on;$('fMail').checked=!!d.follow?.mail}$('fAct').className='s';$('fAct').textContent=on?'New replies will show in Messages.':''});
+ if($('fMail'))$('fMail').onchange=()=>act(()=>api(`/forum/threads/${id}/follow`,{method:'PUT',body:{on:true,mail:$('fMail').checked}}),()=>{$('fAct').className='s';$('fAct').textContent=$('fMail').checked?'One email per thread until you open it again.':'No emails for this thread.'});
+ if($('fEdT'))$('fEdT').onclick=()=>{const h=$('fTt');h.innerHTML=`<input class="inp" id="fTi" maxlength="120" value="${esc(th.title)}"> <button class="btn pri" type="button" id="fTs">Save</button>`;$('fTi').focus();
+  $('fTs').onclick=()=>act(()=>api('/forum/threads/'+id,{method:'PUT',body:{title:$('fTi').value}}),()=>forumThread(id))};
+ if($('fPin'))$('fPin').onclick=()=>act(()=>api('/forum/threads/'+id,{method:'PUT',body:{pinned:!th.pinned}}),()=>forumThread(id));
+ if($('fLock'))$('fLock').onclick=()=>act(()=>api('/forum/threads/'+id,{method:'PUT',body:{locked:!th.locked}}),()=>forumThread(id));
+ if($('fMove'))forumCats().then(cs=>{const S=$('fMove');if(!S)return;S.innerHTML=cs.map(c=>`<option value="${esc(c.id)}"${c.id===th.category.id?' selected':''}>${c.id===th.category.id?'In: ':'Move to: '}${esc(c.name)}</option>`).join('');
+  S.onchange=()=>act(()=>api('/forum/threads/'+id,{method:'PUT',body:{category:S.value}}),()=>{fCats=null;forumThread(id)})}).catch(()=>{});
+ if($('fDelT'))$('fDelT').onclick=e=>{const b=e.target;if(!b.dataset.c){b.dataset.c=1;b.textContent='Click again to delete the whole thread';return}
+  act(()=>api('/forum/threads/'+id,{method:'DELETE'}),()=>{fCats=null;location.hash='#/forum/c/'+th.category.id})};
+ // The buttons on each post.
+ $('fPosts').querySelectorAll('[data-p]').forEach(P=>{const pid=P.dataset.p,p=d.posts.find(x=>x.id===pid),q=s=>P.querySelector(s),err=t=>{const e=q('[data-er]');if(e)e.textContent=t};
+  if(q('[data-sh]'))q('[data-sh]').onclick=e=>{e.target.parentElement.hidden=true;q('[data-bc]').hidden=false};
+  P.querySelectorAll('.fpp .chip').forEach(c=>c.onclick=()=>{const k=BYKEY.get(c.dataset.k);if(k){showOnWheel([k.k]);setTimeout(()=>showP(k),0)}});
+  if(q('[data-vt]'))q('[data-vt]').onclick=async e=>{const b=e.currentTarget;b.disabled=true;
+   try{const v=await api(`/forum/posts/${pid}/vote`,{method:'PUT',body:{on:!p.voted}});p.voted=v.voted;p.votes=v.votes;b.classList.toggle('on',p.voted);b.setAttribute('aria-pressed',p.voted);b.querySelector('span').textContent=`${p.voted?'Upvoted':'Upvote'} · ${p.votes}`}
+   catch(x){err(x.message)}b.disabled=false};
+  if(q('[data-rp]'))q('[data-rp]').onclick=()=>openReport('forum',pid,th.title);
+  if(q('[data-hd]'))q('[data-hd]').onclick=e=>act(()=>api('/forum/posts/'+pid,{method:'PUT',body:{hidden:e.target.dataset.hd==='1'}}),()=>forumThread(id));
+  if(q('[data-dl]'))q('[data-dl]').onclick=async e=>{const b=e.target;if(!b.dataset.c){b.dataset.c=1;b.textContent=p.first&&!replies?'Click again to delete the post and thread':'Click again to delete';return}
+   try{const r=await api('/forum/posts/'+pid,{method:'DELETE'});if(r.thread==='deleted'){fCats=null;location.hash='#/forum/c/'+th.category.id}else forumThread(id)}catch(x){err(x.message)}};
+  if(q('[data-ed]'))q('[data-ed]').onclick=()=>{const box=document.createElement('div');P.replaceWith(box);
+   forumComposer(box,{body:p.body,images:p.images,paints:p.paints,recipes:p.recipes},{label:'Edit your post',go:'Save',going:'Saving…',cancel:()=>forumThread(id)},
+    async x=>{await api('/forum/posts/'+pid,{method:'PUT',body:x});forumThread(id)})}});
+ const h=location.hash.match(/[?&]p=([\w-]+)/);if(h)document.getElementById('post-'+h[1])?.scrollIntoView({block:'center'})}
 
 /* ---------- feedback ---------- */
 // The floating Feedback button on every page opens this popup; messages go to /api/feedback.
