@@ -29,5 +29,9 @@
   // paintersdesk.com must be onboarded under Email Service > Email Sending.
   "send_email": [{ "name": "EMAIL" }],
   // Workers AI checks each uploaded photo before it is stored (see scanImage in worker/index.js).
-  "ai": { "binding": "AI" }
+  "ai": { "binding": "AI" },
+  // Live chat: one ChatRoom Durable Object per room holds the open WebSocket connections (see ChatRoom in worker/index.js).
+  // The deploy creates it; the migration tag below only ever grows (never edit or remove an applied one).
+  "durable_objects": { "bindings": [{ "name": "CHAT", "class_name": "ChatRoom" }] },
+  "migrations": [{ "tag": "v1-chat", "new_sqlite_classes": ["ChatRoom"] }]
 }
