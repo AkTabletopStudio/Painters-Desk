@@ -142,6 +142,7 @@ async function route(request, env, url) {
   if (p === '/api/blocks' && m === 'GET') return listBlocks(request, env);
   if ((r = p.match(/^\/api\/blocks\/([\w-]+)$/)) && m === 'PUT') return setBlock(request, env, r[1]);
   if (p === '/api/me/messages' && m === 'PUT') return setMessagePrefs(request, env);
+  if (p.startsWith('/api/forum') && !forumOpen(env, await currentUser(request, env))) return json({ error: 'Not found' }, 404);
   if (p === '/api/forum' && m === 'GET') return forumHome(request, env);
   if (p === '/api/forum/threads' && m === 'GET') return listThreads(request, env, url);
   if (p === '/api/forum/threads' && m === 'POST') return createThread(request, env);
@@ -313,7 +314,8 @@ async function me(request, env) {
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // messages: the Messages pages work (migration 0015).
   // forum: the Forum pages work (migration 0018). chat: the Chat page works (migration 0019).
-  const messages = await hasMessages(env), follows = await hasFollows(env), forum = await hasForum(env), chat = await hasChat(env);
+  // forum is only on for admins until FORUM_OPEN is set to 1 (the owner paused it 2026-10-31 to focus on chat).
+  const messages = await hasMessages(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
   return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, forum, chat, devLogin: env.DEV_LOGIN === '1' });
@@ -1651,7 +1653,7 @@ async function unreadCount(request, env) {
   const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE (a_id = ?1 AND a_hidden = 0 AND b_last > a_read)
     OR (kind = 'direct' AND b_id = ?1 AND b_hidden = 0 AND a_last > b_read) OR (a_id IS NULL AND ?2 != '' AND a_token = ?2 AND b_last > a_read)`).bind(u?.id || '', token).first();
   const team = u?.admin ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM conversations WHERE kind = 'feedback' AND status = 'open' AND a_last > b_read").first()).n : 0;
-  const forum = u && await hasForum(env) ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM forum_follows f JOIN forum_threads t ON t.id = f.thread_id
+  const forum = u && forumOpen(env, u) && await hasForum(env) ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM forum_follows f JOIN forum_threads t ON t.id = f.thread_id
     WHERE f.user_id = ? AND t.last_at > f.read_at`).bind(u.id).first()).n : 0;
   const chat = u && await hasChat(env) ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM chat_mentions n JOIN chat_messages m ON m.id = n.message_id
     LEFT JOIN users u ON u.id = m.user_id WHERE n.user_id = ? AND n.read = 0 AND ${CHAT_SHOWN}`).bind(u.id).first()).n : 0;
@@ -1890,6 +1892,8 @@ async function hasForum(env) {
   if (!forumReady) forumReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'forum_threads'").first());
   return forumReady;
 }
+// The forum is paused: only admins can see it until the FORUM_OPEN variable is set to 1. Its data stays as it is.
+const forumOpen = (env, u) => env.FORUM_OPEN === '1' || !!u?.admin;
 async function needForum(env) {
   if (!await hasForum(env)) throw new HttpError(503, 'The forum is not open on this server yet');
 }
