@@ -142,6 +142,30 @@ async function route(request, env, url) {
   if (p === '/api/blocks' && m === 'GET') return listBlocks(request, env);
   if ((r = p.match(/^\/api\/blocks\/([\w-]+)$/)) && m === 'PUT') return setBlock(request, env, r[1]);
   if (p === '/api/me/messages' && m === 'PUT') return setMessagePrefs(request, env);
+  if (p === '/api/forum' && m === 'GET') return forumHome(request, env);
+  if (p === '/api/forum/threads' && m === 'GET') return listThreads(request, env, url);
+  if (p === '/api/forum/threads' && m === 'POST') return createThread(request, env);
+  if (p === '/api/forum/search' && m === 'GET') return searchForum(request, env, url);
+  if (p === '/api/forum/updates' && m === 'GET') return forumUpdates(request, env);
+  if (p === '/api/forum/updates' && m === 'POST') return readForumUpdates(request, env);
+  if (p === '/api/me/forum' && m === 'PUT') return setForumPrefs(request, env);
+  if ((r = p.match(/^\/api\/forum\/threads\/([\w-]+)$/))) {
+    if (m === 'GET') return getThread(request, env, r[1]);
+    if (m === 'PUT') return updateThread(request, env, r[1]);
+    if (m === 'DELETE') return deleteThread(request, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/forum\/threads\/([\w-]+)\/posts$/)) && m === 'POST') return addPost(request, env, url, r[1]);
+  if ((r = p.match(/^\/api\/forum\/threads\/([\w-]+)\/follow$/)) && m === 'PUT') return followThread(request, env, r[1]);
+  if ((r = p.match(/^\/api\/forum\/posts\/([\w-]+)$/))) {
+    if (m === 'PUT') return updatePost(request, env, r[1]);
+    if (m === 'DELETE') return deletePost(request, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/forum\/posts\/([\w-]+)\/vote$/)) && m === 'PUT') return votePost(request, env, r[1]);
+  if (p === '/api/forum/categories' && m === 'POST') return addCategory(request, env, url);
+  if ((r = p.match(/^\/api\/forum\/categories\/([\w-]+)$/))) {
+    if (m === 'PUT') return updateCategory(request, env, r[1]);
+    if (m === 'DELETE') return deleteCategory(request, env, r[1]);
+  }
   if (p === '/api/hit' && m === 'POST') return hit(request, env, url);
   if (p === '/api/me/updates' && m === 'PUT') return setUpdates(request, env);
   if (p === '/api/unsubscribe' && (m === 'GET' || m === 'POST')) return unsubscribe(request, env, url);
@@ -209,9 +233,10 @@ async function currentUser(request, env) {
   const token = cookies(request)[SESSION_COOKIE];
   if (!token) return null;
   // dm/dm_mail (message settings) come with migration 0015.
-  const msg = await hasMessages(env), fnd = await hasFindable(env);
+  // forum_mail comes with migration 0018.
+  const msg = await hasMessages(env), fnd = await hasFindable(env), frm = await hasForum(env);
   const row = await env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}${fnd ? ', u.findable' : ''}
+    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}${fnd ? ', u.findable' : ''}${frm ? ', u.forum_mail' : ''}
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now()).first();
   if (!row) return null;
@@ -223,6 +248,7 @@ async function currentUser(request, env) {
   row.blocked = !!row.blocked;
   if (msg) { row.dm = !!row.dm; row.dm_mail = !!row.dm_mail; }
   if (fnd) row.findable = !!row.findable;
+  if (frm) row.forum_mail = !!row.forum_mail;
   row.favourites = JSON.parse(row.favourites || '[]');
   return row;
 }
@@ -269,10 +295,11 @@ async function me(request, env) {
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // messages: the Messages pages work (migration 0015).
-  const messages = await hasMessages(env), follows = await hasFollows(env);
+  // forum: the Forum pages work (migration 0018).
+  const messages = await hasMessages(env), follows = await hasFollows(env), forum = await hasForum(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, devLogin: env.DEV_LOGIN === '1' });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, forum, devLogin: env.DEV_LOGIN === '1' });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -695,6 +722,22 @@ async function deleteAccount(request, env) {
       env.DB.prepare('DELETE FROM user_blocks WHERE user_id = ?1 OR blocked_id = ?1').bind(u.id),
     ] : []),
     ...(await hasFollows(env) ? [env.DB.prepare('DELETE FROM follows WHERE user_id = ?1 OR followed_id = ?1').bind(u.id)] : []),
+    // Forum: replies go. Threads nobody else replied to go entirely; the others keep their replies, with the opening post deleted.
+    ...(await hasForum(env) ? [
+      env.DB.prepare('DELETE FROM forum_votes WHERE user_id = ?1 OR post_id IN (SELECT id FROM forum_posts WHERE user_id = ?1)').bind(u.id),
+      env.DB.prepare('DELETE FROM forum_follows WHERE user_id = ?1').bind(u.id),
+      env.DB.prepare('DELETE FROM forum_posts WHERE user_id = ?1 AND first = 0').bind(u.id),
+      env.DB.prepare('DELETE FROM forum_follows WHERE thread_id IN (SELECT t.id FROM forum_threads t WHERE t.user_id = ?1 AND NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = t.id AND p.first = 0))').bind(u.id),
+      env.DB.prepare('DELETE FROM forum_posts WHERE first = 1 AND thread_id IN (SELECT t.id FROM forum_threads t WHERE t.user_id = ?1 AND NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = t.id AND p.first = 0))').bind(u.id),
+      env.DB.prepare('DELETE FROM forum_threads WHERE user_id = ?1 AND NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = forum_threads.id)').bind(u.id),
+      env.DB.prepare("UPDATE forum_posts SET user_id = NULL, deleted = 1, body = '', images = '[]', paints = '[]', recipes = '[]' WHERE user_id = ?1").bind(u.id),
+      env.DB.prepare('UPDATE forum_threads SET user_id = NULL WHERE user_id = ?1').bind(u.id),
+      env.DB.prepare('UPDATE forum_categories SET suggested_by = NULL WHERE suggested_by = ?1').bind(u.id),
+      // Threads left with nothing but deleted posts go too.
+      env.DB.prepare('DELETE FROM forum_follows WHERE thread_id IN (SELECT t.id FROM forum_threads t WHERE NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = t.id AND p.deleted = 0))'),
+      env.DB.prepare('DELETE FROM forum_posts WHERE thread_id IN (SELECT t.id FROM forum_threads t WHERE NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = t.id AND p.deleted = 0))'),
+      env.DB.prepare('DELETE FROM forum_threads WHERE NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = forum_threads.id)'),
+    ] : []),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(u.id),
@@ -1066,7 +1109,7 @@ const REPORTS_PER_HOUR = 10;
 async function addReport(request, env, url) {
   const b = await body(request);
   if (b.website) return json({ ok: true });
-  const kind = ['user', 'message'].includes(b.kind) ? b.kind : 'recipe';
+  const kind = ['user', 'message', 'forum'].includes(b.kind) ? b.kind : 'recipe';
   const target = typeof b.id === 'string' && RECIPE_ID.test(b.id) ? b.id : '';
   const reason = REPORT_REASONS[b.reason] ? b.reason : 'other';
   const note = str(b.note, 1000, 'Details');
@@ -1079,6 +1122,10 @@ async function addReport(request, env, url) {
     const side = m && sideOf(m, u, '');
     if (!side || side === m.side) throw new HttpError(404, 'Message not found');
     row = { name: m.name || '(deleted account)' };
+  } else if (kind === 'forum') {
+    // A forum post (the opening post or a reply), by its id.
+    row = await hasForum(env) && await env.DB.prepare('SELECT t.id AS thread_id, t.title AS name FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.id = ? AND p.deleted = 0').bind(target).first();
+    if (!row) throw new HttpError(404, 'Post not found');
   } else row = kind === 'recipe'
     ? await env.DB.prepare("SELECT title AS name FROM recipes WHERE id = ? AND visibility = 'public'").bind(target).first()
     : await env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(target).first();
@@ -1090,7 +1137,7 @@ async function addReport(request, env, url) {
     .bind(crypto.randomUUID(), kind, target, reason, note, u?.id || null, ip, t).run();
   const to = env.FEEDBACK_TO || adminEmails(env)[0];
   if (to) {
-    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : kind === 'message' ? `a private message from ${row.name}` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
+    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : kind === 'forum' ? `a forum post in "${row.name}" (${url.origin}/#/forum/t/${row.thread_id})` : kind === 'message' ? `a private message from ${row.name}` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
     try {
       await sendMail(env, to, `[Painters Desk] Report: ${REPORT_REASONS[reason]}`,
         `Someone reported ${what}.\n\nReason: ${REPORT_REASONS[reason]}\n\n${note ? 'Details: ' + note + '\n\n' : ''}Reported by: ${u ? u.name : 'someone not signed in'}`,
@@ -1113,6 +1160,9 @@ async function moderation(request, env) {
   for (const x of users.values()) if (x.avatar_image) add(x.avatar_image, { type: 'icon', id: x.id });
   if (await hasCommissions(env)) for (const c of (await env.DB.prepare('SELECT user_id, photos FROM commissions').all()).results)
     for (const img of JSON.parse(c.photos || '[]')) add(img, { type: 'portfolio', id: c.user_id });
+  const forum = await hasForum(env);
+  if (forum) for (const p of (await env.DB.prepare("SELECT p.thread_id, p.images, t.title FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.images != '[]'").all()).results)
+    for (const img of JSON.parse(p.images)) add(img, { type: 'forum', id: p.thread_id, title: p.title });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -1131,6 +1181,11 @@ async function moderation(request, env) {
       o.message = m ? { body: m.body, created_at: m.created_at } : null;
       o.user = m?.user_id ? person(m.user_id) : null;
       o.images = [];
+    } else if (r.kind === 'forum') {
+      const p = forum && await env.DB.prepare('SELECT p.id, p.user_id, p.body, p.images, p.first, p.hidden, p.deleted, p.created_at, t.id AS thread_id, t.title FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.id = ?').bind(r.target_id).first();
+      o.post = p && !p.deleted ? { id: p.id, body: p.body, first: !!p.first, hidden: !!p.hidden, created_at: p.created_at, thread: { id: p.thread_id, title: p.title } } : null;
+      o.user = p?.user_id ? person(p.user_id) : null;
+      o.images = o.post ? await imgById(JSON.parse(p.images || '[]')) : [];
     } else {
       o.user = person(r.target_id);
       const icon = r.kind === 'user' && users.get(r.target_id)?.avatar_image;
@@ -1158,6 +1213,8 @@ async function adminDeleteImage(request, env, id) {
   const stmts = rows.map(r => env.DB.prepare('UPDATE recipes SET cover = ?, steps = ? WHERE id = ?').bind(
     r.cover === id ? '' : r.cover, JSON.stringify(JSON.parse(r.steps || '[]').map(s => (s.image === id ? { ...s, image: '' } : s))), r.id));
   stmts.push(env.DB.prepare("UPDATE users SET avatar_image = '' WHERE avatar_image = ?").bind(id));
+  if (await hasForum(env)) for (const p of (await env.DB.prepare('SELECT id, images FROM forum_posts WHERE images LIKE ?').bind(`%"${id}"%`).all()).results)
+    stmts.push(env.DB.prepare('UPDATE forum_posts SET images = ? WHERE id = ?').bind(JSON.stringify(JSON.parse(p.images).filter(i => i !== id)), p.id));
   await env.DB.batch(stmts);
   await deleteImages(env, [id]);
   return json({ ok: true });
@@ -1545,7 +1602,7 @@ async function inbox(request, env, url) {
 }
 
 // GET /api/inbox/unread: how many conversations have something new, for the badge on Messages (and, for admins,
-// how many open feedback conversations are waiting on the team).
+// how many open feedback conversations are waiting on the team, and how many followed forum threads have new replies).
 async function unreadCount(request, env) {
   if (!await hasMessages(env)) return json({ n: 0, team: 0, unavailable: true });
   const u = await currentUser(request, env), token = await anonToken(request);
@@ -1553,7 +1610,9 @@ async function unreadCount(request, env) {
   const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE (a_id = ?1 AND a_hidden = 0 AND b_last > a_read)
     OR (kind = 'direct' AND b_id = ?1 AND b_hidden = 0 AND a_last > b_read) OR (a_id IS NULL AND ?2 != '' AND a_token = ?2 AND b_last > a_read)`).bind(u?.id || '', token).first();
   const team = u?.admin ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM conversations WHERE kind = 'feedback' AND status = 'open' AND a_last > b_read").first()).n : 0;
-  return json({ n: r.n, team });
+  const forum = u && await hasForum(env) ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM forum_follows f JOIN forum_threads t ON t.id = f.thread_id
+    WHERE f.user_id = ? AND t.last_at > f.read_at`).bind(u.id).first()).n : 0;
+  return json({ n: r.n, team, forum });
 }
 
 // Whether u can message painter id, and if not, why. Returns { other, why } (why is '' when they can).
@@ -1771,6 +1830,495 @@ async function claimInbox(request, env) {
     env.DB.prepare('UPDATE feedback SET user_id = ? WHERE id = ?').bind(u.id, c.feedback_id),
   ]));
   return json({ ok: true, moved: ids.length });
+}
+
+/* ---------- forum ---------- */
+
+// Categories, threads and posts live in migration 0018 (see it for what each column means). Until it is applied the
+// Forum page says it isn't open yet.
+// A post is up to POST_MAX characters with FORUM_PHOTOS photos, FORUM_PAINTS paints and FORUM_RECIPES public recipes.
+// Members can start THREADS_PER_HOUR / THREADS_PER_DAY threads and write POSTS_PER_HOUR / POSTS_PER_DAY posts,
+// POST_GAP apart, and suggest SUGGESTIONS_PER_DAY categories. A reply emails at most FORUM_MAILS followers.
+const POST_MAX = 8000, TITLE_MAX = 120, FORUM_PHOTOS = 6, FORUM_PAINTS = 12, FORUM_RECIPES = 3;
+const THREADS_PER_HOUR = 5, THREADS_PER_DAY = 20, POSTS_PER_HOUR = 30, POSTS_PER_DAY = 200, POST_GAP = 10000, SUGGESTIONS_PER_DAY = 3;
+const THREAD_PAGE = 30, THREAD_POSTS = 500, FORUM_MAILS = 50;
+let forumReady = false;
+async function hasForum(env) {
+  if (!forumReady) forumReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'forum_threads'").first());
+  return forumReady;
+}
+async function needForum(env) {
+  if (!await hasForum(env)) throw new HttpError(503, 'The forum is not open on this server yet');
+}
+
+// Blocked accounts and sign-ups that never confirmed their email can read but not write.
+function forumWriter(u) {
+  if (u.blocked) throw new HttpError(403, 'This account has been blocked from posting');
+  if (u.email && !u.email_verified) throw new HttpError(403, 'Please confirm your email first. You can send the confirmation email from your account page.');
+}
+
+async function forumLimits(env, u, newThread) {
+  const t = now();
+  const n = await env.DB.prepare(`SELECT COALESCE(SUM(created_at > ?1), 0) AS hour, COUNT(*) AS day, MAX(created_at) AS last,
+    COALESCE(SUM(first = 1 AND created_at > ?1), 0) AS th_hour, COALESCE(SUM(first = 1), 0) AS th_day
+    FROM forum_posts WHERE user_id = ?2 AND created_at > ?3`).bind(t - 3600000, u.id, t - 86400000).first();
+  if (n.last && t - n.last < POST_GAP) throw new HttpError(429, 'Please wait a few seconds before posting again');
+  if (newThread && (n.th_hour >= THREADS_PER_HOUR || n.th_day >= THREADS_PER_DAY)) throw new HttpError(429, "You've started a lot of threads recently, please try again later");
+  if (n.hour >= POSTS_PER_HOUR || n.day >= POSTS_PER_DAY) throw new HttpError(429, "You've posted a lot recently, please try again later");
+}
+
+// A post's text, photos (uploaded by this user), paints and tagged recipes (public ones only).
+async function cleanPost(env, u, b) {
+  const text = str(b.body, POST_MAX, 'Post');
+  const images = [...new Set((Array.isArray(b.images) ? b.images : []).filter(i => typeof i === 'string' && IMAGE_ID.test(i)))];
+  if (images.length > FORUM_PHOTOS) throw new HttpError(400, `Too many photos (max ${FORUM_PHOTOS})`);
+  if (!text && !images.length) throw new HttpError(400, 'Write something or add a photo');
+  await checkImagesOwned(env, u, images);
+  const paints = paintKeys(b.paints, FORUM_PAINTS);
+  const recipes = [...new Set((Array.isArray(b.recipes) ? b.recipes : []).filter(i => typeof i === 'string' && RECIPE_ID.test(i)))];
+  if (recipes.length > FORUM_RECIPES) throw new HttpError(400, `Too many recipes (max ${FORUM_RECIPES})`);
+  if (recipes.length) {
+    const ok = (await env.DB.prepare(`SELECT id FROM recipes WHERE visibility = 'public' AND id IN (${recipes.map(() => '?').join(',')})`).bind(...recipes).all()).results;
+    if (ok.length !== recipes.length) throw new HttpError(400, 'A recipe you tagged is no longer public');
+  }
+  return { text, images, paints, recipes };
+}
+
+// Delete photos no recipe, profile, portfolio or other post still uses (a photo can be reused across them).
+async function dropUnusedImages(env, ids) {
+  const cm = await hasCommissions(env), gone = [];
+  for (const id of new Set(ids)) {
+    const like = `%"${id}"%`;
+    const used = await env.DB.prepare(`SELECT 1 FROM recipes WHERE cover = ?1 OR steps LIKE ?2 UNION ALL SELECT 1 FROM users WHERE avatar_image = ?1
+      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
+    if (!used) gone.push(id);
+  }
+  await deleteImages(env, gone);
+}
+
+// The painters the viewer blocked: their posts are folded away for the viewer.
+async function myBlocks(env, u) {
+  if (!u || !await hasMessages(env)) return new Set();
+  return new Set((await env.DB.prepare('SELECT blocked_id FROM user_blocks WHERE user_id = ?').bind(u.id).all()).results.map(r => r.blocked_id));
+}
+
+// Tagged recipes as cards: title, kind, author, and a colour strip (recipes and palettes) or photo (tutorials).
+async function taggedRecipes(env, ids) {
+  ids = [...new Set(ids)];
+  if (!ids.length) return {};
+  const rows = (await env.DB.prepare(`SELECT r.id, r.kind, r.title, r.cover, r.steps, u.name AS author_name FROM recipes r JOIN users u ON u.id = r.user_id
+    WHERE r.visibility = 'public' AND r.id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()).results;
+  return Object.fromEntries(rows.map(r => {
+    const steps = JSON.parse(r.steps || '[]');
+    return [r.id, { id: r.id, kind: r.kind, title: r.title, author: r.author_name, layers: r.kind === 'tutorial' ? [] : steps.map(s => s.mix),
+      cover: r.cover || [...steps].reverse().find(s => s.image)?.image || '' }];
+  }));
+}
+
+const FORUM_POST_SELECT = `SELECT p.*, u.name AS author_name, ${AVATAR} AS author_avatar, u.blocked AS author_blocked,
+  (SELECT COUNT(*) FROM forum_votes v WHERE v.post_id = p.id) AS votes,
+  EXISTS (SELECT 1 FROM forum_votes v WHERE v.post_id = p.id AND v.user_id = ?1) AS voted
+  FROM forum_posts p LEFT JOIN users u ON u.id = p.user_id`;
+
+// A post as the viewer sees it. Removed posts (by a moderator, or from a blocked account) keep their place but lose
+// their content, except for admins, who see what was removed.
+function postOut(p, recipes, viewer, blocks) {
+  const removed = !!(p.hidden || p.author_blocked);
+  const out = {
+    id: p.id, first: !!p.first, created_at: p.created_at, edited_at: p.edited_at || null, votes: p.votes || 0, voted: !!p.voted,
+    mine: !!viewer && p.user_id === viewer.id,
+    author: p.user_id && p.author_name != null ? { id: p.user_id, name: p.author_name, avatar: p.author_avatar } : { id: null, name: '(deleted account)', avatar: null },
+    body: '', images: [], paints: [], recipes: [],
+  };
+  if (p.deleted) out.deleted = true;
+  else if (removed && !viewer?.admin) out.removed = true;
+  else {
+    if (removed) { out.hiddenByMod = !!p.hidden; out.authorBlocked = !!p.author_blocked; }
+    if (blocks.has(p.user_id)) out.blockedByMe = true;
+    out.body = p.body; out.images = JSON.parse(p.images || '[]'); out.paints = JSON.parse(p.paints || '[]');
+    out.recipes = JSON.parse(p.recipes || '[]').map(id => recipes[id]).filter(Boolean);
+  }
+  return out;
+}
+
+// Threads with their category, author, reply and upvote counts, the first photo of the opening post, and who wrote last.
+// ?1 is the viewer's id (for whether they follow it and have read the newest reply).
+const THREAD_SELECT = `SELECT t.*, c.name AS category_name, u.name AS author_name, ${AVATAR} AS author_avatar,
+  (SELECT COUNT(*) FROM forum_posts p WHERE p.thread_id = t.id AND p.first = 0 AND p.deleted = 0 AND p.hidden = 0) AS replies,
+  (SELECT COUNT(*) FROM forum_votes v JOIN forum_posts p ON p.id = v.post_id WHERE p.thread_id = t.id AND p.first = 1) AS votes,
+  (SELECT json_extract(p.images, '$[0]') FROM forum_posts p WHERE p.thread_id = t.id AND p.first = 1 AND p.deleted = 0 AND p.hidden = 0) AS photo,
+  (SELECT lu.name FROM forum_posts p JOIN users lu ON lu.id = p.user_id WHERE p.thread_id = t.id AND p.deleted = 0 AND p.hidden = 0 AND lu.blocked = 0 ORDER BY p.created_at DESC LIMIT 1) AS last_name,
+  (SELECT f.read_at FROM forum_follows f WHERE f.thread_id = t.id AND f.user_id = ?1) AS my_read
+  FROM forum_threads t JOIN forum_categories c ON c.id = t.category_id LEFT JOIN users u ON u.id = t.user_id`;
+// A thread whose opening post a moderator removed, or whose author is blocked, drops out of lists (admins still see it).
+const THREAD_SHOWN = `COALESCE(u.blocked, 0) = 0 AND NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = t.id AND p.first = 1 AND p.hidden = 1)`;
+
+const threadOut = t => ({
+  id: t.id, title: t.title, category: { id: t.category_id, name: t.category_name }, pinned: !!t.pinned, locked: !!t.locked,
+  author: t.user_id && t.author_name != null ? { id: t.user_id, name: t.author_name, avatar: t.author_avatar } : { id: null, name: '(deleted account)', avatar: null },
+  replies: t.replies || 0, votes: t.votes || 0, photo: t.photo || '', last_at: t.last_at, last_name: t.last_name || '', created_at: t.created_at,
+  following: t.my_read != null, unread: t.my_read != null && t.last_at > t.my_read,
+});
+
+const catOut = c => ({ id: c.id, name: c.name, description: c.description, sort: c.sort, threads: c.threads || 0, last_at: c.last_at || null });
+
+// GET /api/forum: the categories (with thread counts), the most active threads, and for admins the suggested categories.
+async function forumHome(request, env) {
+  if (!await hasForum(env)) return json({ unavailable: true, categories: [], threads: [] });
+  const u = await currentUser(request, env);
+  const cats = (await env.DB.prepare(`SELECT c.*, (SELECT COUNT(*) FROM forum_threads t WHERE t.category_id = c.id) AS threads,
+    (SELECT MAX(last_at) FROM forum_threads t WHERE t.category_id = c.id) AS last_at FROM forum_categories c WHERE c.status = 'live' ORDER BY c.sort, c.name`).all()).results;
+  const threads = (await env.DB.prepare(`${THREAD_SELECT} WHERE ${THREAD_SHOWN} ORDER BY t.last_at DESC LIMIT 10`).bind(u?.id || '').all()).results;
+  const out = { categories: cats.map(catOut), threads: threads.map(threadOut) };
+  if (u?.admin) out.pending = (await env.DB.prepare(`SELECT c.*, s.name AS by_name FROM forum_categories c LEFT JOIN users s ON s.id = c.suggested_by
+    WHERE c.status = 'pending' ORDER BY c.created_at`).all()).results.map(c => ({ ...catOut(c), by: c.suggested_by ? { id: c.suggested_by, name: c.by_name || '(deleted account)' } : null }));
+  return json(out);
+}
+
+// GET /api/forum/threads?c=&sort=active|new|top&offset=: a category's threads (pinned ones first), THREAD_PAGE at a time.
+// Without c: threads from every category. following=1 (signed in): only threads the viewer follows.
+async function listThreads(request, env, url) {
+  await needForum(env);
+  const u = await currentUser(request, env), c = url.searchParams.get('c') || '';
+  const sort = ['new', 'top'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'active';
+  const offset = Math.max(0, Math.min(5000, parseInt(url.searchParams.get('offset'), 10) || 0));
+  const where = [u?.admin ? '1 = 1' : THREAD_SHOWN], args = [u?.id || ''];
+  let cat = null;
+  if (c) {
+    cat = await env.DB.prepare("SELECT * FROM forum_categories WHERE id = ? AND status = 'live'").bind(c).first();
+    if (!cat) throw new HttpError(404, 'Category not found');
+    where.push('t.category_id = ?'); args.push(c);
+  }
+  if (url.searchParams.get('following') === '1') {
+    if (!u) throw new HttpError(401, 'Please sign in');
+    where.push('t.id IN (SELECT thread_id FROM forum_follows WHERE user_id = ?1)');
+  }
+  const order = sort === 'new' ? 't.created_at DESC' : sort === 'top' ? 'votes DESC, t.last_at DESC' : 't.last_at DESC';
+  const rows = (await env.DB.prepare(`${THREAD_SELECT} WHERE ${where.join(' AND ')} ORDER BY ${c ? 't.pinned DESC, ' : ''}${order} LIMIT ? OFFSET ?`)
+    .bind(...args, THREAD_PAGE + 1, offset).all()).results;
+  return json({ category: cat && catOut(cat), threads: rows.slice(0, THREAD_PAGE).map(threadOut), more: rows.length > THREAD_PAGE });
+}
+
+// GET /api/forum/search?q=&c=: threads whose title or any visible post matches, newest activity first, with the matching text.
+async function searchForum(request, env, url) {
+  await needForum(env);
+  const u = await currentUser(request, env);
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 80).replace(/[%_]/g, '');
+  if (q.length < 2) return json({ threads: [] });
+  const like = `%${q}%`, where = [u?.admin ? '1 = 1' : THREAD_SHOWN], args = [u?.id || '', like];
+  where.push(`(t.title LIKE ?2 OR EXISTS (SELECT 1 FROM forum_posts p JOIN users pu ON pu.id = p.user_id WHERE p.thread_id = t.id AND p.deleted = 0 AND p.hidden = 0 AND pu.blocked = 0 AND p.body LIKE ?2))`);
+  const c = url.searchParams.get('c');
+  if (c) { where.push('t.category_id = ?3'); args.push(c); }
+  const rows = (await env.DB.prepare(`${THREAD_SELECT.replace(' FROM forum_threads t', `,
+    (SELECT p.body FROM forum_posts p JOIN users pu ON pu.id = p.user_id WHERE p.thread_id = t.id AND p.deleted = 0 AND p.hidden = 0 AND pu.blocked = 0 AND p.body LIKE ?2 ORDER BY p.created_at LIMIT 1) AS hit
+    FROM forum_threads t`)} WHERE ${where.join(' AND ')} ORDER BY t.last_at DESC LIMIT 50`).bind(...args).all()).results;
+  // A short piece of the matching post, centred on the first match.
+  const snip = s => {
+    if (!s) return '';
+    const i = s.toLowerCase().indexOf(q.toLowerCase()), a = Math.max(0, i - 60);
+    return (a ? '…' : '') + s.slice(a, a + 180).replace(/\s+/g, ' ') + (a + 180 < s.length ? '…' : '');
+  };
+  return json({ threads: rows.map(t => ({ ...threadOut(t), hit: snip(t.hit) })) });
+}
+
+async function loadThread(env, id, viewer) {
+  const t = await env.DB.prepare(`${THREAD_SELECT} WHERE t.id = ?2`).bind(viewer?.id || '', id).first();
+  if (!t) throw new HttpError(404, 'Thread not found');
+  const first = await env.DB.prepare('SELECT p.hidden, u.blocked FROM forum_posts p LEFT JOIN users u ON u.id = p.user_id WHERE p.thread_id = ? AND p.first = 1').bind(id).first();
+  // Like a removed recipe, a thread a moderator took down looks missing to everyone but admins.
+  if (!viewer?.admin && first && (first.hidden || first.blocked)) throw new HttpError(404, 'Thread not found');
+  return t;
+}
+
+// Why the viewer can't reply here ('' when they can).
+function replyBlocker(t, u) {
+  if (!u) return 'signin';
+  if (u.blocked) return 'This account has been blocked from posting.';
+  if (u.email && !u.email_verified) return 'Please confirm your email before posting. You can send the confirmation email from your account page.';
+  if (t.locked && !u.admin) return 'This thread is locked, so it takes no new replies.';
+  return '';
+}
+
+// GET /api/forum/threads/:id: the thread and its posts, oldest first. Opening it marks it read for a follower.
+async function getThread(request, env, id) {
+  await needForum(env);
+  const u = await currentUser(request, env), t = await loadThread(env, id, u);
+  const rows = (await env.DB.prepare(`${FORUM_POST_SELECT} WHERE p.thread_id = ?2 ORDER BY p.first DESC, p.created_at LIMIT ${THREAD_POSTS}`).bind(u?.id || '', id).all()).results;
+  const recipes = await taggedRecipes(env, rows.flatMap(p => (p.deleted ? [] : JSON.parse(p.recipes || '[]'))));
+  const blocks = await myBlocks(env, u);
+  let follow = null;
+  if (u) {
+    const f = await env.DB.prepare('SELECT mail FROM forum_follows WHERE thread_id = ? AND user_id = ?').bind(id, u.id).first();
+    if (f) { follow = { mail: !!f.mail }; await env.DB.prepare('UPDATE forum_follows SET read_at = ? WHERE thread_id = ? AND user_id = ?').bind(now(), id, u.id).run(); }
+  }
+  const out = threadOut(t);
+  out.unread = false;
+  return json({ thread: out, posts: rows.map(p => postOut(p, recipes, u, blocks)), follow, why: replyBlocker(t, u), mail: mailReady(env) });
+}
+
+// POST /api/forum/threads { category, title, body, images, paints, recipes }: start a thread. The author follows it.
+async function createThread(request, env) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request);
+  forumWriter(u);
+  if (b.website) return json({ ok: true });
+  const cat = await env.DB.prepare("SELECT id FROM forum_categories WHERE id = ? AND status = 'live'").bind(String(b.category || '')).first();
+  if (!cat) throw new HttpError(400, 'Please pick a category');
+  const title = str(b.title, TITLE_MAX, 'Title', { required: true });
+  const p = await cleanPost(env, u, b);
+  await forumLimits(env, u, true);
+  const id = crypto.randomUUID(), t = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO forum_threads (id, category_id, user_id, title, last_at, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, cat.id, u.id, title, t, t),
+    env.DB.prepare('INSERT INTO forum_posts (id, thread_id, user_id, first, body, images, paints, recipes, created_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), id, u.id, p.text, JSON.stringify(p.images), JSON.stringify(p.paints), JSON.stringify(p.recipes), t),
+    env.DB.prepare('INSERT INTO forum_follows (thread_id, user_id, mail, read_at, created_at) VALUES (?, ?, 1, ?, ?)').bind(id, u.id, t, t),
+  ]);
+  return json({ id }, 201);
+}
+
+// PUT /api/forum/threads/:id: the author (or an admin) can change the { title, category }; admins can also set { pinned, locked }.
+async function updateThread(request, env, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request), t = await loadThread(env, id, u);
+  const own = t.user_id === u.id;
+  if (!own && !u.admin) throw new HttpError(403, 'Only the person who started this thread can change it');
+  if (own && !u.admin) forumWriter(u);
+  const sets = [], args = [];
+  if (b.title !== undefined) { sets.push('title = ?'); args.push(str(b.title, TITLE_MAX, 'Title', { required: true })); }
+  if (b.category !== undefined) {
+    if (!await env.DB.prepare("SELECT 1 FROM forum_categories WHERE id = ? AND status = 'live'").bind(String(b.category)).first()) throw new HttpError(400, 'Please pick a category');
+    sets.push('category_id = ?'); args.push(String(b.category));
+  }
+  for (const k of ['pinned', 'locked']) if (b[k] !== undefined) {
+    if (!u.admin) throw new HttpError(403, 'Admins only');
+    sets.push(`${k} = ?`); args.push(b[k] ? 1 : 0);
+  }
+  if (sets.length) await env.DB.prepare(`UPDATE forum_threads SET ${sets.join(', ')} WHERE id = ?`).bind(...args, id).run();
+  return json({ ok: true });
+}
+
+// Delete a whole thread: its posts, upvotes, follows and the photos nothing else uses.
+async function removeThread(env, id) {
+  const imgs = (await env.DB.prepare('SELECT images FROM forum_posts WHERE thread_id = ?').bind(id).all()).results.flatMap(p => JSON.parse(p.images || '[]'));
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM forum_votes WHERE post_id IN (SELECT id FROM forum_posts WHERE thread_id = ?)').bind(id),
+    env.DB.prepare('DELETE FROM forum_posts WHERE thread_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM forum_follows WHERE thread_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM forum_threads WHERE id = ?').bind(id),
+  ]);
+  await dropUnusedImages(env, imgs);
+}
+
+// DELETE /api/forum/threads/:id: admins can delete any thread; the author only one nobody has replied to yet.
+async function deleteThread(request, env, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), t = await loadThread(env, id, u);
+  if (!u.admin) {
+    if (t.user_id !== u.id) throw new HttpError(403, 'Only the person who started this thread can delete it');
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM forum_posts WHERE thread_id = ? AND first = 0').bind(id).first();
+    if (n.n) throw new HttpError(400, "Others have replied, so the thread stays. You can delete your opening post instead.");
+  }
+  await removeThread(env, id);
+  return json({ ok: true });
+}
+
+// POST /api/forum/threads/:id/posts { body, images, paints, recipes }: reply. The writer follows the thread from then on,
+// and the other followers hear about it (in Messages, and by email if they want that).
+async function addPost(request, env, url, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request);
+  if (b.website) return json({ ok: true });
+  const t = await loadThread(env, id, u), why = replyBlocker(t, u);
+  if (why) throw new HttpError(403, why);
+  const p = await cleanPost(env, u, b);
+  await forumLimits(env, u, false);
+  const pid = crypto.randomUUID(), tm = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO forum_posts (id, thread_id, user_id, body, images, paints, recipes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(pid, id, u.id, p.text, JSON.stringify(p.images), JSON.stringify(p.paints), JSON.stringify(p.recipes), tm),
+    env.DB.prepare('UPDATE forum_threads SET last_at = ? WHERE id = ?').bind(tm, id),
+    env.DB.prepare('INSERT INTO forum_follows (thread_id, user_id, mail, read_at, created_at) VALUES (?1, ?2, 1, ?3, ?3) ON CONFLICT (thread_id, user_id) DO UPDATE SET read_at = ?3').bind(id, u.id, tm),
+  ]);
+  await notifyFollowers(env, url, t, u, tm);
+  return json({ id: pid }, 201);
+}
+
+// One email per thread until the follower opens it again, only to confirmed emails, never to someone who blocked the writer.
+async function notifyFollowers(env, url, t, u, tm) {
+  if (!mailReady(env)) return;
+  const notBlocked = await hasMessages(env) ? 'AND NOT EXISTS (SELECT 1 FROM user_blocks b WHERE b.user_id = f.user_id AND b.blocked_id = ?2)' : '';
+  const rows = (await env.DB.prepare(`SELECT f.user_id, u.name, u.email FROM forum_follows f JOIN users u ON u.id = f.user_id
+    WHERE f.thread_id = ?1 AND f.user_id != ?2 AND f.mail = 1 AND f.mailed_at <= f.read_at AND u.forum_mail = 1 AND u.blocked = 0
+      AND u.email IS NOT NULL AND u.email != '' AND u.email_verified = 1 ${notBlocked} LIMIT ${FORUM_MAILS}`).bind(t.id, u.id).all()).results;
+  for (const r of rows) {
+    try {
+      await sendMail(env, r.email, `New reply in "${t.title}"`,
+        `Hi ${r.name},\n\n${u.name} replied in a forum thread you follow on The Painters Desk:\n\n"${t.title}"\n\nYou won't get another email about this thread until you've opened it.\n\nTo stop these emails, press Following on the thread, or turn off forum emails on your account page.`,
+        `${url.origin}/#/forum/t/${t.id}`, 'Read the reply');
+      await env.DB.prepare('UPDATE forum_follows SET mailed_at = ? WHERE thread_id = ? AND user_id = ?').bind(tm, t.id, r.user_id).run();
+    } catch (e) { console.error('Forum email failed', e); }
+  }
+}
+
+async function loadPost(env, id) {
+  const p = await env.DB.prepare('SELECT p.*, t.locked, t.user_id AS thread_user FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.id = ?').bind(id).first();
+  if (!p) throw new HttpError(404, 'Post not found');
+  return p;
+}
+
+// PUT /api/forum/posts/:id: the author edits { body, images, paints, recipes }; an admin removes or restores it with { hidden }.
+async function updatePost(request, env, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request), p = await loadPost(env, id);
+  if (b.hidden !== undefined) {
+    if (!u.admin) throw new HttpError(403, 'Admins only');
+    await env.DB.prepare('UPDATE forum_posts SET hidden = ? WHERE id = ?').bind(b.hidden ? 1 : 0, id).run();
+    return json({ ok: true, hidden: !!b.hidden });
+  }
+  if (p.user_id !== u.id || p.deleted) throw new HttpError(403, 'You can only edit your own posts');
+  forumWriter(u);
+  if (p.locked && !u.admin) throw new HttpError(403, 'This thread is locked');
+  const c = await cleanPost(env, u, b), old = JSON.parse(p.images || '[]');
+  await env.DB.prepare('UPDATE forum_posts SET body = ?, images = ?, paints = ?, recipes = ?, edited_at = ? WHERE id = ?')
+    .bind(c.text, JSON.stringify(c.images), JSON.stringify(c.paints), JSON.stringify(c.recipes), now(), id).run();
+  await dropUnusedImages(env, old.filter(i => !c.images.includes(i)));
+  return json({ ok: true });
+}
+
+// DELETE /api/forum/posts/:id (author or admin). A reply goes for good. An opening post with replies under it is
+// emptied and marked deleted so the thread stays readable; without replies the whole thread goes.
+async function deletePost(request, env, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), p = await loadPost(env, id);
+  if (p.user_id !== u.id && !u.admin) throw new HttpError(403, 'You can only delete your own posts');
+  const imgs = JSON.parse(p.images || '[]');
+  if (p.first) {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM forum_posts WHERE thread_id = ? AND first = 0').bind(p.thread_id).first();
+    if (!n.n) { await removeThread(env, p.thread_id); return json({ ok: true, thread: 'deleted' }); }
+    await env.DB.batch([
+      env.DB.prepare("UPDATE forum_posts SET deleted = 1, body = '', images = '[]', paints = '[]', recipes = '[]' WHERE id = ?").bind(id),
+      env.DB.prepare('DELETE FROM forum_votes WHERE post_id = ?').bind(id),
+    ]);
+  } else {
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM forum_votes WHERE post_id = ?').bind(id),
+      env.DB.prepare('DELETE FROM forum_posts WHERE id = ?').bind(id),
+    ]);
+    // The last reply under a deleted opening post takes the thread with it.
+    if (!await env.DB.prepare('SELECT 1 FROM forum_posts WHERE thread_id = ? AND deleted = 0').bind(p.thread_id).first()) {
+      await removeThread(env, p.thread_id);
+      await dropUnusedImages(env, imgs);
+      return json({ ok: true, thread: 'deleted' });
+    }
+  }
+  await dropUnusedImages(env, imgs);
+  return json({ ok: true });
+}
+
+// PUT /api/forum/posts/:id/vote { on }: upvote a post (not your own), or take it back.
+async function votePost(request, env, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request), p = await loadPost(env, id);
+  if (b.on === false) await env.DB.prepare('DELETE FROM forum_votes WHERE post_id = ? AND user_id = ?').bind(id, u.id).run();
+  else {
+    if (p.deleted || p.hidden) throw new HttpError(404, 'Post not found');
+    if (p.user_id === u.id) throw new HttpError(400, "You can't upvote your own");
+    await env.DB.prepare('INSERT OR IGNORE INTO forum_votes (post_id, user_id, created_at) VALUES (?, ?, ?)').bind(id, u.id, now()).run();
+  }
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM forum_votes WHERE post_id = ?').bind(id).first();
+  return json({ votes: n.n, voted: b.on !== false });
+}
+
+// PUT /api/forum/threads/:id/follow { on, mail }: follow a thread (new replies show in Messages; mail: also by email) or stop.
+async function followThread(request, env, id) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request);
+  await loadThread(env, id, u);
+  if (b.on === false) await env.DB.prepare('DELETE FROM forum_follows WHERE thread_id = ? AND user_id = ?').bind(id, u.id).run();
+  else await env.DB.prepare('INSERT INTO forum_follows (thread_id, user_id, mail, read_at, created_at) VALUES (?1, ?2, ?3, ?4, ?4) ON CONFLICT (thread_id, user_id) DO UPDATE SET mail = ?3, read_at = ?4')
+    .bind(id, u.id, b.mail === false ? 0 : 1, now()).run();
+  return json({ follow: b.on === false ? null : { mail: b.mail !== false } });
+}
+
+// GET /api/forum/updates: followed threads with replies the viewer hasn't read, for Messages. POST marks them all read.
+async function forumUpdates(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasForum(env)) return json({ threads: [] });
+  const rows = (await env.DB.prepare(`${THREAD_SELECT} WHERE ${THREAD_SHOWN} AND t.id IN (SELECT f.thread_id FROM forum_follows f WHERE f.user_id = ?1 AND f.read_at < t.last_at)
+    ORDER BY t.last_at DESC LIMIT 50`).bind(u.id).all()).results;
+  return json({ threads: rows.map(threadOut) });
+}
+async function readForumUpdates(request, env) {
+  const u = await requireUser(request, env);
+  await needForum(env);
+  await env.DB.prepare('UPDATE forum_follows SET read_at = ? WHERE user_id = ?').bind(now(), u.id).run();
+  return json({ ok: true });
+}
+
+// PUT /api/me/forum { forum_mail }: email me about new replies in threads I follow.
+async function setForumPrefs(request, env) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request);
+  await env.DB.prepare('UPDATE users SET forum_mail = ? WHERE id = ?').bind(b.forum_mail === false ? 0 : 1, u.id).run();
+  return json({ user: await currentUser(request, env) });
+}
+
+const slug = s => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+
+// POST /api/forum/categories { name, description }: admins add a category; members suggest one, which waits for an admin.
+async function addCategory(request, env, url) {
+  await needForum(env);
+  const u = await requireUser(request, env), b = await body(request);
+  if (b.website) return json({ ok: true });
+  const name = str(b.name, 50, 'Name', { required: true }), description = str(b.description, 200, 'Description'), t = now();
+  if (await env.DB.prepare('SELECT 1 FROM forum_categories WHERE lower(name) = lower(?)').bind(name).first())
+    throw new HttpError(400, 'There is already a category with that name (or one waiting for approval)');
+  if (!u.admin) {
+    forumWriter(u);
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM forum_categories WHERE suggested_by = ? AND created_at > ?').bind(u.id, t - 86400000).first();
+    if (n.n >= SUGGESTIONS_PER_DAY) throw new HttpError(429, "You've suggested a few categories today, please try again tomorrow");
+  }
+  let id = slug(name) || 'category';
+  if (await env.DB.prepare('SELECT 1 FROM forum_categories WHERE id = ?').bind(id).first()) id += '-' + crypto.randomUUID().slice(0, 4);
+  const max = await env.DB.prepare('SELECT MAX(sort) AS m FROM forum_categories').first();
+  await env.DB.prepare('INSERT INTO forum_categories (id, name, description, sort, status, suggested_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, name, description, (max.m || 0) + 10, u.admin ? 'live' : 'pending', u.admin ? null : u.id, t).run();
+  const to = !u.admin && (env.FEEDBACK_TO || adminEmails(env)[0]);
+  if (to) {
+    try {
+      await sendMail(env, to, `[Painters Desk] Forum category suggested: ${name}`,
+        `${u.name} suggested a new forum category.\n\nName: ${name}\n${description ? 'Description: ' + description + '\n' : ''}\nApprove or decline it on the forum page.`,
+        `${url.origin}/#/forum`, 'Open the forum');
+    } catch (e) { console.error('Suggestion email failed', e); }
+  }
+  return json({ id, status: u.admin ? 'live' : 'pending' }, 201);
+}
+
+// PUT /api/forum/categories/:id { name, description, sort, status: 'live' } (admins): edit, reorder or approve a category.
+async function updateCategory(request, env, id) {
+  await needForum(env);
+  await requireAdmin(request, env);
+  const b = await body(request), sets = [], args = [];
+  if (b.name !== undefined) { sets.push('name = ?'); args.push(str(b.name, 50, 'Name', { required: true })); }
+  if (b.description !== undefined) { sets.push('description = ?'); args.push(str(b.description, 200, 'Description')); }
+  if (b.sort !== undefined) { sets.push('sort = ?'); args.push(Math.max(0, Math.min(100000, parseInt(b.sort, 10) || 0))); }
+  if (b.status === 'live') sets.push("status = 'live'");
+  if (!sets.length) return json({ ok: true });
+  const r = await env.DB.prepare(`UPDATE forum_categories SET ${sets.join(', ')} WHERE id = ?`).bind(...args, id).run();
+  if (!r.meta.changes) throw new HttpError(404, 'Category not found');
+  return json({ ok: true });
+}
+
+// DELETE /api/forum/categories/:id (admins): decline a suggestion, or remove a category with no threads in it.
+async function deleteCategory(request, env, id) {
+  await needForum(env);
+  await requireAdmin(request, env);
+  if (await env.DB.prepare('SELECT 1 FROM forum_threads WHERE category_id = ?').bind(id).first())
+    throw new HttpError(400, 'Move or delete the threads in this category first');
+  const r = await env.DB.prepare('DELETE FROM forum_categories WHERE id = ?').bind(id).run();
+  if (!r.meta.changes) throw new HttpError(404, 'Category not found');
+  return json({ ok: true });
 }
 
 /* ---------- feedback ---------- */
