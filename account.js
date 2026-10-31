@@ -13,12 +13,17 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
+// Someone who sends feedback without signing in keeps a random token in this browser, so the team's replies can
+// find their way back to them in Messages. It goes with every API call; the server only stores its hash.
+const FBT='pd-fbt',fbToken=()=>{try{return localStorage.getItem(FBT)||''}catch(e){return ''}};
+function newFbToken(){let t=fbToken();if(t)return t;const a=crypto.getRandomValues(new Uint8Array(24));t=btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');try{localStorage.setItem(FBT,t)}catch(e){}return t}
 async function api(path,{method='GET',body}={}){
- const r=await fetch('/api'+path,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+ const h=body?{'Content-Type':'application/json'}:{},t=fbToken();if(t)h['X-Pd-Token']=t;
+ const r=await fetch('/api'+path,{method,credentials:'same-origin',headers:h,body:body?JSON.stringify(body):undefined});
  const d=await r.json().catch(()=>({}));
  if(!r.ok){const e=new Error(d.error||'Something went wrong ('+r.status+')');e.status=r.status;throw e}
  return d}
@@ -61,6 +66,9 @@ async function loadMe(){
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
  $('mine').hidden=!ME;
  $('fbBtn').hidden=!API;
+ // Feedback sent from this browser while signed out moves to the account on sign-in.
+ if(ME&&INFO.messages&&fbToken()){try{await api('/inbox/claim',{method:'POST'});localStorage.removeItem(FBT)}catch(e){}}
+ unread();
  askUpdates();
  renderNeu();draw()}
 
@@ -88,6 +96,7 @@ function route(){
  else if(view==='reset')renderReset(id);
  else if(view==='admin')renderAdmin();
  else if(view==='painters')renderPainters();
+ else if(view==='inbox')renderInbox(id,sub);
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -158,8 +167,13 @@ function renderAccount(){
  ${INFO.mail&&ME.email?`<div class="panel"><h2>Emails</h2>
  <p><label><input type="checkbox" id="uOpt"${ME.updates?' checked':''}> Email me when new features go live</label> <span class="s" id="uMsg"></span></p>
  <p class="s">A few times a year at most, with an unsubscribe link in every email.${ME.email_verified?'':' We only send these to confirmed addresses, so confirm yours above.'} Emails about your account, like password resets, come either way.</p></div>`:''}
+ ${INFO.messages?`<div class="panel" id="msgP"><h2>Messages</h2><p><a class="btn" href="#/inbox">Open messages</a></p>
+ <p><label><input type="checkbox" id="mDm"${ME.dm?' checked':''}> Let other painters start conversations with me</label></p>
+ <p><label><input type="checkbox" id="mMail"${ME.dm_mail?' checked':''}> Email me when I get a message or a reply to my feedback</label> <span class="s" id="mMsg"></span></p>
+ <p class="s">${ME.email&&ME.email_verified?'One email per conversation, until you open it again.':'We only email confirmed addresses.'} People you already talk with can still reply when new conversations are off. Block someone from your conversation with them to stop them for good.</p>
+ <div id="mBlk"></div></div>`:''}
  <div class="panel" id="cmP"><h2>Commission painting</h2><p class="s">Loading…</p></div>
- ${ME.admin?`<div class="panel"><h2>Moderation <span class="tag">admin</span></h2><p class="s">Reports from the Report button, photos refused at upload, and the newest photos. Hide or delete a photo, or block an account.</p><a class="btn" href="#/admin">Open moderation</a></div>`:''}
+ ${ME.admin?`<div class="panel"><h2>Moderation <span class="tag">admin</span></h2><p class="s">Reports from the Report button, photos refused at upload, and the newest photos. Hide or delete a photo, or block an account.</p><div class="row"><a class="btn" href="#/admin">Open moderation</a>${INFO.messages?'<a class="btn" href="#/inbox?team">Read and answer feedback</a>':''}</div></div>`:''}
  ${ME.admin?`<div class="panel" id="annP"><h2>Send an update email <span class="tag">admin</span></h2>
  <p class="s" id="annN">Checking who has opted in…</p>
  <label class="f"><span>Subject</span><input type="text" id="annS" maxlength="150"></label>
@@ -195,6 +209,7 @@ function renderAccount(){
   try{ME=(await api('/me/updates',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('uMsg').textContent=c.checked?'Thanks, you\'re on the list.':'Turned off.';$('updAsk').hidden=true}
   catch(e){c.checked=!c.checked;$('uMsg').className='err';$('uMsg').textContent=e.message}c.disabled=false};
  if(ME.admin)annPanel();
+ if(INFO.messages)msgPanel();
  commissionPanel();
  $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
@@ -239,7 +254,7 @@ async function renderProfile(id){
  const p=d.profile,mine=ME&&ME.id===p.id;
  el.innerHTML=`<div class="prof">${avHTML(p,'av huge')}<div><h1>${esc(p.name)}</h1><p class="s">Painting with us since ${fmtDate(p.created_at)}</p>
  ${p.link?`<p><a href="${esc(p.link)}" target="_blank" rel="noopener nofollow ugc">${esc(p.link.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,''))}</a></p>`:''}
- ${mine?'<a class="btn" href="#/account">Edit profile</a>':`<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
+ ${mine?'<a class="btn" href="#/account">Edit profile</a>':`${p.canMessage&&INFO.messages?`<p><a class="btn" href="#/inbox/u/${esc(p.id)}">✉ Message</a></p>`:''}<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
  ${p.bio?`<div class="panel"><div class="steps">${esc(p.bio)}</div></div>`:''}
  ${d.commission?commissionHTML(d.commission,p,mine):''}
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
@@ -689,7 +704,7 @@ document.addEventListener('error',e=>{const i=e.target;if(i.tagName==='IMG'&&/\/
 let REP=null;
 function openReport(kind,id,name){const D=$('rpDlg'),F=$('rpForm');REP={kind,id};F.reset();
  $('rpErr').textContent='';$('rpBody').hidden=false;$('rpSend').hidden=false;$('rpSend').disabled=false;$('rpNo').textContent='Cancel';$('rpDone').hidden=true;
- $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:`"${name}"`;D.showModal()}
+ $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:kind==='message'?`this message from ${name}`:`"${name}"`;D.showModal()}
 $('rpNo').onclick=()=>$('rpDlg').close();
 $('rpForm').onsubmit=async e=>{e.preventDefault();const F=$('rpForm');$('rpErr').textContent='';$('rpSend').disabled=true;
  try{await api('/reports',{method:'POST',body:{kind:REP.kind,id:REP.id,reason:F.rpReason.value,note:$('rpNote').value,website:$('rpWeb').value}});
@@ -712,14 +727,16 @@ async function renderAdmin(){
   <div class="row"><button class="btn sm" type="button" data-hide="${i.hidden?0:1}">${i.hidden?'Show again':'Hide'}</button><button class="btn sm dan" type="button" data-delimg>Delete</button></div></div>`;
  const what=r=>r.kind==='upload'?`A photo by ${pers(r.user)} was refused at upload: ${esc(r.note)}`
   :r.kind==='user'?`Profile of ${pers(r.user)}`
+  :r.kind==='message'?(r.message?`Private message from ${pers(r.user)||'a deleted account'}`:'A message that has since been deleted')
   :r.target?`<a href="#/recipe/${esc(r.target.id)}">${esc(r.target.title)}</a> (${esc(r.target.kind)}, ${esc(r.target.visibility)}) by ${pers(r.user)}`:'A recipe that has since been deleted';
  const by=r=>r.kind==='upload'?'':r.reporter?` · reported by ${pers(r.reporter)}`:' · reported by someone not signed in';
  const repCard=r=>`<div class="panel mrep" data-rep="${esc(r.id)}"><h3>${esc(r.label)}</h3>
   <p class="s">${what(r)} · ${fmtDate(r.created_at)}${by(r)}</p>
+  ${r.message?`<div class="msg them">${esc(r.message.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
   ${r.kind!=='upload'&&r.note?`<div class="steps">${esc(r.note)}</div>`:''}
   ${r.images.length?`<div class="mgrid">${r.images.map(imgCard).join('')}</div>`:''}
   <div class="row">${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
- el.innerHTML=`<h1>Moderation</h1><p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
+ el.innerHTML=`<h1>Moderation</h1>${INFO.messages?'<p><a class="btn" href="#/inbox?team">Read and answer feedback</a></p>':''}<p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
  <h2>Open reports (${d.reports.length})</h2>${d.reports.map(repCard).join('')||'<p class="s">No open reports.</p>'}
  <h2>Newest photos</h2><div class="mgrid">${d.images.map(imgCard).join('')||'<p class="s">No photos yet.</p>'}</div>`;
  const act=async(b,fn)=>{b.disabled=true;try{await fn();renderAdmin()}catch(e){b.disabled=false;b.parentElement.insertAdjacentHTML('beforeend',`<span class="err">${esc(e.message)}</span>`)}};
@@ -732,6 +749,88 @@ async function renderAdmin(){
  el.querySelectorAll('[data-blk]').forEach(b=>b.onclick=()=>(b.dataset.on!=='1'||twice(b,'Click again to block'))&&act(b,()=>api('/admin/users/'+b.dataset.blk,{method:'PUT',body:{blocked:b.dataset.on==='1'}})));
  el.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>act(b,()=>api('/admin/reports/'+b.closest('[data-rep]').dataset.rep,{method:'PUT',body:{status:'done'}})))}
 
+/* ---------- messages ---------- */
+// One inbox for replies to feedback and private messages between painters. #/inbox lists them, #/inbox/<id> opens
+// one, #/inbox/u/<user id> starts or continues one with that painter, and #/inbox?team (admins) lists all feedback.
+let UNREAD=0,TEAMN=0;
+async function unread(){
+ const show=!!(INFO&&INFO.messages&&(ME||fbToken()));$('inb').hidden=!show;
+ if(!show){UNREAD=TEAMN=0;drawBadge();return}
+ try{const d=await api('/inbox/unread');UNREAD=d.n;TEAMN=d.team}catch(e){}drawBadge()}
+function drawBadge(){const n=UNREAD+TEAMN,b=$('inbN');b.hidden=!n;b.textContent=n>99?'99+':n;$('inb').title=n?`Messages (${n} new)`:'Messages'}
+setInterval(()=>{if(document.visibilityState==='visible'&&!$('inb').hidden)unread()},120000);
+const ago=t=>{const d=(Date.now()-t)/60000;return d<1?'just now':d<60?Math.floor(d)+' min ago':d<1440?Math.floor(d/60)+' h ago':fmtDate(t)};
+const convWho=c=>c.other?.team?{name:c.other.name,avatar:c.other.avatar}:c.other||{name:'(deleted account)'};
+async function renderInbox(id,sub){
+ const el=$('v-inbox');
+ if(id==='u')return inboxWith(sub);
+ if(id&&id!=='team')return inboxConv(id);
+ const team=id==='team';
+ if(team&&!ME?.admin){el.innerHTML='<h1>Feedback</h1><p class="s">Admins only.</p>';return}
+ el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1><p class="s">Loading…</p>`;
+ let d;try{d=await api('/inbox'+(team?'?team=1':''))}catch(e){el.innerHTML=`<h1>Messages</h1><p class="err">${esc(e.message)}</p>`;return}
+ const tabs=ME?.admin?`<div class="row"><a class="btn${team?'':' pri'}" href="#/inbox">My messages${UNREAD?` (${UNREAD} new)`:''}</a><a class="btn${team?' pri':''}" href="#/inbox?team">Site feedback${TEAMN?` (${TEAMN} new)`:''}</a></div>`:'';
+ const tags=c=>c.kind==='feedback'?`<span class="tag">${esc(c.feedback.kind)}</span>${team?(c.status==='done'?'<span class="tag">dealt with</span>':'<span class="tag warn">open</span>'):''}`:'';
+ const row=c=>{const w=convWho(c);return `<a class="conv${c.unread?' new':''}" href="#/inbox/${esc(c.id)}">${avHTML(w)}<span class="cv"><b>${esc(team?w.name:c.kind==='feedback'?'Your feedback':w.name)}</b> ${tags(c)}${c.unread?'<span class="tag dang">new</span>':''}
+  <span class="s">${c.last?(c.last.mine?'You: ':'')+esc(c.last.body):''}</span></span><span class="s cvt">${ago(c.updated_at)}</span></a>`};
+ const intro=team?'Everything sent with the Feedback button, open ones first. Replies show in the sender\'s Messages, and go by email when they gave one.'
+  :ME?'Replies to your feedback, and conversations with other painters. To message a painter, open their profile and press Message.'
+  :'Replies to feedback you sent from this browser. <a href="#/account">Sign in</a> to message other painters and keep your replies on every device.';
+ el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1>${tabs}<p class="s">${intro}</p><div class="convs">${d.conversations.map(row).join('')||`<p class="s">${team?'No feedback yet.':'Nothing here yet.'}</p>`}</div>`}
+async function inboxWith(uid){
+ const el=$('v-inbox');
+ if(!ME){el.innerHTML='<h1>Messages</h1>'+signInLink('You need an account to message other painters.');return}
+ el.innerHTML='<h1>Messages</h1><p class="s">Loading…</p>';
+ let d;try{d=await api('/conversations/with/'+encodeURIComponent(uid))}catch(e){el.innerHTML=`<h1>Messages</h1><p class="err">${esc(e.message)}</p>`;return}
+ if(d.id){history.replaceState(null,'','#/inbox/'+d.id);return inboxConv(d.id)}
+ el.innerHTML=`<p><a href="#/inbox">← All messages</a></p><div class="prof">${avHTML(d.other,'av big')}<div><h1>${esc(d.other.name)}</h1><p><a href="#/u/${esc(d.other.id)}">See their profile</a></p></div></div>
+ ${d.why?`<p class="s">${esc(d.why)}</p>`:composeHTML(`Your first message to ${d.other.name}. Be kind, and keep to the <a href="terms" target="_blank">site rules</a>: they can block or report you.`)}`;
+ wireCompose(async text=>{const r=await api('/conversations/with/'+encodeURIComponent(uid),{method:'POST',body:{message:text,website:$('mWeb').value}});history.replaceState(null,'','#/inbox/'+r.id);inboxConv(r.id)})}
+const composeHTML=hint=>`<form id="mForm" class="panel"><label class="f"><span>Message</span><textarea id="mText" maxlength="2000" required></textarea></label>
+ <label class="fbhp" aria-hidden="true">Website<input type="text" id="mWeb" tabindex="-1" autocomplete="off"></label>
+ <div class="row"><button class="btn pri" type="submit" id="mSend">Send</button><span class="err" id="mErr" role="alert"></span></div>${hint?`<p class="s">${hint}</p>`:''}</form>`;
+function wireCompose(send){const F=$('mForm');if(!F)return;
+ F.onsubmit=async e=>{e.preventDefault();$('mErr').textContent='';$('mSend').disabled=true;
+  try{await send($('mText').value)}catch(err){$('mErr').textContent=err.message;$('mSend').disabled=false}};
+ $('mText').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))F.requestSubmit()}}
+async function inboxConv(id){
+ const el=$('v-inbox');
+ let d;try{d=await api('/conversations/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<h1>Messages</h1><p class="err">${esc(e.message)}</p><a href="#/inbox">All messages</a>`;return}
+ const c=d.conversation,w=convWho(c),team=c.kind==='feedback'&&d.side==='b',fb=c.kind==='feedback',direct=c.kind==='direct';
+ const back=team?'#/inbox?team':'#/inbox';
+ const title=fb&&!team?'Your feedback':w.name;
+ const info=team?`<p class="s">${esc(c.feedback.kind)}${c.feedback.page?' · sent from '+esc(c.feedback.page):''}${c.other.id&&!c.other.gone?` · <a href="#/u/${esc(c.other.id)}">profile</a>`:''}${c.feedback.email?' · email: '+esc(c.feedback.email):''}</p>
+  <p class="s">${c.other.id?'They see your reply in Messages when they visit, signed as The Painters Desk team.':c.feedback.onSite?'Sent without signing in. They see your reply in Messages on the browser they used.':'Sent without signing in.'}${c.feedback.email?' Each reply is also emailed to them'+(c.other.id?' if they have no confirmed account email':'')+'.':''}</p>`
+  :fb?'<p class="s">You sent this with the Feedback button. Replies come from The Painters Desk team.</p>':direct&&w.id&&!w.gone?`<p><a href="#/u/${esc(w.id)}">See their profile</a></p>`:'';
+ const msg=m=>`<div class="msg ${m.mine?'me':'them'}">${esc(m.body)}<span class="mtm">${m.mine?'You':esc(fb&&!team?'The Painters Desk team':w.name)} · ${ago(m.created_at)}${direct&&!m.mine?` · <button class="lnk" type="button" data-rep="${esc(m.id)}">Report</button>`:''}</span></div>`;
+ el.innerHTML=`<p><a href="${back}">← ${team?'All feedback':'All messages'}</a></p><div class="prof">${avHTML(w,'av big')}<div><h1>${esc(title)}</h1>${team?(c.status==='done'?'<span class="tag">dealt with</span>':'<span class="tag warn">open</span>'):''}</div></div>${info}
+ <div class="msgs" id="mList">${d.messages.map(msg).join('')}</div>
+ ${d.why?`<p class="s">${esc(d.why)}</p>`:composeHTML('')}
+ <div class="row">${team?`<button class="btn" type="button" id="mDone">${c.status==='done'?'Reopen':'Mark as dealt with'}</button>`:''}
+ ${direct&&w.id&&!w.gone?`<button class="btn${d.blockedByMe?'':' dan'}" type="button" id="mBlock">${d.blockedByMe?'Unblock':'Block'} ${esc(w.name)}</button>`:''}
+ ${team?'':'<button class="btn" type="button" id="mHide">Delete conversation</button>'}<span class="s" id="mAct"></span></div>`;
+ const L=$('mList');L.lastElementChild?.scrollIntoView({block:'nearest'});
+ unread();
+ wireCompose(async text=>{await api('/conversations/'+encodeURIComponent(id),{method:'POST',body:{message:text,website:$('mWeb').value}});inboxConv(id)});
+ L.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>openReport('message',b.dataset.rep,w.name));
+ const act=async(fn,after)=>{try{await fn();after()}catch(e){$('mAct').className='err';$('mAct').textContent=e.message}};
+ if($('mDone'))$('mDone').onclick=()=>act(()=>api('/conversations/'+id,{method:'PUT',body:{status:c.status==='done'?'open':'done'}}),()=>c.status==='done'?inboxConv(id):(location.hash='#/inbox?team'));
+ if($('mBlock'))$('mBlock').onclick=e=>{const b=e.target;
+  if(!d.blockedByMe&&!b.dataset.c){b.dataset.c=1;b.textContent=`Click again to block ${w.name}`;$('mAct').className='s';$('mAct').textContent="They won't be able to message you, and won't be told.";return}
+  act(()=>api('/blocks/'+w.id,{method:'PUT',body:{blocked:!d.blockedByMe}}),()=>inboxConv(id))};
+ if($('mHide'))$('mHide').onclick=e=>{const b=e.target;if(!b.dataset.c){b.dataset.c=1;b.textContent='Click again to delete';$('mAct').className='s';$('mAct').textContent='It comes back if a new message arrives.';return}
+  act(()=>api('/conversations/'+id,{method:'PUT',body:{hidden:true}}),()=>location.hash='#/inbox')}}
+// Account page: message settings and the painters you blocked.
+async function msgPanel(){
+ const save=async()=>{$('mMsg').className='s';$('mMsg').textContent='Saving…';
+  try{ME=(await api('/me/messages',{method:'PUT',body:{dm:$('mDm').checked,dm_mail:$('mMail').checked}})).user;INFO.user=ME;$('mMsg').textContent='Saved.'}
+  catch(e){$('mMsg').className='err';$('mMsg').textContent=e.message}};
+ $('mDm').onchange=$('mMail').onchange=save;
+ const draw=async()=>{let d;try{d=await api('/blocks')}catch(e){return}const B=$('mBlk');if(!B)return;
+  B.innerHTML=d.blocks.length?`<h3>Blocked</h3>${d.blocks.map(b=>`<div class="row">${who(b)}<button class="btn sm" type="button" data-ub="${esc(b.id)}">Unblock</button></div>`).join('')}`:'';
+  B.querySelectorAll('[data-ub]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/blocks/'+b.dataset.ub,{method:'PUT',body:{blocked:false}});draw()}catch(e){b.disabled=false}})};
+ draw()}
+
 /* ---------- feedback ---------- */
 // The floating Feedback button on every page opens this popup; messages go to /api/feedback.
 {const D=$('fbDlg'),F=$('fbForm');let sent=false;
@@ -739,9 +838,11 @@ async function renderAdmin(){
  $('fbBtn').onclick=()=>{if(sent)reset();if(ME&&!$('fbEmail').value)$('fbEmail').value=ME.email||'';D.showModal();$('fbMsg').focus()};
  $('fbNo').onclick=()=>D.close();
  F.onsubmit=async e=>{e.preventDefault();$('fbErr').textContent='';$('fbSend').disabled=true;
-  try{await api('/feedback',{method:'POST',body:{kind:F.fbKind.value,message:$('fbMsg').value,email:$('fbEmail').value.trim(),website:$('fbWeb').value,page:location.hash||'#/'}});
+  try{if(!ME&&INFO.messages)newFbToken();
+   const d=await api('/feedback',{method:'POST',body:{kind:F.fbKind.value,message:$('fbMsg').value,email:$('fbEmail').value.trim(),website:$('fbWeb').value,page:location.hash||'#/'}});
    sent=true;$('fbBody').hidden=true;$('fbSend').hidden=true;$('fbNo').textContent='Close';
-   $('fbT').insertAdjacentHTML('afterend','<p class="ok" id="fbDone">Thanks! Your feedback has been sent.</p>');$('fbNo').focus()}
+   const where=d.conversation?` Our reply will show in <a href="#/inbox/${esc(d.conversation)}">Messages</a>${ME?'':' on this browser'}${$('fbEmail').value.trim()?', and by email':''}.`:'';
+   $('fbT').insertAdjacentHTML('afterend',`<p class="ok" id="fbDone">Thanks! Your feedback has been sent.${where}</p>`);D.querySelector('#fbDone a')?.addEventListener('click',()=>D.close());unread();$('fbNo').focus()}
   catch(err){$('fbErr').textContent=err.message;$('fbSend').disabled=false}}}
 
 if(FIRST)route();

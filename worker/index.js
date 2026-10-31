@@ -123,7 +123,22 @@ async function route(request, env, url) {
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/vote$/)) && m === 'PUT') return setVote(request, env, r[1]);
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)\/save$/)) && m === 'PUT') return setSave(request, env, r[1]);
   if ((r = p.match(/^\/api\/comments\/([\w-]+)$/)) && m === 'DELETE') return deleteComment(request, env, r[1]);
-  if (p === '/api/feedback' && m === 'POST') return sendFeedback(request, env);
+  if (p === '/api/feedback' && m === 'POST') return sendFeedback(request, env, url);
+  if (p === '/api/inbox' && m === 'GET') return inbox(request, env, url);
+  if (p === '/api/inbox/unread' && m === 'GET') return unreadCount(request, env);
+  if (p === '/api/inbox/claim' && m === 'POST') return claimInbox(request, env);
+  if ((r = p.match(/^\/api\/conversations\/with\/([\w-]+)$/))) {
+    if (m === 'GET') return conversationWith(request, env, r[1]);
+    if (m === 'POST') return messageUser(request, env, url, r[1]);
+  }
+  if ((r = p.match(/^\/api\/conversations\/([\w-]+)$/))) {
+    if (m === 'GET') return getConversation(request, env, r[1]);
+    if (m === 'POST') return replyConversation(request, env, url, r[1]);
+    if (m === 'PUT') return updateConversation(request, env, r[1]);
+  }
+  if (p === '/api/blocks' && m === 'GET') return listBlocks(request, env);
+  if ((r = p.match(/^\/api\/blocks\/([\w-]+)$/)) && m === 'PUT') return setBlock(request, env, r[1]);
+  if (p === '/api/me/messages' && m === 'PUT') return setMessagePrefs(request, env);
   if (p === '/api/hit' && m === 'POST') return hit(request, env, url);
   if (p === '/api/me/updates' && m === 'PUT') return setUpdates(request, env);
   if (p === '/api/unsubscribe' && (m === 'GET' || m === 'POST')) return unsubscribe(request, env, url);
@@ -190,8 +205,10 @@ const AVATAR = `CASE WHEN u.blocked = 1 THEN NULL
 async function currentUser(request, env) {
   const token = cookies(request)[SESSION_COOKIE];
   if (!token) return null;
+  // dm/dm_mail (message settings) come with migration 0015.
+  const msg = await hasMessages(env);
   const row = await env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at
+    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now()).first();
   if (!row) return null;
@@ -201,6 +218,7 @@ async function currentUser(request, env) {
   row.updates = !!row.updates;
   row.updates_asked = !!row.updates_asked;
   row.blocked = !!row.blocked;
+  if (msg) { row.dm = !!row.dm; row.dm_mail = !!row.dm_mail; }
   row.favourites = JSON.parse(row.favourites || '[]');
   return row;
 }
@@ -246,9 +264,11 @@ async function me(request, env) {
   const providers = Object.entries(PROVIDERS).filter(([, p]) => p.id(env) && p.secret(env)).map(([k, p]) => ({ id: k, label: p.label }));
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
+  // messages: the Messages pages work (migration 0015).
+  const messages = await hasMessages(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), devLogin: env.DEV_LOGIN === '1' });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, devLogin: env.DEV_LOGIN === '1' });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -644,6 +664,8 @@ async function getProfile(request, env, id) {
      FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' ORDER BY r.updated_at DESC LIMIT 100`
   ).bind(id).all()).results;
   const commission = blocked ? null : await commissionFor(env, id);
+  // canMessage: shows the Message button. The checks that depend on who is asking happen when they open it.
+  p.canMessage = !blocked && await hasMessages(env) && !!(await env.DB.prepare('SELECT dm FROM users WHERE id = ?').bind(id).first()).dm;
   return json({ profile: p, recipes: rows.map(listItem), commission });
 }
 
@@ -661,6 +683,11 @@ async function deleteAccount(request, env) {
     ...(await hasCommissions(env) ? [
       env.DB.prepare('DELETE FROM commissions WHERE user_id = ?').bind(u.id),
       env.DB.prepare('DELETE FROM commission_messages WHERE painter_id = ? OR sender_id = ?').bind(u.id, u.id),
+    ] : []),
+    ...(await hasMessages(env) ? [
+      env.DB.prepare('DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE a_id = ?1 OR b_id = ?1)').bind(u.id),
+      env.DB.prepare('DELETE FROM conversations WHERE a_id = ?1 OR b_id = ?1').bind(u.id),
+      env.DB.prepare('DELETE FROM user_blocks WHERE user_id = ?1 OR blocked_id = ?1').bind(u.id),
     ] : []),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
@@ -1027,15 +1054,23 @@ const REPORTS_PER_HOUR = 10;
 async function addReport(request, env, url) {
   const b = await body(request);
   if (b.website) return json({ ok: true });
-  const kind = b.kind === 'user' ? 'user' : 'recipe';
+  const kind = ['user', 'message'].includes(b.kind) ? b.kind : 'recipe';
   const target = typeof b.id === 'string' && RECIPE_ID.test(b.id) ? b.id : '';
   const reason = REPORT_REASONS[b.reason] ? b.reason : 'other';
   const note = str(b.note, 1000, 'Details');
-  const row = kind === 'recipe'
+  const u = await currentUser(request, env), t = now();
+  let row;
+  if (kind === 'message') {
+    // Only someone who received a private message can report it, and that lets moderators read that one message.
+    if (!u || !await hasMessages(env)) throw new HttpError(404, 'Message not found');
+    const m = await env.DB.prepare("SELECT m.side, c.a_id, c.b_id, c.kind, c.a_token, u.name FROM messages m JOIN conversations c ON c.id = m.conversation_id LEFT JOIN users u ON u.id = m.user_id WHERE m.id = ? AND c.kind = 'direct'").bind(target).first();
+    const side = m && sideOf(m, u, '');
+    if (!side || side === m.side) throw new HttpError(404, 'Message not found');
+    row = { name: m.name || '(deleted account)' };
+  } else row = kind === 'recipe'
     ? await env.DB.prepare("SELECT title AS name FROM recipes WHERE id = ? AND visibility = 'public'").bind(target).first()
     : await env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(target).first();
   if (!row) throw new HttpError(404, kind === 'recipe' ? 'Recipe not found' : 'Painter not found');
-  const u = await currentUser(request, env), t = now();
   const ip = await sha256('report:' + (request.headers.get('CF-Connecting-IP') || ''));
   const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM reports WHERE ip_hash = ? AND created_at > ?').bind(ip, t - 3600000).first();
   if (c.n >= REPORTS_PER_HOUR) throw new HttpError(429, "Thanks! You've sent a lot of reports this hour, please try again later");
@@ -1043,7 +1078,7 @@ async function addReport(request, env, url) {
     .bind(crypto.randomUUID(), kind, target, reason, note, u?.id || null, ip, t).run();
   const to = env.FEEDBACK_TO || adminEmails(env)[0];
   if (to) {
-    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
+    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : kind === 'message' ? `a private message from ${row.name}` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
     try {
       await sendMail(env, to, `[Painters Desk] Report: ${REPORT_REASONS[reason]}`,
         `Someone reported ${what}.\n\nReason: ${REPORT_REASONS[reason]}\n\n${note ? 'Details: ' + note + '\n\n' : ''}Reported by: ${u ? u.name : 'someone not signed in'}`,
@@ -1079,6 +1114,11 @@ async function moderation(request, env) {
       o.target = rec ? { id: rec.id, title: rec.title, kind: rec.kind, visibility: rec.visibility } : null;
       o.user = rec ? person(rec.user_id) : null;
       o.images = rec ? await imgById([...new Set(usedImages(rec))]) : [];
+    } else if (r.kind === 'message') {
+      const m = await env.DB.prepare('SELECT user_id, body, created_at FROM messages WHERE id = ?').bind(r.target_id).first();
+      o.message = m ? { body: m.body, created_at: m.created_at } : null;
+      o.user = m?.user_id ? person(m.user_id) : null;
+      o.images = [];
     } else {
       o.user = person(r.target_id);
       const icon = r.kind === 'user' && users.get(r.target_id)?.avatar_image;
@@ -1322,6 +1362,311 @@ async function messagePainter(request, env, url, id) {
   return json({ ok: true });
 }
 
+/* ---------- messages: feedback replies and messages between painters ---------- */
+
+// Conversations live in migration 0015 (see it for what each column means). Until it is applied, Feedback still
+// works as before and the Messages pages stay hidden.
+// MSG_MAX characters a message. Painters can send DM_PER_HOUR / DM_PER_DAY messages and start NEW_CHATS_PER_DAY
+// conversations a day, and only UNANSWERED messages to someone who hasn't replied yet, so nobody can be flooded.
+// Anonymous feedback senders can write ANON_PER_HOUR follow-ups an hour (by IP).
+const MSG_MAX = 2000, DM_PER_HOUR = 30, DM_PER_DAY = 200, NEW_CHATS_PER_DAY = 10, UNANSWERED = 3, ANON_PER_HOUR = 10;
+const TEAM = { id: null, name: 'The Painters Desk team', avatar: '/icons/icon-192.png', team: true };
+let messagesReady = false;
+async function hasMessages(env) {
+  if (!messagesReady) messagesReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversations'").first());
+  return messagesReady;
+}
+async function needMessages(env) {
+  if (!await hasMessages(env)) throw new HttpError(503, 'Messages are not set up on this server yet');
+}
+
+// Someone who sends feedback without signing in gets a random token kept in their browser (sent as X-Pd-Token),
+// so the replies can find their way back to them. Only its hash is stored.
+async function anonToken(request) {
+  const t = request.headers.get('X-Pd-Token') || '';
+  return /^[\w-]{32,100}$/.test(t) ? sha256('fbtoken:' + t) : '';
+}
+
+// Which side of a conversation the viewer is on ('a', 'b' or null). Admins are side b of every feedback conversation.
+function sideOf(c, u, token) {
+  if (u && c.a_id === u.id) return 'a';
+  if (!c.a_id && token && c.a_token === token) return 'a';
+  if (c.kind === 'direct' && u && c.b_id === u.id) return 'b';
+  if (c.kind === 'feedback' && u?.admin) return 'b';
+  return null;
+}
+
+// The picture SQL for a users table joined under another name.
+const avatarAs = alias => AVATAR.replace(/\bu\./g, alias + '.');
+const CONV_SELECT = `SELECT c.*, f.kind AS fb_kind, f.page AS fb_page, f.email AS fb_email,
+  ua.name AS a_name, ${avatarAs('ua')} AS a_avatar, ua.blocked AS a_blocked, ub.name AS b_name, ${avatarAs('ub')} AS b_avatar, ub.blocked AS b_blocked,
+  (SELECT body FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
+  (SELECT side FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_side
+  FROM conversations c LEFT JOIN feedback f ON f.id = c.feedback_id LEFT JOIN users ua ON ua.id = c.a_id LEFT JOIN users ub ON ub.id = c.b_id`;
+
+const personOf = (c, s) => c[s + '_id']
+  ? (c[s + '_name'] != null ? { id: c[s + '_id'], name: c[s + '_name'], avatar: c[s + '_avatar'], blocked: !!c[s + '_blocked'] } : { id: c[s + '_id'], name: '(deleted account)', avatar: null, gone: true })
+  : null;
+
+// A conversation as the viewer on `side` sees it. The team sees who sent feedback (and the email they gave);
+// the sender only ever sees "The Painters Desk team", never which admin answered.
+function convOut(c, side) {
+  const other = side === 'a' ? 'b' : 'a';
+  let who;
+  if (c.kind === 'feedback') who = side === 'a' ? TEAM : personOf(c, 'a') || { id: null, name: 'Someone not signed in', avatar: null, anon: true };
+  else who = personOf(c, other);
+  const out = {
+    id: c.id, kind: c.kind, other: who, status: c.status, updated_at: c.updated_at,
+    last: c.last_body == null ? null : { body: c.last_body.slice(0, 140), mine: c.last_side === side },
+    unread: c[other + '_last'] > c[side + '_read'],
+  };
+  if (c.kind === 'feedback') {
+    out.feedback = { kind: FEEDBACK_KINDS[c.fb_kind] || 'Feedback', page: side === 'b' ? c.fb_page || '' : '' };
+    if (side === 'b') { out.feedback.email = c.fb_email || ''; out.feedback.onSite = !!(c.a_id || c.a_token); }
+  }
+  return out;
+}
+
+// GET /api/inbox: the viewer's conversations, newest first. ?team=1 (admins): every feedback conversation, open ones first.
+async function inbox(request, env, url) {
+  if (!await hasMessages(env)) return json({ conversations: [], unavailable: true });
+  const u = await currentUser(request, env), token = await anonToken(request);
+  if (url.searchParams.get('team') === '1') {
+    if (!u?.admin) throw new HttpError(403, 'Admins only');
+    const rows = (await env.DB.prepare(`${CONV_SELECT} WHERE c.kind = 'feedback' ORDER BY c.status = 'open' DESC, c.updated_at DESC LIMIT 200`).all()).results;
+    return json({ conversations: rows.map(c => convOut(c, 'b')) });
+  }
+  if (!u && !token) return json({ conversations: [] });
+  const rows = (await env.DB.prepare(`${CONV_SELECT} WHERE (c.a_id = ?1 AND c.a_hidden = 0) OR (c.kind = 'direct' AND c.b_id = ?1 AND c.b_hidden = 0)
+    OR (c.a_id IS NULL AND ?2 != '' AND c.a_token = ?2 AND c.a_hidden = 0) ORDER BY c.updated_at DESC LIMIT 200`).bind(u?.id || '', token).all()).results;
+  return json({ conversations: rows.map(c => convOut(c, sideOf(c, u, token))) });
+}
+
+// GET /api/inbox/unread: how many conversations have something new, for the badge on Messages (and, for admins,
+// how many open feedback conversations are waiting on the team).
+async function unreadCount(request, env) {
+  if (!await hasMessages(env)) return json({ n: 0, team: 0, unavailable: true });
+  const u = await currentUser(request, env), token = await anonToken(request);
+  if (!u && !token) return json({ n: 0, team: 0 });
+  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE (a_id = ?1 AND a_hidden = 0 AND b_last > a_read)
+    OR (kind = 'direct' AND b_id = ?1 AND b_hidden = 0 AND a_last > b_read) OR (a_id IS NULL AND ?2 != '' AND a_token = ?2 AND b_last > a_read)`).bind(u?.id || '', token).first();
+  const team = u?.admin ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM conversations WHERE kind = 'feedback' AND status = 'open' AND a_last > b_read").first()).n : 0;
+  return json({ n: r.n, team });
+}
+
+// Whether u can message painter id, and if not, why. Returns { other, why } (why is '' when they can).
+async function directCheck(env, u, id) {
+  const o = await env.DB.prepare(`SELECT u.id, u.name, ${AVATAR} AS avatar, u.blocked, u.dm FROM users u WHERE u.id = ?`).bind(id).first();
+  if (!o) throw new HttpError(404, 'Painter not found');
+  const other = { id: o.id, name: o.name, avatar: o.avatar };
+  if (o.id === u.id) return { other, why: "You can't message yourself" };
+  if (u.blocked) return { other, why: 'This account has been blocked from sending messages' };
+  if (u.email && !u.email_verified) return { other, why: 'Please confirm your email first. You can send the confirmation email from your account page.' };
+  if (o.blocked) return { other, why: `${o.name} can't get messages right now.` };
+  const blocks = (await env.DB.prepare('SELECT user_id FROM user_blocks WHERE (user_id = ?1 AND blocked_id = ?2) OR (user_id = ?2 AND blocked_id = ?1)').bind(u.id, o.id).all()).results;
+  if (blocks.some(b => b.user_id === u.id)) return { other, why: `You've blocked ${o.name}. Unblock them to send a message.`, blockedByMe: true };
+  // Being blocked reads the same as having messages turned off, so nobody learns that they were blocked.
+  if (blocks.length) return { other, why: `${o.name} isn't taking messages right now.` };
+  return { other, why: '', dm: !!o.dm };
+}
+
+const pairOf = (x, y) => (x < y ? `${x}|${y}` : `${y}|${x}`);
+
+async function loadConversation(env, id) {
+  const c = await env.DB.prepare(`${CONV_SELECT} WHERE c.id = ?`).bind(id).first();
+  if (!c) throw new HttpError(404, 'Conversation not found');
+  return c;
+}
+
+// Can this side write in this conversation? Returns '' or the reason they can't.
+async function replyIssue(env, c, side, u) {
+  if (c.kind === 'feedback') {
+    if (side === 'b' && !c.a_id && !c.a_token && !c.fb_email) return "This was sent without signing in or an email, before replies on the site existed, so a reply can't reach them.";
+    if (side === 'b' && c.a_id && c.a_name == null) return 'This person has deleted their account.';
+    return '';
+  }
+  const otherId = c[(side === 'a' ? 'b' : 'a') + '_id'];
+  const r = await directCheck(env, u, otherId).catch(e => ({ why: e.status === 404 ? 'This painter has deleted their account.' : e.message }));
+  return r.why;
+}
+
+// GET /api/conversations/:id: the messages (newest 300), and marks the conversation read for the viewer.
+async function getConversation(request, env, id) {
+  await needMessages(env);
+  const u = await currentUser(request, env), token = await anonToken(request);
+  const c = await loadConversation(env, id), side = sideOf(c, u, token);
+  if (!side) throw new HttpError(404, 'Conversation not found');
+  const rows = (await env.DB.prepare('SELECT id, side, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 300').bind(id).all()).results.reverse();
+  await env.DB.prepare(`UPDATE conversations SET ${side}_read = ? WHERE id = ?`).bind(now(), id).run();
+  const why = await replyIssue(env, c, side, u);
+  let blockedByMe = false;
+  if (c.kind === 'direct') blockedByMe = !!(await env.DB.prepare('SELECT 1 FROM user_blocks WHERE user_id = ? AND blocked_id = ?').bind(u.id, c[(side === 'a' ? 'b' : 'a') + '_id']).first());
+  const out = convOut(c, side);
+  out.unread = false;
+  return json({ conversation: out, side, why, blockedByMe, messages: rows.map(m => ({ id: m.id, mine: m.side === side, body: m.body, created_at: m.created_at })) });
+}
+
+// Add a message from `side`, after the limits for that kind of sender, then email the other side if they want that.
+async function addMessage(request, env, url, c, side, u, b) {
+  const text = str(b.message, MSG_MAX, 'Message', { required: true }), t = now(), other = side === 'a' ? 'b' : 'a';
+  const why = await replyIssue(env, c, side, u);
+  if (why) throw new HttpError(403, why);
+  let ip = '';
+  if (!u) {
+    ip = await sha256('feedback:' + (request.headers.get('CF-Connecting-IP') || ''));
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM messages WHERE ip_hash = ? AND created_at > ?').bind(ip, t - 3600000).first();
+    if (n.n >= ANON_PER_HOUR) throw new HttpError(429, "You've sent a lot of messages this hour, please try again later");
+  } else if (!(c.kind === 'feedback' && side === 'b')) {
+    const n = await env.DB.prepare('SELECT COALESCE(SUM(created_at > ?), 0) AS hour, COUNT(*) AS day FROM messages WHERE user_id = ? AND created_at > ?').bind(t - 3600000, u.id, t - 86400000).first();
+    if (n.hour >= DM_PER_HOUR || n.day >= DM_PER_DAY) throw new HttpError(429, "You've sent a lot of messages recently, please try again later");
+  }
+  if (c.kind === 'direct' && !c[other + '_last']) {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND side = ?').bind(c.id, side).first();
+    if (n.n >= UNANSWERED) throw new HttpError(429, `Please wait for ${c[other + '_name']} to reply before sending more.`);
+  }
+  // A feedback sender writing again reopens it for the team.
+  const status = c.kind === 'feedback' && side === 'a' ? 'open' : c.status;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO messages (id, conversation_id, side, user_id, body, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), c.id, side, u?.id || null, text, ip, t),
+    env.DB.prepare(`UPDATE conversations SET ${side}_last = ?1, ${side}_read = ?1, ${side}_hidden = 0, ${other}_hidden = 0, status = ?2, updated_at = ?1 WHERE id = ?3`).bind(t, status, c.id),
+  ]);
+  await notify(env, url, c, side, u, text, t);
+  return json({ ok: true, id: c.id });
+}
+
+// Emails about new messages. To keep inboxes quiet, someone gets one email per conversation until they open it again
+// (except a reply to an anonymous feedback sender, which can only reach them by email, so each reply is sent).
+async function notify(env, url, c, side, u, text, t) {
+  if (!mailReady(env)) return;
+  const other = side === 'a' ? 'b' : 'a', link = `${url.origin}/#/inbox/${c.id}`;
+  const fresh = c[other + '_mailed'] <= c[other + '_read'];
+  let to = '', subject, body, button = 'Read it', always = false;
+  if (c.kind === 'feedback' && side === 'a') {
+    to = env.FEEDBACK_TO || adminEmails(env)[0];
+    subject = `[Painters Desk] Reply to feedback from ${u ? u.name : 'someone not signed in'}`;
+    body = `${u ? u.name : 'Someone who isn\'t signed in'} answered on their feedback:\n\n${text}`;
+    button = 'Reply on the site';
+  } else {
+    const r = c[other + '_id'] ? await env.DB.prepare('SELECT name, email, email_verified, dm_mail FROM users WHERE id = ?').bind(c[other + '_id']).first() : null;
+    if (r && r.dm_mail && r.email && r.email_verified) to = r.email;
+    if (c.kind === 'feedback') {
+      subject = 'The Painters Desk team replied to your feedback';
+      if (to) body = `Hi ${r.name},\n\nWe replied to the feedback you sent. Open your messages on The Painters Desk to read it and answer.\n\nYou can turn these emails off on your account page.`;
+      else if (c.fb_email && (!r || !r.email_verified)) {
+        // They gave this address for a reply, so the reply itself goes in the email.
+        to = c.fb_email; always = true;
+        body = `Thanks for your feedback. Here is our reply:\n\n${text}\n\nYou can also answer on the site, in Messages, from the browser you sent your feedback with.`;
+        button = 'Open The Painters Desk';
+      }
+    } else {
+      subject = `${u.name} sent you a message on The Painters Desk`;
+      body = `${u.name} sent you a message. Open your messages on The Painters Desk to read it and reply.\n\nYou can turn these emails off, stop people starting conversations with you, or block someone, on your account page and in the conversation.`;
+    }
+  }
+  if (!to || (!fresh && !always)) return;
+  try {
+    await sendMail(env, to, subject, body, link, button);
+    await env.DB.prepare(`UPDATE conversations SET ${other}_mailed = ? WHERE id = ?`).bind(t, c.id).run();
+  } catch (e) { console.error('Message email failed', e); }
+}
+
+// POST /api/conversations/:id { message }: reply in a conversation.
+async function replyConversation(request, env, url, id) {
+  await needMessages(env);
+  const b = await body(request);
+  if (b.website) return json({ ok: true });
+  const u = await currentUser(request, env), token = await anonToken(request);
+  const c = await loadConversation(env, id), side = sideOf(c, u, token);
+  if (!side) throw new HttpError(404, 'Conversation not found');
+  return addMessage(request, env, url, c, side, u, b);
+}
+
+// PUT /api/conversations/:id { hidden: true } deletes it from the viewer's inbox (until a new message comes);
+// { status: 'done' | 'open' } marks feedback as dealt with (team only).
+async function updateConversation(request, env, id) {
+  await needMessages(env);
+  const b = await body(request), u = await currentUser(request, env), token = await anonToken(request);
+  const c = await loadConversation(env, id), side = sideOf(c, u, token);
+  if (!side) throw new HttpError(404, 'Conversation not found');
+  if (b.status !== undefined) {
+    if (c.kind !== 'feedback' || side !== 'b') throw new HttpError(403, 'Admins only');
+    await env.DB.prepare('UPDATE conversations SET status = ? WHERE id = ?').bind(b.status === 'open' ? 'open' : 'done', id).run();
+  }
+  if (b.hidden !== undefined && !(c.kind === 'feedback' && side === 'b'))
+    await env.DB.prepare(`UPDATE conversations SET ${side}_hidden = ? WHERE id = ?`).bind(b.hidden ? 1 : 0, id).run();
+  return json({ ok: true });
+}
+
+// GET /api/conversations/with/:userId: the conversation with that painter if there is one, and whether a message can be sent.
+async function conversationWith(request, env, id) {
+  await needMessages(env);
+  const u = await requireUser(request, env), r = await directCheck(env, u, id);
+  const c = await env.DB.prepare('SELECT id FROM conversations WHERE pair = ?').bind(pairOf(u.id, id)).first();
+  const why = r.why || (!c && !r.dm ? `${r.other.name} isn't taking new messages right now.` : '');
+  return json({ id: c?.id || null, other: r.other, why, blockedByMe: !!r.blockedByMe });
+}
+
+// POST /api/conversations/with/:userId { message }: message a painter, starting the conversation if needed.
+async function messageUser(request, env, url, id) {
+  await needMessages(env);
+  const u = await requireUser(request, env), b = await body(request);
+  if (b.website) return json({ ok: true });
+  const pair = pairOf(u.id, id);
+  let c = await env.DB.prepare('SELECT id FROM conversations WHERE pair = ?').bind(pair).first();
+  if (!c) {
+    const r = await directCheck(env, u, id);
+    if (r.why) throw new HttpError(403, r.why);
+    if (!r.dm) throw new HttpError(403, `${r.other.name} isn't taking new messages right now.`);
+    str(b.message, MSG_MAX, 'Message', { required: true });
+    const t = now();
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM conversations WHERE kind = 'direct' AND a_id = ? AND created_at > ?").bind(u.id, t - 86400000).first();
+    if (n.n >= NEW_CHATS_PER_DAY) throw new HttpError(429, "You've started a lot of conversations today, please try again tomorrow");
+    await env.DB.prepare("INSERT OR IGNORE INTO conversations (id, kind, a_id, b_id, pair, created_at, updated_at) VALUES (?, 'direct', ?, ?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), u.id, id, pair, t, t).run();
+    c = await env.DB.prepare('SELECT id FROM conversations WHERE pair = ?').bind(pair).first();
+  }
+  const full = await loadConversation(env, c.id);
+  return addMessage(request, env, url, full, sideOf(full, u, ''), u, b);
+}
+
+// GET /api/blocks: the painters the user blocked. PUT /api/blocks/:id { blocked }: block or unblock one.
+async function listBlocks(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasMessages(env)) return json({ blocks: [] });
+  const rows = (await env.DB.prepare(`SELECT u.id, u.name, ${AVATAR} AS avatar FROM user_blocks b JOIN users u ON u.id = b.blocked_id WHERE b.user_id = ? ORDER BY b.created_at DESC`).bind(u.id).all()).results;
+  return json({ blocks: rows });
+}
+async function setBlock(request, env, id) {
+  await needMessages(env);
+  const u = await requireUser(request, env), b = await body(request);
+  if (id === u.id) throw new HttpError(400, "You can't block yourself");
+  if (!await env.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind(id).first()) throw new HttpError(404, 'Painter not found');
+  if (b.blocked === false) await env.DB.prepare('DELETE FROM user_blocks WHERE user_id = ? AND blocked_id = ?').bind(u.id, id).run();
+  else await env.DB.prepare('INSERT OR IGNORE INTO user_blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)').bind(u.id, id, now()).run();
+  return json({ ok: true, blocked: b.blocked !== false });
+}
+
+// PUT /api/me/messages { dm, dm_mail }: whether painters can start conversations with me, and whether I get emails about messages.
+async function setMessagePrefs(request, env) {
+  await needMessages(env);
+  const u = await requireUser(request, env), b = await body(request);
+  await env.DB.prepare('UPDATE users SET dm = ?, dm_mail = ? WHERE id = ?').bind(b.dm === false ? 0 : 1, b.dm_mail === false ? 0 : 1, u.id).run();
+  return json({ user: await currentUser(request, env) });
+}
+
+// POST /api/inbox/claim: after signing in, feedback sent from this browser while signed out moves to the account.
+async function claimInbox(request, env) {
+  const u = await requireUser(request, env), token = await anonToken(request);
+  if (!token || !await hasMessages(env)) return json({ ok: true, moved: 0 });
+  const ids = (await env.DB.prepare("SELECT id, feedback_id FROM conversations WHERE a_id IS NULL AND a_token = ? AND kind = 'feedback'").bind(token).all()).results;
+  if (ids.length) await env.DB.batch(ids.flatMap(c => [
+    env.DB.prepare("UPDATE conversations SET a_id = ?, a_token = '' WHERE id = ?").bind(u.id, c.id),
+    env.DB.prepare("UPDATE messages SET user_id = ? WHERE conversation_id = ? AND side = 'a'").bind(u.id, c.id),
+    env.DB.prepare('UPDATE feedback SET user_id = ? WHERE id = ?').bind(u.id, c.feedback_id),
+  ]));
+  return json({ ok: true, moved: ids.length });
+}
+
 /* ---------- feedback ---------- */
 
 // The Feedback button on every page. Saved to D1 and emailed to FEEDBACK_TO (else the first ADMIN_EMAILS address).
@@ -1379,7 +1724,7 @@ async function countVisit(request, env, path, referrer, url) {
   }
 }
 
-async function sendFeedback(request, env) {
+async function sendFeedback(request, env, url) {
   const b = await body(request);
   if (b.website) return json({ ok: true });
   const kind = FEEDBACK_KINDS[b.kind] ? b.kind : 'other';
@@ -1388,13 +1733,22 @@ async function sendFeedback(request, env) {
   const page = str(b.page, 200, 'Page');
   const u = await currentUser(request, env);
   const ip = await sha256('feedback:' + (request.headers.get('CF-Connecting-IP') || ''));
-  const t = now();
-  let saved = true;
+  const t = now(), id = crypto.randomUUID();
+  let saved = true, conv = null;
   try {
     const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM feedback WHERE ip_hash = ? AND created_at > ?').bind(ip, t - 3600000).first();
     if (c.n >= FEEDBACK_PER_HOUR) throw new HttpError(429, "Thanks! You've sent a lot of feedback this hour, please try again later");
     await env.DB.prepare('INSERT INTO feedback (id, kind, message, email, user_id, page, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), kind, message, email, u?.id || null, page, ip, t).run();
+      .bind(id, kind, message, email, u?.id || null, page, ip, t).run();
+    // It also starts a conversation, so the team can reply on the site (the conversation shares the feedback's id).
+    if (await hasMessages(env)) {
+      const token = u ? '' : await anonToken(request);
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO conversations (id, kind, a_id, a_token, feedback_id, a_last, a_read, created_at, updated_at) VALUES (?1, 'feedback', ?2, ?3, ?1, ?4, ?4, ?4, ?4)").bind(id, u?.id || null, token, t),
+        env.DB.prepare("INSERT INTO messages (id, conversation_id, side, user_id, body, ip_hash, created_at) VALUES (?1, ?1, 'a', ?2, ?3, '', ?4)").bind(id, u?.id || null, message, t),
+      ]);
+      conv = id;
+    }
   } catch (e) {
     if (e instanceof HttpError) throw e;
     // The feedback table may not exist yet (migration 0007 not applied); the email still goes out.
@@ -1405,11 +1759,13 @@ async function sendFeedback(request, env) {
   let mailed = false;
   if (to && env.MAIL_FROM && (env.EMAIL || env.RESEND_API_KEY)) {
     const who = u ? `${u.name} (signed in${u.email ? ', ' + u.email : ''})` : 'Not signed in';
-    const text = `${FEEDBACK_KINDS[kind]} from ${who}\nReply to: ${email || 'no email given'}\nPage: ${page || '/'}\n\n${message}`;
+    const reply = conv ? `${url.origin}/#/inbox/${conv}` : '';
+    const text = `${FEEDBACK_KINDS[kind]} from ${who}\nReply to: ${email || 'no email given'}\nPage: ${page || '/'}\n\n${message}${reply ? '\n\nReply on the site: ' + reply : ''}`;
     const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#1b1b1b;max-width:560px">
 <p style="font-size:20px;font-weight:700;margin:0 0 12px">The Painters Desk: ${FEEDBACK_KINDS[kind]}</p>
 <p style="color:#666;font-size:13px;margin:0 0 12px">${htmlEsc(who)}<br>Reply to: ${htmlEsc(email || 'no email given')}<br>Page: ${htmlEsc(page || '/')}</p>
-<p style="white-space:pre-wrap;border:3px solid #1b1b1b;border-radius:14px;padding:12px">${htmlEsc(message)}</p></div>`;
+<p style="white-space:pre-wrap;border:3px solid #1b1b1b;border-radius:14px;padding:12px">${htmlEsc(message)}</p>
+${reply ? `<p><a href="${reply}" style="font-weight:700">Reply on the site</a> (they'll see it in Messages${u ? '' : ' on the browser they sent it from'})</p>` : ''}</div>`;
     const subject = `[Painters Desk] ${FEEDBACK_KINDS[kind]}: ${message.replace(/\s+/g, ' ').slice(0, 60)}`;
     try {
       if (env.EMAIL) await env.EMAIL.send({ from: env.MAIL_FROM, to, subject, text, html, ...(email ? { replyTo: email } : {}) });
@@ -1428,7 +1784,7 @@ async function sendFeedback(request, env) {
     mailed = true;
   }
   if (!saved && !mailed) throw new HttpError(503, "Sorry, feedback couldn't be sent right now. Please try again later");
-  return json({ ok: true });
+  return json({ ok: true, conversation: conv });
 }
 
 /* ---------- update emails (new features) ---------- */
