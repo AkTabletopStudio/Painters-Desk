@@ -94,6 +94,8 @@ async function route(request, env, url) {
   if (p === '/api/me/password' && m === 'PUT') return setPassword(request, env);
   if ((r = p.match(/^\/api\/users\/([\w-]+)$/)) && m === 'GET') return getProfile(request, env, r[1]);
   if (p === '/api/painters' && m === 'GET') return listPainters(request, env, url);
+  if (p === '/api/people' && m === 'GET') return listPeople(request, env, url);
+  if (p === '/api/me/findable' && m === 'PUT') return setFindable(request, env);
   if ((r = p.match(/^\/api\/painters\/([\w-]+)\/message$/)) && m === 'POST') return messagePainter(request, env, url, r[1]);
   if (p === '/api/me/commission' && m === 'GET') return getCommission(request, env);
   if (p === '/api/me/commission' && m === 'PUT') return saveCommission(request, env);
@@ -206,9 +208,9 @@ async function currentUser(request, env) {
   const token = cookies(request)[SESSION_COOKIE];
   if (!token) return null;
   // dm/dm_mail (message settings) come with migration 0015.
-  const msg = await hasMessages(env);
+  const msg = await hasMessages(env), fnd = await hasFindable(env);
   const row = await env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}
+    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}${fnd ? ', u.findable' : ''}
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now()).first();
   if (!row) return null;
@@ -219,6 +221,7 @@ async function currentUser(request, env) {
   row.updates_asked = !!row.updates_asked;
   row.blocked = !!row.blocked;
   if (msg) { row.dm = !!row.dm; row.dm_mail = !!row.dm_mail; }
+  if (fnd) row.findable = !!row.findable;
   row.favourites = JSON.parse(row.favourites || '[]');
   return row;
 }
@@ -1360,6 +1363,52 @@ async function messagePainter(request, env, url, id) {
   await env.DB.prepare('INSERT INTO commission_messages (id, painter_id, sender_id, message, created_at) VALUES (?, ?, ?, ?, ?)')
     .bind(crypto.randomUUID(), id, u.id, message, t).run();
   return json({ ok: true });
+}
+
+/* ---------- the Painters list ---------- */
+
+// The column comes with migration 0016. Until it is applied everyone is listed and the setting to hide is missing.
+let findableReady = false;
+async function hasFindable(env) {
+  if (!findableReady) findableReady = !!(await env.DB.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'findable'").first());
+  return findableReady;
+}
+
+// GET /api/people?q=&sort=active|new&offset=: painters to find and message, PEOPLE_PAGE at a time. Blocked accounts,
+// sign-ups that never confirmed their email, and people who turned the list off are left out.
+// active: the most public recipes, tutorials and palettes first, then the most recently active.
+const PEOPLE_PAGE = 48;
+async function listPeople(request, env, url) {
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 60).replace(/[%_]/g, '');
+  const sort = url.searchParams.get('sort') === 'new' ? 'new' : 'active';
+  const offset = Math.max(0, Math.min(5000, parseInt(url.searchParams.get('offset'), 10) || 0));
+  const where = ['u.blocked = 0', "(u.email IS NULL OR u.email = '' OR u.email_verified = 1)"], args = [];
+  if (await hasFindable(env)) where.push('u.findable = 1');
+  if (q) { where.push('u.name LIKE ?'); args.push(`%${q}%`); }
+  const listed = await hasCommissions(env) ? '(SELECT c.listed FROM commissions c WHERE c.user_id = u.id)' : '0';
+  const rows = (await env.DB.prepare(
+    `SELECT u.id, u.name, ${AVATAR} AS avatar, u.bio, u.created_at, ${listed} AS commissions,
+       SUM(r.kind = 'tutorial') AS tutorials, SUM(r.kind = 'recipe') AS recipes, SUM(r.kind = 'palette') AS palettes,
+       COUNT(r.id) AS works, MAX(r.updated_at) AS active_at
+     FROM users u LEFT JOIN recipes r ON r.user_id = u.id AND r.visibility = 'public'
+     WHERE ${where.join(' AND ')} GROUP BY u.id
+     ORDER BY ${sort === 'new' ? 'u.created_at DESC' : 'works DESC, COALESCE(active_at, u.created_at) DESC'} LIMIT ? OFFSET ?`
+  ).bind(...args, PEOPLE_PAGE + 1, offset).all()).results;
+  return json({
+    people: rows.slice(0, PEOPLE_PAGE).map(p => ({
+      id: p.id, name: p.name, avatar: p.avatar, bio: (p.bio || '').slice(0, 160), created_at: p.created_at,
+      tutorials: p.tutorials || 0, recipes: p.recipes || 0, palettes: p.palettes || 0, commissions: !!p.commissions,
+    })),
+    more: rows.length > PEOPLE_PAGE,
+  });
+}
+
+// PUT /api/me/findable { on }: show me in the Painters list and its search, or not.
+async function setFindable(request, env) {
+  const u = await requireUser(request, env), b = await body(request);
+  if (!await hasFindable(env)) throw new HttpError(503, 'This setting is not available on this server yet');
+  await env.DB.prepare('UPDATE users SET findable = ? WHERE id = ?').bind(b.on === false ? 0 : 1, u.id).run();
+  return json({ user: await currentUser(request, env) });
 }
 
 /* ---------- messages: feedback replies and messages between painters ---------- */
