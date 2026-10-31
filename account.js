@@ -13,7 +13,7 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum','chat'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
@@ -65,6 +65,7 @@ async function loadMe(){
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
  $('mine').hidden=!ME;
+ $('chatN').hidden=!(INFO&&INFO.chat&&API);
  $('fbBtn').hidden=!API;
  // Feedback sent from this browser while signed out moves to the account on sign-in.
  if(ME&&INFO.messages&&fbToken()){try{await api('/inbox/claim',{method:'POST'});localStorage.removeItem(FBT)}catch(e){}}
@@ -99,6 +100,8 @@ function route(){
  else if(view==='inbox')renderInbox(id,sub);
  else if(view==='people')renderPeople();
  else if(view==='forum')renderForum(id,sub);
+ else if(view==='chat')renderChat(id);
+ if(view!=='chat')chatClose();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -720,7 +723,7 @@ document.addEventListener('error',e=>{const i=e.target;if(i.tagName==='IMG'&&/\/
 let REP=null;
 function openReport(kind,id,name){const D=$('rpDlg'),F=$('rpForm');REP={kind,id};F.reset();
  $('rpErr').textContent='';$('rpBody').hidden=false;$('rpSend').hidden=false;$('rpSend').disabled=false;$('rpNo').textContent='Cancel';$('rpDone').hidden=true;
- $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:kind==='message'?`this message from ${name}`:kind==='forum'?`a post in "${name}"`:`"${name}"`;D.showModal()}
+ $('rpWhat').textContent=kind==='user'?`the profile of ${name}`:kind==='message'?`this message from ${name}`:kind==='forum'?`a post in "${name}"`:kind==='chat'?`a chat message in ${name}`:`"${name}"`;D.showModal()}
 $('rpNo').onclick=()=>$('rpDlg').close();
 $('rpForm').onsubmit=async e=>{e.preventDefault();const F=$('rpForm');$('rpErr').textContent='';$('rpSend').disabled=true;
  try{await api('/reports',{method:'POST',body:{kind:REP.kind,id:REP.id,reason:F.rpReason.value,note:$('rpNote').value,website:$('rpWeb').value}});
@@ -736,7 +739,7 @@ async function renderAdmin(){
  let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
  const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
  const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
- const where=w=>w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const where=w=>w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
  const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
   <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
   <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
@@ -744,6 +747,7 @@ async function renderAdmin(){
  const what=r=>r.kind==='upload'?`A photo by ${pers(r.user)} was refused at upload: ${esc(r.note)}`
   :r.kind==='user'?`Profile of ${pers(r.user)}`
   :r.kind==='forum'?(r.post?`Forum ${r.post.first?'opening post':'reply'} in <a href="#/forum/t/${esc(r.post.thread.id)}?p=${esc(r.post.id)}">${esc(r.post.thread.title)}</a> by ${pers(r.user)||'a deleted account'}${r.post.hidden?' <span class="tag dang">removed</span>':''}`:'A forum post that has since been deleted')
+  :r.kind==='chat'?(r.chat?`Chat message in <a href="#/chat/${esc(r.chat.room.id)}?m=${esc(r.chat.id)}"># ${esc(r.chat.room.name)}</a> by ${pers(r.user)||'a deleted account'}${r.chat.hidden?' <span class="tag dang">removed</span>':''}${r.user?.muted?` <span class="tag warn">muted until ${new Date(r.user.muted).toLocaleString()}</span>`:''}`:'A chat message that has since been deleted')
   :r.kind==='message'?(r.message?`Private message from ${pers(r.user)||'a deleted account'}`:'A message that has since been deleted')
   :r.target?`<a href="#/recipe/${esc(r.target.id)}">${esc(r.target.title)}</a> (${esc(r.target.kind)}, ${esc(r.target.visibility)}) by ${pers(r.user)}`:'A recipe that has since been deleted';
  const by=r=>r.kind==='upload'?'':r.reporter?` · reported by ${pers(r.reporter)}`:' · reported by someone not signed in';
@@ -751,10 +755,11 @@ async function renderAdmin(){
   <p class="s">${what(r)} · ${fmtDate(r.created_at)}${by(r)}</p>
   ${r.message?`<div class="msg them">${esc(r.message.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
   ${r.post?.body?`<div class="msg them">${esc(r.post.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
+  ${r.chat?.body?`<div class="msg them">${esc(r.chat.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
   ${r.kind!=='upload'&&r.note?`<div class="steps">${esc(r.note)}</div>`:''}
   ${r.images.length?`<div class="mgrid">${r.images.map(imgCard).join('')}</div>`:''}
-  <div class="row">${r.post?`<button class="btn sm${r.post.hidden?'':' dan'}" type="button" data-fhide="${esc(r.post.id)}" data-on="${r.post.hidden?0:1}">${r.post.hidden?'Restore post':'Remove post'}</button>`:''}${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
- el.innerHTML=`<h1>Moderation</h1>${INFO.messages?'<p><a class="btn" href="#/inbox?team">Read and answer feedback</a></p>':''}<p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Removing a forum post hides it from everyone but admins, and you can restore it. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
+  <div class="row">${r.post?`<button class="btn sm${r.post.hidden?'':' dan'}" type="button" data-fhide="${esc(r.post.id)}" data-on="${r.post.hidden?0:1}">${r.post.hidden?'Restore post':'Remove post'}</button>`:''}${r.chat?`<button class="btn sm${r.chat.hidden?'':' dan'}" type="button" data-chide="${esc(r.chat.id)}" data-on="${r.chat.hidden?0:1}">${r.chat.hidden?'Restore message':'Remove message'}</button>${r.user&&r.user.id!==ME.id?`<button class="btn sm" type="button" data-cmute="${esc(r.user.id)}" data-h="${r.user.muted?0:24}">${r.user.muted?'Lift chat mute':'Mute in chat for a day'}</button>`:''}`:''}${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
+ el.innerHTML=`<h1>Moderation</h1>${INFO.messages?'<p><a class="btn" href="#/inbox?team">Read and answer feedback</a></p>':''}<p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Removing a forum post or chat message hides it from everyone but admins, and you can restore it. Muting someone in chat lets them read but not write until it runs out. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
  <h2>Open reports (${d.reports.length})</h2>${d.reports.map(repCard).join('')||'<p class="s">No open reports.</p>'}
  <h2>Newest photos</h2><div class="mgrid">${d.images.map(imgCard).join('')||'<p class="s">No photos yet.</p>'}</div>`;
  const act=async(b,fn)=>{b.disabled=true;try{await fn();renderAdmin()}catch(e){b.disabled=false;b.parentElement.insertAdjacentHTML('beforeend',`<span class="err">${esc(e.message)}</span>`)}};
@@ -765,6 +770,8 @@ async function renderAdmin(){
  el.querySelectorAll('[data-delimg]').forEach(b=>b.onclick=()=>twice(b,'Click again to delete')&&act(b,()=>api('/admin/images/'+imgOf(b),{method:'DELETE'})));
  el.querySelectorAll('[data-delrec]').forEach(b=>b.onclick=()=>twice(b,'Click again to delete for good')&&act(b,()=>api('/recipes/'+b.dataset.delrec,{method:'DELETE'})));
  el.querySelectorAll('[data-blk]').forEach(b=>b.onclick=()=>(b.dataset.on!=='1'||twice(b,'Click again to block'))&&act(b,()=>api('/admin/users/'+b.dataset.blk,{method:'PUT',body:{blocked:b.dataset.on==='1'}})));
+ el.querySelectorAll('[data-chide]').forEach(b=>b.onclick=()=>act(b,()=>api('/chat/messages/'+b.dataset.chide,{method:'PUT',body:{hidden:b.dataset.on==='1'}})));
+ el.querySelectorAll('[data-cmute]').forEach(b=>b.onclick=()=>act(b,()=>api('/chat/mutes/'+b.dataset.cmute,{method:'PUT',body:{hours:+b.dataset.h}})));
  el.querySelectorAll('[data-fhide]').forEach(b=>b.onclick=()=>act(b,()=>api('/forum/posts/'+b.dataset.fhide,{method:'PUT',body:{hidden:b.dataset.on==='1'}})));
  el.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>act(b,()=>api('/admin/reports/'+b.closest('[data-rep]').dataset.rep,{method:'PUT',body:{status:'done'}})))}
 
@@ -798,12 +805,12 @@ async function renderPeople(){
 /* ---------- messages ---------- */
 // One inbox for replies to feedback and private messages between painters. #/inbox lists them, #/inbox/<id> opens
 // one, #/inbox/u/<user id> starts or continues one with that painter, and #/inbox?team (admins) lists all feedback.
-let UNREAD=0,TEAMN=0,FORUMN=0;
+let UNREAD=0,TEAMN=0,FORUMN=0,CHATN=0;
 async function unread(){
  const show=!!(INFO&&INFO.messages&&(ME||fbToken()));$('inb').hidden=!show;
- if(!show){UNREAD=TEAMN=FORUMN=0;drawBadge();return}
- try{const d=await api('/inbox/unread');UNREAD=d.n;TEAMN=d.team;FORUMN=d.forum||0}catch(e){}drawBadge()}
-function drawBadge(){const n=UNREAD+TEAMN+FORUMN,b=$('inbN');b.hidden=!n;b.textContent=n>99?'99+':n;$('inb').title=n?`Messages (${n} new)`:'Messages'}
+ if(!show){UNREAD=TEAMN=FORUMN=CHATN=0;drawBadge();return}
+ try{const d=await api('/inbox/unread');UNREAD=d.n;TEAMN=d.team;FORUMN=d.forum||0;CHATN=d.chat||0}catch(e){}drawBadge()}
+function drawBadge(){const n=UNREAD+TEAMN+FORUMN+CHATN,b=$('inbN');b.hidden=!n;b.textContent=n>99?'99+':n;$('inb').title=n?`Messages (${n} new)`:'Messages'}
 setInterval(()=>{if(document.visibilityState==='visible'&&!$('inb').hidden)unread()},120000);
 const ago=t=>{const d=(Date.now()-t)/60000;return d<1?'just now':d<60?Math.floor(d)+' min ago':d<1440?Math.floor(d/60)+' h ago':fmtDate(t)};
 const convWho=c=>c.other?.team?{name:c.other.name,avatar:c.other.avatar}:c.other||{name:'(deleted account)'};
@@ -822,8 +829,12 @@ async function renderInbox(id,sub){
  const intro=team?'Everything sent with the Feedback button, open ones first. Replies show in the sender\'s Messages, and go by email when they gave one.'
   :ME?'Replies to your feedback, and conversations with other painters. To message a painter, <a href="#/people">find them</a> and press Message on their profile.'
   :'Replies to feedback you sent from this browser. <a href="#/account">Sign in</a> to message other painters and keep your replies on every device.';
- el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1>${tabs}<p class="s">${intro}</p>${!team&&ME&&INFO.forum?'<div id="fUpd"></div>':''}<div class="convs">${d.conversations.map(row).join('')||`<p class="s">${team?'No feedback yet.':'Nothing here yet.'}</p>`}</div>`;
- // New replies in forum threads you follow sit above the conversations.
+ el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1>${tabs}<p class="s">${intro}</p>${!team&&ME&&INFO.chat?'<div id="cUpd"></div>':''}${!team&&ME&&INFO.forum?'<div id="fUpd"></div>':''}<div class="convs">${d.conversations.map(row).join('')||`<p class="s">${team?'No feedback yet.':'Nothing here yet.'}</p>`}</div>`;
+ // Chat messages that @mention you, then new replies in forum threads you follow, sit above the conversations.
+ if($('cUpd'))api('/chat/mentions').then(c=>{const B=$('cUpd');if(!B||!c.mentions.length)return;
+  B.innerHTML=`<h2>Chat mentions</h2><div class="convs">${c.mentions.map(m=>`<a class="conv new" href="#/chat/${esc(m.room)}?m=${esc(m.id)}">${avHTML(m.author)}<span class="cv"><b>${esc(m.author.name)}</b><span class="tag fcat"># ${esc(m.room_name)}</span><span class="s">${esc(m.body||'(photo)')}</span></span><span class="s cvt">${ago(m.created_at)}</span></a>`).join('')}</div><p><button class="lnk" type="button" id="cUpdR">Mark all as read</button></p>`;
+  $('cUpdR').onclick=async()=>{try{await api('/chat/mentions',{method:'POST'});B.innerHTML='';unread()}catch(e){}}}).catch(()=>{});
+ // New replies in forum threads you follow.
  if($('fUpd'))api('/forum/updates').then(f=>{const B=$('fUpd');if(!B||!f.threads.length)return;
   B.innerHTML=`<h2>Forum replies</h2><div class="convs">${f.threads.map(threadRow).join('')}</div><p><button class="lnk" type="button" id="fUpdR">Mark all as read</button> · <a href="#/forum/following">All threads I follow</a></p>`;
   $('fUpdR').onclick=async()=>{try{await api('/forum/updates',{method:'POST'});B.innerHTML='';unread()}catch(e){}}}).catch(()=>{})}
@@ -907,7 +918,7 @@ async function renderForum(id,sub){
  const pend=c=>`<div class="row" data-pc="${esc(c.id)}"><b>${esc(c.name)}</b><span class="s">${esc(c.description)}${c.by?` · suggested by <a href="#/u/${esc(c.by.id)}">${esc(c.by.name)}</a>`:''}</span>
   <button class="btn sm pri" type="button" data-ok>Approve</button><button class="btn sm dan" type="button" data-no>Decline</button></div>`;
  el.innerHTML=`<h1>Forum</h1>
- <p class="s">Talk paint with other painters: show your work, ask for help with a colour scheme, compare brands and swap techniques. Be kind, and keep to the <a href="terms" target="_blank">site rules</a>.</p>
+ <p class="s">Talk paint with other painters: show your work, ask for help with a colour scheme, compare brands and swap techniques. Be kind, and keep to the <a href="terms" target="_blank">site rules</a>.${INFO.chat?' Want a quick answer? Try the <a href="#/chat">live chat</a>.':''}</p>
  <div class="row">${ME?'<a class="btn pri" href="#/forum/new">+ New thread</a><a class="btn" href="#/forum/following">★ Threads I follow</a>':'<a class="btn" href="#/account">Sign in to post</a>'}</div>
  <div class="bar"><input id="fq" type="search" placeholder="Search the forum" aria-label="Search the forum"></div>
  <div id="fRes" hidden></div>
@@ -1079,6 +1090,221 @@ async function forumThread(id){
    forumComposer(box,{body:p.body,images:p.images,paints:p.paints,recipes:p.recipes},{label:'Edit your post',go:'Save',going:'Saving…',cancel:()=>forumThread(id)},
     async x=>{await api('/forum/posts/'+pid,{method:'PUT',body:x});forumThread(id)})}});
  const h=location.hash.match(/[?&]p=([\w-]+)/);if(h)document.getElementById('post-'+h[1])?.scrollIntoView({block:'center'})}
+
+/* ---------- live chat ---------- */
+// #/chat opens the room you had open last (else the first); #/chat/<room> one room, and ?m=<message> scrolls to a message.
+// New messages, edits, reactions and who's online arrive over a WebSocket to the room. Without one (or while it
+// reconnects) new messages are fetched every few seconds instead.
+const C_PHOTOS=4,C_PAINTS=6,CHK='pd-chat';
+const CT={gen:0,ws:null,timers:[],rooms:[],room:null,msgs:[],pins:[],more:false,online:[],blocks:new Set(),emoji:[],why:'',live:false,
+ reply:null,images:[],paints:[],ment:new Map(),busy:0,readT:0};
+function chatClose(){CT.gen++;CT.timers.forEach(t=>{clearTimeout(t);clearInterval(t)});CT.timers=[];
+ if(CT.ws){CT.ws.onclose=CT.ws.onmessage=null;try{CT.ws.close()}catch(e){}CT.ws=null}}
+const cNotOpen='<h1>Chat</h1><p class="s">Chat isn\'t open yet. Check back soon.</p>';
+const chatTime=t=>{const d=new Date(t),hm=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?hm:d.toLocaleDateString([],{month:'short',day:'numeric'})+', '+hm};
+// The text with links, and the painters it mentions picked out (you in yellow).
+function chatBody(m){let h=linkify(m.body);for(const x of m.mentions){const t='@'+esc(x.name);h=h.split(t).join(`<span class="at${x.id===ME.id?' me':''}">${t}</span>`)}return h}
+// One message. A message straight after another from the same painter (within 5 minutes) drops the name and picture.
+function chatMsgHTML(m,prev){
+ const mine=m.author.id===ME.id,grp=prev&&prev.author.id===m.author.id&&!m.reply&&m.created_at-prev.created_at<300000,atme=m.mentions.some(x=>x.id===ME.id);
+ const rx=Object.entries(m.reactions).map(([e,ids])=>`<button class="crx${ids.includes(ME.id)?' on':''}" type="button" data-rx="${e}" aria-pressed="${ids.includes(ME.id)}" title="${ids.length} ${ids.length===1?'reaction':'reactions'}">${e} ${ids.length}</button>`).join('');
+ const content=`${m.reply?`<button class="crep" type="button" data-jump="${esc(m.reply.id)}">↪ ${m.reply.gone?'<i>a deleted message</i>':`<b>${esc(m.reply.name)}</b> ${esc(m.reply.body)}`}</button>`:''}
+  ${m.body?`<div class="cbody">${chatBody(m)}${m.edited_at?' <span class="s">(edited)</span>':''}</div>`:''}
+  ${m.images.length?`<div class="cimgs">${m.images.map(id=>`<a href="${imgURL(id)}" target="_blank"><img src="${imgURL(id)}" alt="Photo" loading="lazy"></a>`).join('')}</div>`:''}
+  ${m.paints.length?`<div class="chips cpp">${m.paints.map(k=>pchip(k)).join('')}</div>`:''}
+  ${rx?`<div class="crxs">${rx}</div>`:''}`;
+ const b=(a,t,i)=>`<button type="button" data-a="${a}" title="${t}" aria-label="${t}">${i}</button>`;
+ const acts=(CT.why?'':b('reply','Reply','↪')+b('react','React','☺'))+(mine&&!CT.why?b('edit','Edit','✎'):'')+(mine||ME.admin?b('del','Delete','🗑'):'')
+  +(ME.admin?b('pin',m.pinned?'Unpin':'Pin','📌')+b('hide',m.hiddenByMod?'Restore':'Remove for everyone',m.hiddenByMod?'↺':'⊘')+(!mine&&m.author.id?b('mute','Mute in chat','🔇'):''):'')
+  +(!mine&&m.author.id?b('report','Report','⚑'):'');
+ const av=m.author.id?`<a class="cav" href="#/u/${esc(m.author.id)}" tabindex="-1">${avHTML(m.author)}</a>`:`<span class="cav">${avHTML(m.author)}</span>`;
+ return `<div class="cmsg${grp?' grp':''}${atme?' atme':''}${m.hiddenByMod||m.authorBlocked?' rem':''}" data-m="${esc(m.id)}" id="cm-${esc(m.id)}">${grp?'<span></span>':av}<div class="cc">
+ ${grp?'':`<div class="cwho">${m.author.id?`<a href="#/u/${esc(m.author.id)}"><b>${esc(m.author.name)}</b></a>`:`<b>${esc(m.author.name)}</b>`}<span class="s" title="${new Date(m.created_at).toLocaleString()}">${chatTime(m.created_at)}</span>${m.pinned?' <span class="tag tpin">📌 pinned</span>':''}${m.hiddenByMod?' <span class="tag dang">removed</span>':''}${m.authorBlocked?' <span class="tag dang">author blocked</span>':''}</div>`}
+ ${CT.blocks.has(m.author.id)?`<p class="s">From a painter you blocked. <button class="lnk" type="button" data-sh>Show it</button></p><div hidden data-bc>${content}</div>`:content}
+ <div class="cact">${acts}</div><div data-x></div></div></div>`}
+
+const nearEnd=L=>L.scrollHeight-L.scrollTop-L.clientHeight<80;
+// Redraw the messages, keeping the reader where they were (or at the bottom if they were there).
+function chatDraw(stick){
+ const L=$('chList');if(!L)return;const end=stick||nearEnd(L),fromEnd=L.scrollHeight-L.scrollTop;
+ L.innerHTML=(CT.more?'<p style="text-align:center"><button class="btn sm" type="button" id="chOld">Load older messages</button></p>':'')
+  +(CT.msgs.length?CT.msgs.map((m,i)=>chatMsgHTML(m,CT.msgs[i-1])).join(''):`<p class="s" style="padding:0 14px">No messages in #${esc(CT.room.name)} yet. Say hello!</p>`)
+  +'<button class="btn sm pri cnew" type="button" id="chNew" hidden>New messages ↓</button>';
+ L.scrollTop=end?L.scrollHeight:L.scrollHeight-fromEnd;
+ if($('chOld'))$('chOld').onclick=()=>chatOlder()}
+function chatPins(){const B=$('chPinB'),P=$('chPins');if(!B)return;B.hidden=!CT.pins.length;B.textContent=`📌 ${CT.pins.length} pinned`;
+ P.innerHTML=CT.pins.map(m=>`<button type="button" data-jump="${esc(m.id)}"><b>${esc(m.author.name)}:</b> ${esc(m.body||'(photo)')}</button>`).join('');if(!CT.pins.length)P.hidden=true}
+function chatOnline(){const O=$('chOn'),B=$('chOnB');if(!O)return;
+ O.innerHTML=`<h2>Online now · ${CT.online.length}</h2>${CT.online.map(u=>`<a class="u" href="#/u/${esc(u.id)}">${avHTML(u)}<span>${esc(u.name)}</span></a>`).join('')||`<p class="s">${CT.live?'Connecting…':'Live updates are off, so new messages arrive every few seconds.'}</p>`}`;
+ B.textContent=`● ${CT.online.length} online`}
+function chatRooms(){const R=$('chRooms');if(!R)return;
+ R.innerHTML=CT.rooms.filter(r=>!r.archived||ME.admin).map(r=>`<a class="croom${r.id===CT.room?.id?' on':''}${r.unread&&r.id!==CT.room?.id?' new':''}${r.archived?' arch':''}" href="#/chat/${esc(r.id)}"><span># ${esc(r.name)}</span>${r.id!==CT.room?.id&&r.mentions?`<b class="bdg" title="Mentions you">${r.mentions}</b>`:r.unread&&r.id!==CT.room?.id?'<i title="New messages"></i>':''}</a>`).join('')}
+function chatTop(){const T=$('chTop');if(!T)return;const r=CT.room;
+ T.querySelector('b').textContent='# '+r.name;T.querySelector('.s').textContent=(r.topic||'')+(r.slow?` · slow mode: one message every ${r.slow} s`:'')+(r.archived?' · archived':'')}
+
+// Add or replace messages (from the server, the live connection or a catch-up), oldest first.
+function chatMerge(list){let added=false;for(const m of list){const i=CT.msgs.findIndex(x=>x.id===m.id);if(i>=0)CT.msgs[i]=m;else{CT.msgs.push(m);added=true}}
+ if(added)CT.msgs.sort((a,b)=>a.created_at-b.created_at);return added}
+function chatIncoming(list){const L=$('chList');if(!L)return;const end=nearEnd(L),mine=list.every(m=>m.author.id===ME.id);
+ if(!chatMerge(list))return chatDraw();chatDraw(end||mine);
+ if(!(end||mine))$('chNew').hidden=false,$('chNew').onclick=()=>{L.scrollTop=L.scrollHeight;$('chNew').hidden=true};
+ chatSeen()}
+// The room counts as read while it is open and the page is visible (sent at most every few seconds).
+function chatSeen(){if(document.visibilityState!=='visible'||!CT.room)return;const t=Date.now();if(t-CT.readT<4000)return;CT.readT=t;
+ api(`/chat/rooms/${CT.room.id}/read`,{method:'PUT'}).then(()=>unread()).catch(()=>{})}
+async function chatCatchUp(){const g=CT.gen,last=CT.msgs[CT.msgs.length-1];if(!last)return;
+ try{const d=await api(`/chat/rooms/${CT.room.id}/messages?after=${last.created_at}`);if(g===CT.gen&&d.messages.length)chatIncoming(d.messages)}catch(e){}}
+
+// The live connection, reconnecting with a growing wait; while it is down, catch up every 5 seconds.
+function chatConnect(tries=0){
+ const g=CT.gen;if(!CT.live)return chatPoll();
+ let ws;try{ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/chat/rooms/${encodeURIComponent(CT.room.id)}/ws`)}catch(e){return chatPoll()}
+ CT.ws=ws;let poll=0,ping=0;
+ ws.onopen=()=>{tries=0;clearInterval(poll);ping=setInterval(()=>{try{ws.send('ping')}catch(e){}},30000);CT.timers.push(ping);chatCatchUp()};
+ ws.onmessage=e=>{if(g!==CT.gen||e.data==='pong')return;let d;try{d=JSON.parse(e.data)}catch(x){return}
+  if(d.type==='msg')chatIncoming([d.m]);
+  else if(d.type==='update'){chatMerge([d.m]);CT.pins=CT.pins.filter(x=>x.id!==d.m.id);if(d.m.pinned)CT.pins.unshift(d.m);chatPins();chatDraw()}
+  else if(d.type==='delete'){CT.msgs=CT.msgs.filter(x=>x.id!==d.id);CT.pins=CT.pins.filter(x=>x.id!==d.id);chatPins();chatDraw()}
+  else if(d.type==='react'){const m=CT.msgs.find(x=>x.id===d.id);if(m){m.reactions=d.reactions;chatDraw()}}
+  else if(d.type==='presence'){CT.online=d.users;chatOnline()}
+  else if(d.type==='room'){CT.room=d.room;const i=CT.rooms.findIndex(r=>r.id===d.room.id);if(i>=0)CT.rooms[i]={...CT.rooms[i],...d.room};chatTop();chatRooms()}};
+ ws.onclose=()=>{clearInterval(ping);if(g!==CT.gen)return;CT.ws=null;CT.online=[];chatOnline();
+  poll=setInterval(chatCatchUp,5000);CT.timers.push(poll);
+  CT.timers.push(setTimeout(()=>{clearInterval(poll);if(g===CT.gen)chatConnect(tries+1)},Math.min(30000,1000*2**tries)))}}
+function chatPoll(){const t=setInterval(chatCatchUp,5000);CT.timers.push(t)}
+
+async function chatOlder(){const first=CT.msgs[0];if(!first)return;
+ const d=await api(`/chat/rooms/${CT.room.id}/messages?before=${first.created_at}`);CT.more=d.more;CT.msgs=[...d.messages,...CT.msgs.filter(m=>!d.messages.some(x=>x.id===m.id))];
+ const L=$('chList'),fromEnd=L.scrollHeight-L.scrollTop;chatDraw();L.scrollTop=L.scrollHeight-fromEnd}
+// Scroll to a message, loading older pages until it turns up (up to 10 pages back).
+async function chatJump(id){for(let i=0;i<10&&!CT.msgs.some(m=>m.id===id)&&CT.more;i++)try{await chatOlder()}catch(e){break}
+ const el=document.getElementById('cm-'+id);if(!el){$('chE').textContent='That message is no longer here.';return}
+ el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),2000)}
+
+async function renderChat(id){
+ chatClose();const el=$('v-chat'),g=CT.gen;
+ if(!INFO.chat){el.innerHTML=cNotOpen;return}
+ if(!ME){el.innerHTML='<h1>Chat</h1><p class="s">Live chat rooms for painters: ask quick questions, share what\'s on your desk and hang out.</p>'+signInLink('Chat is for members.');return}
+ el.innerHTML='<h1>Chat</h1><p class="s">Loading…</p>';
+ let d;try{d=await api('/chat');if(INFO.messages&&!CT.blocks.size)CT.blocks=new Set((await api('/blocks')).blocks.map(b=>b.id))}catch(e){el.innerHTML=`<h1>Chat</h1><p class="err">${esc(e.message)}</p>`;return}
+ if(g!==CT.gen)return;
+ if(d.unavailable){el.innerHTML=cNotOpen;return}
+ Object.assign(CT,{rooms:d.rooms,emoji:d.emoji,live:d.live,readT:0,reply:null,images:[],paints:[],ment:new Map(),online:[]});
+ let last='';try{last=localStorage.getItem(CHK)||''}catch(e){}
+ const room=d.rooms.find(r=>r.id===id)||d.rooms.find(r=>r.id===last&&!r.archived)||d.rooms.find(r=>!r.archived);
+ if(!room){el.innerHTML='<h1>Chat</h1><p class="s">There are no chat rooms yet.</p>';return}
+ if(room.id!==id)history.replaceState(null,'','#/chat/'+room.id);
+ try{localStorage.setItem(CHK,room.id)}catch(e){}
+ let m;try{m=await api(`/chat/rooms/${room.id}/messages`)}catch(e){el.innerHTML=`<h1>Chat</h1><p class="err">${esc(e.message)}</p>`;return}
+ if(g!==CT.gen)return;
+ Object.assign(CT,{room:m.room,msgs:m.messages,more:m.more,pins:m.pins,why:m.why});
+ el.innerHTML=`<div class="chat"><aside class="crooms"><h2>Rooms</h2><div id="chRooms"></div>${ME.admin?'<button class="lnk" type="button" id="chManB">Manage rooms</button>':''}</aside>
+ <section class="cmain"><div class="ctop" id="chTop"><b></b><span class="s"></span><button class="btn sm" type="button" id="chPinB" hidden></button><button class="btn sm" type="button" id="chOnB" aria-controls="chOn"></button></div>
+ <div class="cpins" id="chPins" hidden></div><div class="clist" id="chList" aria-live="polite"></div>
+ <div class="cbox" id="chBox">${CT.why?`<p class="s">${esc(CT.why)}</p>`:`<div class="creply" id="chRep" hidden></div><div class="catt"><div class="pgal ed" id="chImgs"></div><div class="chips" id="chPcs"></div></div>
+  <div class="fps" id="chPs" hidden></div><div class="res cat" id="chAt" hidden></div>
+  <div class="cin"><label class="btn sm" title="Add a photo" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden id="chF"></label><button class="btn sm" type="button" id="chPB" title="Tag a paint" aria-label="Tag a paint">🎨</button>
+  <textarea id="chT" rows="1" maxlength="1000" placeholder="Message #${esc(CT.room.name)}" aria-label="Message"></textarea><button class="btn pri" type="button" id="chS">Send</button></div>`}
+  <p class="s" id="chE" role="alert"></p></div></section>
+ <aside class="conl" id="chOn"></aside></div><div id="chMan"></div>
+ <p class="s">Be kind, and keep to the <a href="terms" target="_blank">site rules</a>. Hover or tap a message to reply, react or report it. Type @ to mention someone.</p>`;
+ chatRooms();chatTop();chatPins();chatOnline();chatDraw(true);chatSeen();
+ $('chPinB').onclick=()=>{$('chPins').hidden=!$('chPins').hidden};
+ $('chOnB').onclick=()=>$('chOn').classList.toggle('open');
+ $('chPins').onclick=e=>{const b=e.target.closest('[data-jump]');if(b)chatJump(b.dataset.jump)};
+ $('chList').onclick=chatClick;
+ if($('chManB'))$('chManB').onclick=()=>chatManage();
+ if(!CT.why)chatComposer();
+ chatConnect();
+ // The room list (unread dots and mention counts) refreshes every minute.
+ CT.timers.push(setInterval(async()=>{try{const r=await api('/chat');if(g===CT.gen){CT.rooms=r.rooms;chatRooms()}}catch(e){}},60000));
+ const mm=location.hash.match(/[?&]m=([\w-]+)/);if(mm)chatJump(mm[1])}
+document.addEventListener('visibilitychange',()=>{if(!$('v-chat').hidden)chatSeen()});
+
+// The writing box: text with @mentions, a photo or two, paint chips, and the message being replied to.
+function chatComposer(){
+ const T=$('chT'),A=$('chAt'),E=$('chE');
+ const grow=()=>{T.style.height='auto';T.style.height=Math.min(160,T.scrollHeight+6)+'px'};
+ const draw=()=>{
+  $('chImgs').innerHTML=CT.images.map((id,i)=>`<div><img src="${imgURL(id)}" alt=""><button class="x" type="button" data-xi="${i}" title="Remove photo">×</button></div>`).join('');
+  $('chPcs').innerHTML=CT.paints.map(k=>pchip(k,true)).join('');
+  $('chImgs').querySelectorAll('[data-xi]').forEach(b=>b.onclick=()=>{CT.images.splice(+b.dataset.xi,1);draw()});
+  $('chPcs').querySelectorAll('.x').forEach(x=>x.onclick=()=>{CT.paints=CT.paints.filter(k=>k!==x.closest('.chip').dataset.k);draw()});
+  const R=$('chRep');R.hidden=!CT.reply;if(CT.reply){R.innerHTML=`<span>↪ Replying to <b>${esc(CT.reply.author.name)}</b>: ${esc(CT.reply.body)}</span><button class="lnk" type="button">Cancel</button>`;R.querySelector('button').onclick=()=>{CT.reply=null;draw()}}};
+ CT.drawBox=draw;draw();
+ $('chF').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
+  for(const f of fs){if(CT.images.length>=C_PHOTOS){E.textContent=`Up to ${C_PHOTOS} photos a message.`;break}
+   CT.busy++;E.className='s';E.textContent='Uploading photo…';try{CT.images.push(await uploadPhoto(f));draw();E.textContent=''}catch(err){E.className='err';E.textContent=err.message}CT.busy--}};
+ $('chPB').onclick=()=>{const b=$('chPs');b.hidden=!b.hidden;if(!b.hidden&&!b.firstChild)paintSearch(b,()=>CT.paints,k=>{if(CT.paints.length>=C_PAINTS){E.textContent=`Up to ${C_PAINTS} paints a message.`;return}CT.paints.push(k);draw();b.hidden=true;b.querySelector('input[type=search]').value='';b.querySelector('.res').hidden=true;T.focus()});if(!b.hidden)b.querySelector('input').focus()};
+ // @mentions: painters online or recently talking here first, then anyone on the Painters list.
+ let at=null,hits=[],pick=0,seq=0,tm=0;
+ const close=()=>{at=null;A.hidden=true};
+ const show=()=>{if(!hits.length){A.hidden=true;return}A.hidden=false;A.innerHTML=hits.map((u,i)=>`<div class="pi${i===pick?' on':''}" data-i="${i}" style="${i===pick?'background:var(--yel);color:#1b1b1b':''}">${avHTML(u)}<span>${esc(u.name)}</span></div>`).join('');
+  A.querySelectorAll('[data-i]').forEach(x=>x.onmousedown=e=>{e.preventDefault();choose(+x.dataset.i)})};
+ const choose=i=>{const u=hits[i];if(!u||!at)return;const v=T.value,c=T.selectionStart;T.value=v.slice(0,at.start)+'@'+u.name+' '+v.slice(c);CT.ment.set(u.id,u.name);
+  const p=at.start+u.name.length+2;T.setSelectionRange(p,p);close();T.focus()};
+ const lookup=()=>{const v=T.value.slice(0,T.selectionStart),mt=v.match(/(^|\s)@([^\s@]{0,30})$/);if(!mt)return close();
+  const q=mt[2].toLowerCase();at={start:v.length-mt[2].length-1};pick=0;
+  const seen=new Map();[...CT.online,...CT.msgs.slice().reverse().map(m=>m.author)].forEach(u=>{if(u.id&&u.id!==ME.id&&!seen.has(u.id))seen.set(u.id,u)});
+  hits=[...seen.values()].filter(u=>u.name.toLowerCase().startsWith(q)).slice(0,6);show();
+  clearTimeout(tm);if(q.length>=2){const my=++seq;tm=setTimeout(async()=>{try{const d=await api('/people?q='+encodeURIComponent(q));if(my!==seq||!at)return;
+   for(const p of d.people||[])if(p.id!==ME.id&&!hits.some(h=>h.id===p.id)&&hits.length<8)hits.push({id:p.id,name:p.name,avatar:p.avatar});show()}catch(e){}},250)}};
+ T.oninput=()=>{grow();lookup()};
+ T.onblur=()=>setTimeout(close,150);
+ T.onkeydown=e=>{
+  if(!A.hidden&&hits.length){if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();pick=(pick+(e.key==='ArrowDown'?1:hits.length-1))%hits.length;show();return}
+   if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();choose(pick);return}if(e.key==='Escape'){close();return}}
+  if(e.key==='Escape'&&CT.reply){CT.reply=null;draw();return}
+  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send()}};
+ const send=async()=>{if(CT.busy){E.className='err';E.textContent='Please wait for the photo to finish uploading.';return}
+  const body=T.value.trim();if(!body&&!CT.images.length)return;
+  const mentions=[...CT.ment].filter(([,n])=>body.includes('@'+n)).map(([id])=>id);
+  $('chS').disabled=true;E.className='s';E.textContent='';
+  try{const r=await api(`/chat/rooms/${CT.room.id}/messages`,{method:'POST',body:{body,images:CT.images,paints:CT.paints,mentions,reply_to:CT.reply?.id||null}});
+   T.value='';grow();CT.images=[];CT.paints=[];CT.reply=null;CT.ment=new Map();draw();chatIncoming([r.message])}
+  catch(err){E.className='err';E.textContent=err.message}
+  $('chS').disabled=false;T.focus()};
+ $('chS').onclick=send}
+
+// Clicks on messages: reactions, replies, the action buttons, paint chips and "show it" on blocked painters.
+async function chatClick(e){
+ const t=e.target,M=t.closest('[data-m]');
+ const j=t.closest('[data-jump]');if(j){chatJump(j.dataset.jump);return}
+ if(!M)return;const id=M.dataset.m,m=CT.msgs.find(x=>x.id===id),X=M.querySelector('[data-x]'),E=$('chE');if(!m)return;
+ const fail=x=>{E.className='err';E.textContent=x.message};
+ if(t.closest('[data-sh]')){t.closest('p').hidden=true;M.querySelector('[data-bc]').hidden=false;return}
+ const ch=t.closest('.cpp .chip');if(ch){const p=BYKEY.get(ch.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}return}
+ const react=async em=>{const on=!(m.reactions[em]||[]).includes(ME.id);try{const r=await api(`/chat/messages/${id}/react`,{method:'PUT',body:{emoji:em,on}});m.reactions=r.reactions;chatDraw()}catch(x){fail(x)}};
+ const rx=t.closest('[data-rx]');if(rx){if(!CT.why)react(rx.dataset.rx);return}
+ const pk=t.closest('[data-pk]');if(pk){react(pk.dataset.pk);return}
+ const b=t.closest('[data-a]');
+ if(!b){if(matchMedia('(hover: none)').matches){document.querySelectorAll('.cmsg.act').forEach(x=>x!==M&&x.classList.remove('act'));M.classList.toggle('act')}return}
+ const a=b.dataset.a,twice=txt=>{if(b.dataset.c)return true;b.dataset.c=1;b.classList.add('cf');b.textContent=txt;setTimeout(()=>{if(b.isConnected){delete b.dataset.c;b.classList.remove('cf')}},4000);return false};
+ if(a==='reply'){CT.reply=m;CT.drawBox&&CT.drawBox();$('chT')?.focus()}
+ else if(a==='react')X.innerHTML=X.innerHTML?'':`<div class="cpick">${CT.emoji.map(em=>`<button type="button" data-pk="${em}" aria-label="React ${em}">${em}</button>`).join('')}</div>`;
+ else if(a==='report')openReport('chat',id,'#'+CT.room.name);
+ else if(a==='del'){if(twice('Sure?'))try{await api('/chat/messages/'+id,{method:'DELETE'});CT.msgs=CT.msgs.filter(x=>x.id!==id);CT.pins=CT.pins.filter(x=>x.id!==id);chatPins();chatDraw()}catch(x){fail(x)}}
+ else if(a==='pin')try{const r=await api('/chat/messages/'+id,{method:'PUT',body:{pinned:!m.pinned}});chatMerge([r.message]);CT.pins=CT.pins.filter(x=>x.id!==id);if(r.message.pinned)CT.pins.unshift(r.message);chatPins();chatDraw()}catch(x){fail(x)}
+ else if(a==='hide')try{const r=await api('/chat/messages/'+id,{method:'PUT',body:{hidden:!m.hiddenByMod}});chatMerge([r.message]);chatDraw()}catch(x){fail(x)}
+ else if(a==='mute'){X.innerHTML=`<div class="row" style="margin:4px 0"><span class="s">Mute ${esc(m.author.name)} in every room for</span>${[[1,'1 hour'],[24,'1 day'],[168,'1 week'],[0,'Lift mute']].map(([h,l])=>`<button class="btn sm${h?' dan':''}" type="button" data-mh="${h}">${l}</button>`).join('')}<span class="s" data-mm></span></div>`;
+  X.querySelectorAll('[data-mh]').forEach(x=>x.onclick=async()=>{try{const r=await api('/chat/mutes/'+m.author.id,{method:'PUT',body:{hours:+x.dataset.mh}});X.querySelector('[data-mm]').textContent=r.until?'Muted until '+new Date(r.until).toLocaleString()+'.':'Mute lifted.'}catch(err){fail(err)}})}
+ else if(a==='edit'){const C=M.querySelector('.cbody')||M.querySelector('.cc');
+  X.innerHTML=`<div class="cin" style="margin:4px 0"><textarea maxlength="1000" aria-label="Edit message">${esc(m.body)}</textarea><button class="btn sm pri" type="button" data-sv>Save</button><button class="btn sm" type="button" data-cx>Cancel</button></div>`;
+  if(M.querySelector('.cbody'))C.hidden=true;const TA=X.querySelector('textarea');TA.focus();
+  const save=async()=>{try{const r=await api('/chat/messages/'+id,{method:'PUT',body:{body:TA.value,images:m.images,paints:m.paints,mentions:m.mentions.map(x=>x.id)}});chatMerge([r.message]);chatDraw()}catch(x){fail(x)}};
+  X.querySelector('[data-sv]').onclick=save;X.querySelector('[data-cx]').onclick=()=>chatDraw();
+  TA.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}else if(e.key==='Escape')chatDraw()}}}
+
+// Admins: add, rename, reorder, set slow mode on and archive rooms.
+function chatManage(){const P=$('chMan');if(P.innerHTML){P.innerHTML='';return}
+ P.innerHTML=`<div class="panel cman"><h2>Manage rooms <span class="tag">admin</span></h2><p class="s">Lower numbers come first. Slow mode is the seconds each member waits between messages (0 = off). Archived rooms leave the list and take no new messages; only admins can still open them.</p>
+ ${CT.rooms.map(r=>`<div class="row fman" data-rm="${esc(r.id)}"><input class="inp" value="${esc(r.sort)}" type="number" aria-label="Order" style="width:70px"><input class="inp" value="${esc(r.name)}" maxlength="30" aria-label="Name" style="flex:1 1 140px"><input class="inp" value="${esc(r.topic)}" maxlength="120" aria-label="Topic" style="flex:3 1 220px">
+  <label class="s">Slow <input class="inp" value="${esc(r.slow)}" type="number" min="0" max="3600" aria-label="Slow mode seconds" style="width:70px"></label><label class="s"><input type="checkbox"${r.archived?' checked':''}> Archived</label><button class="btn sm pri" type="button" data-sv>Save</button><span class="s" data-m></span></div>`).join('')}
+ <form class="row" id="chAdd"><input class="inp" id="chAN" maxlength="30" placeholder="New room name" required style="flex:1 1 140px"><input class="inp" id="chAT" maxlength="120" placeholder="Topic" style="flex:3 1 220px"><button class="btn" type="submit">Add room</button><span class="s" id="chAM"></span></form></div>`;
+ P.querySelectorAll('[data-rm]').forEach(r=>{const id=r.dataset.rm,[so,nm,tp,sl]=r.querySelectorAll('.inp'),ar=r.querySelector('[type=checkbox]'),m=r.querySelector('[data-m]');
+  r.querySelector('[data-sv]').onclick=async()=>{m.className='s';m.textContent='Saving…';try{const x=await api('/chat/rooms/'+id,{method:'PUT',body:{sort:so.value,name:nm.value,topic:tp.value,slow:sl.value,archived:ar.checked}});
+   const i=CT.rooms.findIndex(y=>y.id===id);CT.rooms[i]={...CT.rooms[i],...x.room};if(CT.room.id===id){CT.room=x.room;chatTop()}chatRooms();m.textContent='Saved.'}catch(e){m.className='err';m.textContent=e.message}}});
+ $('chAdd').onsubmit=async e=>{e.preventDefault();try{const x=await api('/chat/rooms',{method:'POST',body:{name:$('chAN').value,topic:$('chAT').value}});location.hash='#/chat/'+x.room.id}catch(err){$('chAM').className='err';$('chAM').textContent=err.message}}}
 
 /* ---------- feedback ---------- */
 // The floating Feedback button on every page opens this popup; messages go to /api/feedback.

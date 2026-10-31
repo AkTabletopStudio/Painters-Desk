@@ -166,6 +166,23 @@ async function route(request, env, url) {
     if (m === 'PUT') return updateCategory(request, env, r[1]);
     if (m === 'DELETE') return deleteCategory(request, env, r[1]);
   }
+  if (p === '/api/chat' && m === 'GET') return chatHome(request, env);
+  if (p === '/api/chat/rooms' && m === 'POST') return chatAddRoom(request, env);
+  if (p === '/api/chat/mentions' && m === 'GET') return chatMentions(request, env);
+  if (p === '/api/chat/mentions' && m === 'POST') return readChatMentions(request, env);
+  if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)$/)) && m === 'PUT') return chatEditRoom(request, env, r[1]);
+  if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)\/ws$/)) && m === 'GET') return chatSocket(request, env, url, r[1]);
+  if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)\/read$/)) && m === 'PUT') return chatRead(request, env, r[1]);
+  if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)\/messages$/))) {
+    if (m === 'GET') return chatMessages(request, env, url, r[1]);
+    if (m === 'POST') return chatSend(request, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/chat\/messages\/([\w-]+)$/))) {
+    if (m === 'PUT') return chatUpdate(request, env, r[1]);
+    if (m === 'DELETE') return chatDelete(request, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/chat\/messages\/([\w-]+)\/react$/)) && m === 'PUT') return chatReact(request, env, r[1]);
+  if ((r = p.match(/^\/api\/chat\/mutes\/([\w-]+)$/)) && m === 'PUT') return chatMute(request, env, r[1]);
   if (p === '/api/hit' && m === 'POST') return hit(request, env, url);
   if (p === '/api/me/updates' && m === 'PUT') return setUpdates(request, env);
   if (p === '/api/unsubscribe' && (m === 'GET' || m === 'POST')) return unsubscribe(request, env, url);
@@ -295,11 +312,11 @@ async function me(request, env) {
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // messages: the Messages pages work (migration 0015).
-  // forum: the Forum pages work (migration 0018).
-  const messages = await hasMessages(env), follows = await hasFollows(env), forum = await hasForum(env);
+  // forum: the Forum pages work (migration 0018). chat: the Chat page works (migration 0019).
+  const messages = await hasMessages(env), follows = await hasFollows(env), forum = await hasForum(env), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, forum, devLogin: env.DEV_LOGIN === '1' });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, forum, chat, devLogin: env.DEV_LOGIN === '1' });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -738,6 +755,14 @@ async function deleteAccount(request, env) {
       env.DB.prepare('DELETE FROM forum_posts WHERE thread_id IN (SELECT t.id FROM forum_threads t WHERE NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = t.id AND p.deleted = 0))'),
       env.DB.prepare('DELETE FROM forum_threads WHERE NOT EXISTS (SELECT 1 FROM forum_posts p WHERE p.thread_id = forum_threads.id)'),
     ] : []),
+    // Chat: their messages go, with the reactions and mentions on them.
+    ...(await hasChat(env) ? [
+      env.DB.prepare('DELETE FROM chat_reactions WHERE user_id = ?1 OR message_id IN (SELECT id FROM chat_messages WHERE user_id = ?1)').bind(u.id),
+      env.DB.prepare('DELETE FROM chat_mentions WHERE user_id = ?1 OR message_id IN (SELECT id FROM chat_messages WHERE user_id = ?1)').bind(u.id),
+      env.DB.prepare('DELETE FROM chat_messages WHERE user_id = ?1').bind(u.id),
+      env.DB.prepare('DELETE FROM chat_reads WHERE user_id = ?1').bind(u.id),
+      env.DB.prepare('DELETE FROM chat_mutes WHERE user_id = ?1').bind(u.id),
+    ] : []),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(u.id),
@@ -1109,7 +1134,7 @@ const REPORTS_PER_HOUR = 10;
 async function addReport(request, env, url) {
   const b = await body(request);
   if (b.website) return json({ ok: true });
-  const kind = ['user', 'message', 'forum'].includes(b.kind) ? b.kind : 'recipe';
+  const kind = ['user', 'message', 'forum', 'chat'].includes(b.kind) ? b.kind : 'recipe';
   const target = typeof b.id === 'string' && RECIPE_ID.test(b.id) ? b.id : '';
   const reason = REPORT_REASONS[b.reason] ? b.reason : 'other';
   const note = str(b.note, 1000, 'Details');
@@ -1126,6 +1151,10 @@ async function addReport(request, env, url) {
     // A forum post (the opening post or a reply), by its id.
     row = await hasForum(env) && await env.DB.prepare('SELECT t.id AS thread_id, t.title AS name FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.id = ? AND p.deleted = 0').bind(target).first();
     if (!row) throw new HttpError(404, 'Post not found');
+  } else if (kind === 'chat') {
+    // A chat message, by its id. Only members can see chat, so only members can report it.
+    row = u && await hasChat(env) && await env.DB.prepare('SELECT r.id AS room_id, r.name, m.id FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id WHERE m.id = ?').bind(target).first();
+    if (!row) throw new HttpError(404, 'Message not found');
   } else row = kind === 'recipe'
     ? await env.DB.prepare("SELECT title AS name FROM recipes WHERE id = ? AND visibility = 'public'").bind(target).first()
     : await env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(target).first();
@@ -1137,7 +1166,7 @@ async function addReport(request, env, url) {
     .bind(crypto.randomUUID(), kind, target, reason, note, u?.id || null, ip, t).run();
   const to = env.FEEDBACK_TO || adminEmails(env)[0];
   if (to) {
-    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : kind === 'forum' ? `a forum post in "${row.name}" (${url.origin}/#/forum/t/${row.thread_id})` : kind === 'message' ? `a private message from ${row.name}` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
+    const what = kind === 'recipe' ? `"${row.name}" (${url.origin}/#/recipe/${target})` : kind === 'forum' ? `a forum post in "${row.name}" (${url.origin}/#/forum/t/${row.thread_id})` : kind === 'chat' ? `a chat message in #${row.name} (${url.origin}/#/chat/${row.room_id}?m=${target})` : kind === 'message' ? `a private message from ${row.name}` : `the profile of ${row.name} (${url.origin}/#/u/${target})`;
     try {
       await sendMail(env, to, `[Painters Desk] Report: ${REPORT_REASONS[reason]}`,
         `Someone reported ${what}.\n\nReason: ${REPORT_REASONS[reason]}\n\n${note ? 'Details: ' + note + '\n\n' : ''}Reported by: ${u ? u.name : 'someone not signed in'}`,
@@ -1163,6 +1192,9 @@ async function moderation(request, env) {
   const forum = await hasForum(env);
   if (forum) for (const p of (await env.DB.prepare("SELECT p.thread_id, p.images, t.title FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.images != '[]'").all()).results)
     for (const img of JSON.parse(p.images)) add(img, { type: 'forum', id: p.thread_id, title: p.title });
+  const chat = await hasChat(env);
+  if (chat) for (const m of (await env.DB.prepare("SELECT m.id, m.room_id, m.images, r.name FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id WHERE m.images != '[]'").all()).results)
+    for (const img of JSON.parse(m.images)) add(img, { type: 'chat', id: m.room_id, msg: m.id, title: m.name });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -1186,6 +1218,12 @@ async function moderation(request, env) {
       o.post = p && !p.deleted ? { id: p.id, body: p.body, first: !!p.first, hidden: !!p.hidden, created_at: p.created_at, thread: { id: p.thread_id, title: p.title } } : null;
       o.user = p?.user_id ? person(p.user_id) : null;
       o.images = o.post ? await imgById(JSON.parse(p.images || '[]')) : [];
+    } else if (r.kind === 'chat') {
+      const m = chat && await env.DB.prepare('SELECT m.id, m.user_id, m.body, m.images, m.hidden, m.created_at, r.id AS room_id, r.name FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id WHERE m.id = ?').bind(r.target_id).first();
+      o.chat = m ? { id: m.id, body: m.body, hidden: !!m.hidden, created_at: m.created_at, room: { id: m.room_id, name: m.name } } : null;
+      o.user = m?.user_id ? person(m.user_id) : null;
+      if (o.user && chat) o.user.muted = (await env.DB.prepare('SELECT until FROM chat_mutes WHERE user_id = ? AND until > ?').bind(m.user_id, now()).first())?.until || null;
+      o.images = m ? await imgById(JSON.parse(m.images || '[]')) : [];
     } else {
       o.user = person(r.target_id);
       const icon = r.kind === 'user' && users.get(r.target_id)?.avatar_image;
@@ -1215,6 +1253,8 @@ async function adminDeleteImage(request, env, id) {
   stmts.push(env.DB.prepare("UPDATE users SET avatar_image = '' WHERE avatar_image = ?").bind(id));
   if (await hasForum(env)) for (const p of (await env.DB.prepare('SELECT id, images FROM forum_posts WHERE images LIKE ?').bind(`%"${id}"%`).all()).results)
     stmts.push(env.DB.prepare('UPDATE forum_posts SET images = ? WHERE id = ?').bind(JSON.stringify(JSON.parse(p.images).filter(i => i !== id)), p.id));
+  if (await hasChat(env)) for (const m of (await env.DB.prepare('SELECT id, images FROM chat_messages WHERE images LIKE ?').bind(`%"${id}"%`).all()).results)
+    stmts.push(env.DB.prepare('UPDATE chat_messages SET images = ? WHERE id = ?').bind(JSON.stringify(JSON.parse(m.images).filter(i => i !== id)), m.id));
   await env.DB.batch(stmts);
   await deleteImages(env, [id]);
   return json({ ok: true });
@@ -1602,7 +1642,8 @@ async function inbox(request, env, url) {
 }
 
 // GET /api/inbox/unread: how many conversations have something new, for the badge on Messages (and, for admins,
-// how many open feedback conversations are waiting on the team, and how many followed forum threads have new replies).
+// how many open feedback conversations are waiting on the team, how many followed forum threads have new replies,
+// and how many chat messages @mention the viewer that they haven't seen).
 async function unreadCount(request, env) {
   if (!await hasMessages(env)) return json({ n: 0, team: 0, unavailable: true });
   const u = await currentUser(request, env), token = await anonToken(request);
@@ -1612,7 +1653,9 @@ async function unreadCount(request, env) {
   const team = u?.admin ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM conversations WHERE kind = 'feedback' AND status = 'open' AND a_last > b_read").first()).n : 0;
   const forum = u && await hasForum(env) ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM forum_follows f JOIN forum_threads t ON t.id = f.thread_id
     WHERE f.user_id = ? AND t.last_at > f.read_at`).bind(u.id).first()).n : 0;
-  return json({ n: r.n, team, forum });
+  const chat = u && await hasChat(env) ? (await env.DB.prepare(`SELECT COUNT(*) AS n FROM chat_mentions n JOIN chat_messages m ON m.id = n.message_id
+    LEFT JOIN users u ON u.id = m.user_id WHERE n.user_id = ? AND n.read = 0 AND ${CHAT_SHOWN}`).bind(u.id).first()).n : 0;
+  return json({ n: r.n, team, forum, chat });
 }
 
 // Whether u can message painter id, and if not, why. Returns { other, why } (why is '' when they can).
@@ -1884,13 +1927,13 @@ async function cleanPost(env, u, b) {
   return { text, images, paints, recipes };
 }
 
-// Delete photos no recipe, profile, portfolio or other post still uses (a photo can be reused across them).
+// Delete photos no recipe, profile, portfolio, chat message or other post still uses (a photo can be reused across them).
 async function dropUnusedImages(env, ids) {
-  const cm = await hasCommissions(env), gone = [];
+  const cm = await hasCommissions(env), ch = await hasChat(env), gone = [];
   for (const id of new Set(ids)) {
     const like = `%"${id}"%`;
     const used = await env.DB.prepare(`SELECT 1 FROM recipes WHERE cover = ?1 OR steps LIKE ?2 UNION ALL SELECT 1 FROM users WHERE avatar_image = ?1
-      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
+      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
     if (!used) gone.push(id);
   }
   await deleteImages(env, gone);
@@ -2555,4 +2598,372 @@ self.addEventListener('activate', e => e.waitUntil((async () => {
   }
 })()));
 `;
+}
+
+/* ---------- live chat ---------- */
+
+// Rooms, messages, reactions, mentions and mutes live in migration 0019 (see it for what each column means). Until it is
+// applied the Chat page says it isn't open yet. Each room has a ChatRoom Durable Object (the CHAT binding) holding the
+// open WebSocket connections: the Worker saves every change in D1 first, then hands it to the room to pass on.
+// Without the binding (or if the connection drops) the page fetches new messages every few seconds instead.
+// A message is up to CHAT_MAX characters with CHAT_PHOTOS photos, CHAT_PAINTS paints and CHAT_MENTIONS @mentions.
+// Members write at most CHAT_PER_MINUTE / CHAT_PER_HOUR / CHAT_PER_DAY messages, CHAT_GAP apart (or the room's slow mode).
+const CHAT_MAX = 1000, CHAT_PHOTOS = 4, CHAT_PAINTS = 6, CHAT_MENTIONS = 5, CHAT_PAGE = 50;
+const CHAT_GAP = 2000, CHAT_PER_MINUTE = 15, CHAT_PER_HOUR = 200, CHAT_PER_DAY = 1000, CHAT_PINS = 20;
+const CHAT_EMOJI = ['👍', '❤️', '😂', '😮', '🔥', '🎨'];
+let chatReady = false;
+async function hasChat(env) {
+  if (!chatReady) chatReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'").first());
+  return chatReady;
+}
+async function needChat(env) {
+  if (!await hasChat(env)) throw new HttpError(503, 'Chat is not open on this server yet');
+}
+
+// Chat is for members: signed-out visitors see a sign-in prompt.
+async function chatUser(request, env) {
+  await needChat(env);
+  return requireUser(request, env);
+}
+
+// Why the viewer can't write in chat right now ('' when they can).
+async function chatBlocker(env, u, room) {
+  if (u.blocked) return 'This account has been blocked from posting.';
+  if (u.email && !u.email_verified) return 'Please confirm your email before chatting. You can send the confirmation email from your account page.';
+  if (room?.archived) return 'This room is archived, so it takes no new messages.';
+  const m = await env.DB.prepare('SELECT until FROM chat_mutes WHERE user_id = ? AND until > ?').bind(u.id, now()).first();
+  if (m) return `You're muted in chat until ${new Date(m.until).toISOString().slice(0, 16).replace('T', ' ')} UTC.`;
+  return '';
+}
+
+async function loadRoom(env, id) {
+  const r = await env.DB.prepare('SELECT * FROM chat_rooms WHERE id = ?').bind(id).first();
+  if (!r) throw new HttpError(404, 'Room not found');
+  return r;
+}
+const roomOut = r => ({ id: r.id, name: r.name, topic: r.topic, sort: r.sort, slow: r.slow, archived: !!r.archived });
+
+// Hand an event to everyone with the room open. Saving already happened, so a failure here only delays it
+// until their page next catches up.
+async function chatBroadcast(env, roomId, event) {
+  if (!env.CHAT) return;
+  try {
+    await env.CHAT.get(env.CHAT.idFromName(roomId)).fetch('https://chat/broadcast', { method: 'POST', body: JSON.stringify(event) });
+  } catch (e) { console.error('Chat broadcast failed', e); }
+}
+
+// A message with its author, the message it replies to, the painters it mentions and its reactions.
+// Removed messages (by a moderator, or from a blocked account) are left out for everyone but admins.
+const CHAT_SELECT = `SELECT m.*, u.name AS author_name, ${AVATAR} AS author_avatar, u.blocked AS author_blocked,
+  r.body AS reply_body, r.hidden AS reply_hidden, ru.name AS reply_name, ru.blocked AS reply_blocked,
+  (SELECT json_group_array(json_array(x.emoji, x.user_id)) FROM chat_reactions x WHERE x.message_id = m.id) AS reacts
+  FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN chat_messages r ON r.id = m.reply_to LEFT JOIN users ru ON ru.id = r.user_id`;
+const CHAT_SHOWN = 'm.hidden = 0 AND COALESCE(u.blocked, 0) = 0';
+
+async function chatOut(env, rows) {
+  const ids = [...new Set(rows.flatMap(m => JSON.parse(m.mentions || '[]')))];
+  const names = ids.length ? new Map((await env.DB.prepare(`SELECT id, name FROM users WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()).results.map(x => [x.id, x.name])) : new Map();
+  return rows.map(m => {
+    const reactions = {};
+    for (const [e, uid] of JSON.parse(m.reacts || '[]')) (reactions[e] ||= []).push(uid);
+    const out = {
+      id: m.id, room: m.room_id, body: m.body, images: JSON.parse(m.images || '[]'), paints: JSON.parse(m.paints || '[]'),
+      mentions: JSON.parse(m.mentions || '[]').filter(id => names.has(id)).map(id => ({ id, name: names.get(id) })),
+      reactions, pinned: !!m.pinned, created_at: m.created_at, edited_at: m.edited_at || null,
+      author: m.user_id && m.author_name != null ? { id: m.user_id, name: m.author_name, avatar: m.author_avatar } : { id: null, name: '(deleted account)', avatar: null },
+      reply: m.reply_to ? (m.reply_body != null && !m.reply_hidden && !m.reply_blocked ? { id: m.reply_to, name: m.reply_name || '(deleted account)', body: m.reply_body.slice(0, 140) } : { id: m.reply_to, gone: true }) : null,
+    };
+    if (m.hidden) out.hiddenByMod = true;
+    if (m.author_blocked) out.authorBlocked = true;
+    return out;
+  });
+}
+async function chatOne(env, id) {
+  const row = await env.DB.prepare(`${CHAT_SELECT} WHERE m.id = ?`).bind(id).first();
+  return row && (await chatOut(env, [row]))[0];
+}
+
+// GET /api/chat: the rooms (unread and mention counts for the viewer), and for admins the archived ones too.
+async function chatHome(request, env) {
+  if (!await hasChat(env)) return json({ unavailable: true, rooms: [] });
+  const u = await requireUser(request, env);
+  const rows = (await env.DB.prepare(`SELECT r.*,
+    (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.room_id = r.id AND m.hidden = 0) AS last_at,
+    (SELECT read_at FROM chat_reads x WHERE x.room_id = r.id AND x.user_id = ?1) AS read_at,
+    (SELECT COUNT(*) FROM chat_mentions n WHERE n.room_id = r.id AND n.user_id = ?1 AND n.read = 0) AS mentions
+    FROM chat_rooms r ${u.admin ? '' : 'WHERE r.archived = 0'} ORDER BY r.archived, r.sort, r.name`).bind(u.id).all()).results;
+  return json({
+    rooms: rows.map(r => ({ ...roomOut(r), unread: !!r.last_at && r.last_at > (r.read_at || 0), mentions: r.mentions })),
+    why: await chatBlocker(env, u, null), emoji: CHAT_EMOJI, live: !!env.CHAT,
+  });
+}
+
+// GET /api/chat/rooms/:id/messages?before=&after=: CHAT_PAGE messages, oldest first. before (a time) pages back through
+// older ones; after catches up on what arrived since. Also the pinned messages and why the viewer can't write, if so.
+async function chatMessages(request, env, url, id) {
+  const u = await chatUser(request, env), room = await loadRoom(env, id);
+  if (room.archived && !u.admin) throw new HttpError(404, 'Room not found');
+  const before = parseInt(url.searchParams.get('before'), 10) || 0, after = parseInt(url.searchParams.get('after'), 10) || 0;
+  const shown = u.admin ? '1 = 1' : CHAT_SHOWN;
+  let rows;
+  if (after) rows = (await env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND ${shown} AND m.created_at >= ? ORDER BY m.created_at LIMIT 200`).bind(id, after).all()).results;
+  else rows = (await env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND ${shown}${before ? ' AND m.created_at < ?' : ''} ORDER BY m.created_at DESC LIMIT ${CHAT_PAGE + 1}`)
+    .bind(...(before ? [id, before] : [id])).all()).results.reverse();
+  const more = !after && rows.length > CHAT_PAGE;
+  if (more) rows = rows.slice(1);
+  const out = { room: roomOut(room), messages: await chatOut(env, rows), more };
+  if (!before && !after) {
+    out.pins = await chatOut(env, (await env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND m.pinned = 1 AND ${CHAT_SHOWN} ORDER BY m.created_at DESC LIMIT ${CHAT_PINS}`).bind(id).all()).results);
+    out.why = await chatBlocker(env, u, room);
+  }
+  return json(out);
+}
+
+// PUT /api/chat/rooms/:id/read: the viewer has the room open, so it isn't unread and its mentions are seen.
+async function chatRead(request, env, id) {
+  const u = await chatUser(request, env), t = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO chat_reads (room_id, user_id, read_at) VALUES (?1, ?2, ?3) ON CONFLICT (room_id, user_id) DO UPDATE SET read_at = ?3').bind(id, u.id, t),
+    env.DB.prepare('UPDATE chat_mentions SET read = 1 WHERE room_id = ? AND user_id = ? AND read = 0').bind(id, u.id),
+  ]);
+  return json({ ok: true });
+}
+
+async function chatLimits(env, u, room) {
+  if (u.admin) return;
+  const t = now();
+  const n = await env.DB.prepare(`SELECT COALESCE(SUM(created_at > ?1), 0) AS minute, COALESCE(SUM(created_at > ?2), 0) AS hour, COUNT(*) AS day,
+    MAX(created_at) AS last, MAX(CASE WHEN room_id = ?4 THEN created_at END) AS last_here
+    FROM chat_messages WHERE user_id = ?3 AND created_at > ?5`).bind(t - 60000, t - 3600000, u.id, room.id, t - 86400000).first();
+  if (room.slow && n.last_here && t - n.last_here < room.slow * 1000)
+    throw new HttpError(429, `Slow mode is on here: one message every ${room.slow} seconds. Try again in ${Math.ceil((room.slow * 1000 - (t - n.last_here)) / 1000)} s.`);
+  if (n.last && t - n.last < CHAT_GAP) throw new HttpError(429, 'Please wait a moment before sending another message');
+  if (n.minute >= CHAT_PER_MINUTE || n.hour >= CHAT_PER_HOUR || n.day >= CHAT_PER_DAY) throw new HttpError(429, "You've sent a lot of messages recently, please slow down");
+}
+
+// A message's text, photos (uploaded by this user), paints and mentions (painters whose @name is in the text).
+async function cleanChat(env, u, b) {
+  const text = str(b.body, CHAT_MAX, 'Message');
+  const images = [...new Set((Array.isArray(b.images) ? b.images : []).filter(i => typeof i === 'string' && IMAGE_ID.test(i)))];
+  if (images.length > CHAT_PHOTOS) throw new HttpError(400, `Too many photos (max ${CHAT_PHOTOS})`);
+  if (!text && !images.length) throw new HttpError(400, 'Write something or add a photo');
+  await checkImagesOwned(env, u, images);
+  const paints = paintKeys(b.paints, CHAT_PAINTS);
+  let ids = [...new Set((Array.isArray(b.mentions) ? b.mentions : []).filter(i => typeof i === 'string' && RECIPE_ID.test(i) && i !== u.id))].slice(0, CHAT_MENTIONS);
+  if (ids.length) {
+    const rows = (await env.DB.prepare(`SELECT id, name FROM users WHERE blocked = 0 AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()).results;
+    ids = rows.filter(r => text.includes('@' + r.name)).map(r => r.id);
+  }
+  return { text, images, paints, mentions: ids };
+}
+
+// The painters newly mentioned in a message hear about it in Messages, unless they blocked the writer.
+async function chatMention(env, u, room, id, ids, t) {
+  if (!ids.length) return;
+  const blocked = await hasMessages(env) ? new Set((await env.DB.prepare(`SELECT user_id FROM user_blocks WHERE blocked_id = ? AND user_id IN (${ids.map(() => '?').join(',')})`).bind(u.id, ...ids).all()).results.map(r => r.user_id)) : new Set();
+  const to = ids.filter(i => !blocked.has(i));
+  if (to.length) await env.DB.batch(to.map(i => env.DB.prepare('INSERT OR IGNORE INTO chat_mentions (message_id, user_id, room_id, created_at) VALUES (?, ?, ?, ?)').bind(id, i, room.id, t)));
+}
+
+// POST /api/chat/rooms/:id/messages { body, images, paints, mentions, reply_to }: send a message.
+async function chatSend(request, env, id) {
+  const u = await chatUser(request, env), b = await body(request), room = await loadRoom(env, id);
+  if (b.website) return json({ ok: true });
+  const why = await chatBlocker(env, u, room);
+  if (why) throw new HttpError(403, why);
+  const c = await cleanChat(env, u, b);
+  let reply = null;
+  if (b.reply_to) {
+    reply = await env.DB.prepare('SELECT id FROM chat_messages WHERE id = ? AND room_id = ? AND hidden = 0').bind(String(b.reply_to), id).first();
+    if (!reply) throw new HttpError(400, 'The message you replied to is gone');
+  }
+  await chatLimits(env, u, room);
+  const mid = crypto.randomUUID(), t = now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO chat_messages (id, room_id, user_id, body, reply_to, images, paints, mentions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(mid, id, u.id, c.text, reply?.id || null, JSON.stringify(c.images), JSON.stringify(c.paints), JSON.stringify(c.mentions), t),
+    env.DB.prepare('INSERT INTO chat_reads (room_id, user_id, read_at) VALUES (?1, ?2, ?3) ON CONFLICT (room_id, user_id) DO UPDATE SET read_at = ?3').bind(id, u.id, t),
+  ]);
+  await chatMention(env, u, room, mid, c.mentions, t);
+  const m = await chatOne(env, mid);
+  await chatBroadcast(env, id, { type: 'msg', m });
+  return json({ message: m }, 201);
+}
+
+async function loadChatMsg(env, id) {
+  const m = await env.DB.prepare('SELECT m.*, r.archived FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id WHERE m.id = ?').bind(id).first();
+  if (!m) throw new HttpError(404, 'Message not found');
+  return m;
+}
+
+// PUT /api/chat/messages/:id: the author edits { body, images, paints, mentions }; admins { pinned } or { hidden }.
+async function chatUpdate(request, env, id) {
+  const u = await chatUser(request, env), b = await body(request), m = await loadChatMsg(env, id);
+  if (b.pinned !== undefined || b.hidden !== undefined) {
+    if (!u.admin) throw new HttpError(403, 'Admins only');
+    if (b.pinned !== undefined) await env.DB.prepare('UPDATE chat_messages SET pinned = ? WHERE id = ?').bind(b.pinned ? 1 : 0, id).run();
+    if (b.hidden !== undefined) await env.DB.prepare('UPDATE chat_messages SET hidden = ? WHERE id = ?').bind(b.hidden ? 1 : 0, id).run();
+    const out = await chatOne(env, id);
+    // A removed message disappears from everyone's screen; a restored one comes back in place.
+    await chatBroadcast(env, m.room_id, b.hidden ? { type: 'delete', id } : { type: 'update', m: out });
+    return json({ message: out });
+  }
+  if (m.user_id !== u.id) throw new HttpError(403, 'You can only edit your own messages');
+  const why = await chatBlocker(env, u, { archived: m.archived });
+  if (why) throw new HttpError(403, why);
+  const c = await cleanChat(env, u, b), old = JSON.parse(m.images || '[]'), before = new Set(JSON.parse(m.mentions || '[]'));
+  await env.DB.prepare('UPDATE chat_messages SET body = ?, images = ?, paints = ?, mentions = ?, edited_at = ? WHERE id = ?')
+    .bind(c.text, JSON.stringify(c.images), JSON.stringify(c.paints), JSON.stringify(c.mentions), now(), id).run();
+  await chatMention(env, u, { id: m.room_id }, id, c.mentions.filter(i => !before.has(i)), now());
+  await dropUnusedImages(env, old.filter(i => !c.images.includes(i)));
+  const out = await chatOne(env, id);
+  if (!m.hidden) await chatBroadcast(env, m.room_id, { type: 'update', m: out });
+  return json({ message: out });
+}
+
+// DELETE /api/chat/messages/:id (author or admin): gone for good, with its reactions and mentions.
+async function chatDelete(request, env, id) {
+  const u = await chatUser(request, env), m = await loadChatMsg(env, id);
+  if (m.user_id !== u.id && !u.admin) throw new HttpError(403, 'You can only delete your own messages');
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM chat_reactions WHERE message_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM chat_mentions WHERE message_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM chat_messages WHERE id = ?').bind(id),
+  ]);
+  await dropUnusedImages(env, JSON.parse(m.images || '[]'));
+  await chatBroadcast(env, m.room_id, { type: 'delete', id });
+  return json({ ok: true });
+}
+
+// PUT /api/chat/messages/:id/react { emoji, on }: add or take back one of the CHAT_EMOJI reactions.
+async function chatReact(request, env, id) {
+  const u = await chatUser(request, env), b = await body(request), m = await loadChatMsg(env, id);
+  if (!CHAT_EMOJI.includes(b.emoji)) throw new HttpError(400, 'Pick one of the reactions');
+  if (m.hidden) throw new HttpError(404, 'Message not found');
+  if (b.on === false) await env.DB.prepare('DELETE FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?').bind(id, u.id, b.emoji).run();
+  else {
+    if (u.blocked) throw new HttpError(403, 'This account has been blocked from posting');
+    await env.DB.prepare('INSERT OR IGNORE INTO chat_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)').bind(id, u.id, b.emoji, now()).run();
+  }
+  const reactions = {};
+  for (const r of (await env.DB.prepare('SELECT emoji, user_id FROM chat_reactions WHERE message_id = ? ORDER BY created_at').bind(id).all()).results) (reactions[r.emoji] ||= []).push(r.user_id);
+  await chatBroadcast(env, m.room_id, { type: 'react', id, reactions });
+  return json({ reactions });
+}
+
+// GET /api/chat/mentions: unread @mentions of the viewer, for Messages. POST marks them all read.
+async function chatMentions(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasChat(env)) return json({ mentions: [] });
+  const rows = (await env.DB.prepare(`${CHAT_SELECT} JOIN chat_mentions n ON n.message_id = m.id WHERE n.user_id = ? AND n.read = 0 AND ${CHAT_SHOWN} ORDER BY m.created_at DESC LIMIT 30`).bind(u.id).all()).results;
+  const rooms = new Map((await env.DB.prepare('SELECT id, name FROM chat_rooms').all()).results.map(r => [r.id, r.name]));
+  return json({ mentions: (await chatOut(env, rows)).map(m => ({ ...m, room_name: rooms.get(m.room) || m.room })) });
+}
+async function readChatMentions(request, env) {
+  const u = await requireUser(request, env);
+  await needChat(env);
+  await env.DB.prepare('UPDATE chat_mentions SET read = 1 WHERE user_id = ?').bind(u.id).run();
+  return json({ ok: true });
+}
+
+// GET /api/chat/rooms/:id/ws: the live connection. The browser sends its session cookie with it; the Worker checks it
+// and tells the room who connected (the room is only reachable through here).
+async function chatSocket(request, env, url, id) {
+  if (request.headers.get('Upgrade') !== 'websocket') throw new HttpError(426, 'Expected a WebSocket');
+  // Browsers send Origin with WebSockets but other sites' pages can open them too, so only this site's own pages may.
+  if (request.headers.get('Origin') !== url.origin) return json({ error: 'Bad origin' }, 403);
+  if (!env.CHAT) throw new HttpError(503, 'Live chat is not set up on this server');
+  const u = await chatUser(request, env), room = await loadRoom(env, id);
+  if (room.archived && !u.admin) throw new HttpError(404, 'Room not found');
+  const h = new Headers(request.headers);
+  h.set('X-Chat-User', JSON.stringify({ id: u.id, name: u.name, avatar: u.avatar || null }));
+  return env.CHAT.get(env.CHAT.idFromName(id)).fetch(new Request('https://chat/ws', { headers: h }));
+}
+
+// Admins: POST /api/chat/rooms { name, topic } adds a room; PUT /api/chat/rooms/:id { name, topic, sort, slow, archived } edits one.
+const roomName = v => str(v, 30, 'Name', { required: true }).toLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}_-]/gu, '').replace(/-+/g, '-');
+async function chatAddRoom(request, env) {
+  await needChat(env);
+  await requireAdmin(request, env);
+  const b = await body(request), name = roomName(b.name), topic = str(b.topic, 120, 'Topic');
+  if (!name) throw new HttpError(400, 'Name is required');
+  if (await env.DB.prepare('SELECT 1 FROM chat_rooms WHERE lower(name) = lower(?)').bind(name).first()) throw new HttpError(400, 'There is already a room with that name');
+  let id = slug(name) || 'room';
+  if (await env.DB.prepare('SELECT 1 FROM chat_rooms WHERE id = ?').bind(id).first()) id += '-' + crypto.randomUUID().slice(0, 4);
+  const max = await env.DB.prepare('SELECT MAX(sort) AS m FROM chat_rooms').first();
+  await env.DB.prepare('INSERT INTO chat_rooms (id, name, topic, sort, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, name, topic, (max.m || 0) + 10, now()).run();
+  return json({ room: roomOut(await loadRoom(env, id)) }, 201);
+}
+async function chatEditRoom(request, env, id) {
+  await needChat(env);
+  await requireAdmin(request, env);
+  const b = await body(request);
+  await loadRoom(env, id);
+  const sets = [], args = [];
+  if (b.name !== undefined) {
+    const name = roomName(b.name);
+    if (!name) throw new HttpError(400, 'Name is required');
+    if (await env.DB.prepare('SELECT 1 FROM chat_rooms WHERE lower(name) = lower(?) AND id != ?').bind(name, id).first()) throw new HttpError(400, 'There is already a room with that name');
+    sets.push('name = ?'); args.push(name);
+  }
+  if (b.topic !== undefined) { sets.push('topic = ?'); args.push(str(b.topic, 120, 'Topic')); }
+  if (b.sort !== undefined) { sets.push('sort = ?'); args.push(Math.max(0, Math.min(9999, parseInt(b.sort, 10) || 0))); }
+  if (b.slow !== undefined) { sets.push('slow = ?'); args.push(Math.max(0, Math.min(3600, parseInt(b.slow, 10) || 0))); }
+  if (b.archived !== undefined) { sets.push('archived = ?'); args.push(b.archived ? 1 : 0); }
+  if (sets.length) await env.DB.prepare(`UPDATE chat_rooms SET ${sets.join(', ')} WHERE id = ?`).bind(...args, id).run();
+  const room = roomOut(await loadRoom(env, id));
+  await chatBroadcast(env, id, { type: 'room', room });
+  return json({ room });
+}
+
+// Admins: PUT /api/chat/mutes/:userId { hours } mutes a painter in every room for that long (0 lifts it).
+async function chatMute(request, env, id) {
+  await needChat(env);
+  const admin = await requireAdmin(request, env), b = await body(request);
+  if (id === admin.id) throw new HttpError(400, "You can't mute yourself");
+  if (!await env.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind(id).first()) throw new HttpError(404, 'Painter not found');
+  const hours = Math.max(0, Math.min(24 * 365, Number(b.hours) || 0));
+  if (!hours) await env.DB.prepare('DELETE FROM chat_mutes WHERE user_id = ?').bind(id).run();
+  else await env.DB.prepare('INSERT INTO chat_mutes (user_id, until, by_id, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (user_id) DO UPDATE SET until = ?2, by_id = ?3, created_at = ?4')
+    .bind(id, now() + hours * 3600000, admin.id, now()).run();
+  return json({ ok: true, until: hours ? now() + hours * 3600000 : null });
+}
+
+// One live chat room. It keeps no data of its own: it holds the open connections (asleep between messages, thanks to
+// WebSocket hibernation), tells everyone who is online, and passes on what the Worker hands it.
+export class ChatRoom {
+  constructor(ctx) {
+    this.ctx = ctx;
+    // Browsers ping every so often to keep the connection open; the answer doesn't need to wake the room.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+  }
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === '/broadcast') {
+      this.send(await request.text());
+      return new Response('ok');
+    }
+    const user = JSON.parse(request.headers.get('X-Chat-User') || 'null');
+    if (!user) return new Response('No user', { status: 400 });
+    const [client, server] = Object.values(new WebSocketPair());
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment(user);
+    this.presence();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  send(text, skip) {
+    for (const ws of this.ctx.getWebSockets()) if (ws !== skip) try { ws.send(text); } catch (e) {}
+  }
+  // Everyone with the room open, once each however many tabs they have.
+  presence(skip) {
+    const seen = new Map();
+    for (const ws of this.ctx.getWebSockets()) if (ws !== skip) { const u = ws.deserializeAttachment(); if (u && !seen.has(u.id)) seen.set(u.id, u); }
+    this.send(JSON.stringify({ type: 'presence', users: [...seen.values()] }), skip);
+  }
+  webSocketMessage() {}
+  webSocketClose(ws) {
+    try { ws.close(1000); } catch (e) {}
+    this.presence(ws);
+  }
+  webSocketError(ws) { this.presence(ws); }
 }
