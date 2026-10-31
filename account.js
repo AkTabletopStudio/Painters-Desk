@@ -13,7 +13,7 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum','chat'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
@@ -65,7 +65,7 @@ async function loadMe(){
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
  $('mine').hidden=!ME;
- $('chatN').hidden=!(INFO&&INFO.chat&&API);
+ chatStart();
  $('fbBtn').hidden=!API;
  // Feedback sent from this browser while signed out moves to the account on sign-in.
  if(ME&&INFO.messages&&fbToken()){try{await api('/inbox/claim',{method:'POST'});localStorage.removeItem(FBT)}catch(e){}}
@@ -75,10 +75,13 @@ async function loadMe(){
 
 /* ---------- router ---------- */
 // First-time visitors (nothing remembered in this browser) land on the welcome page and get the theme picker; everyone else on the wheel.
-let FIRST=false;try{FIRST=!localStorage.getItem('pd-seen')&&!localStorage.getItem(WK);localStorage.setItem('pd-seen','1')}catch(e){}
+let FIRST=false,PREV='';try{FIRST=!localStorage.getItem('pd-seen')&&!localStorage.getItem(WK);localStorage.setItem('pd-seen','1')}catch(e){}
 function route(){
  if(FIRST){FIRST=false;if(!location.hash.replace(/^#\/?/,''))history.replaceState(null,'','#/welcome');window.pdThemeFirst&&pdThemeFirst()}
  const h=location.hash.replace(/^#\/?/,''),[v,id,sub]=h.split(/[/?]/);
+ // #/chat links open the chat popup over the page you were on.
+ if(v==='chat'){const mm=h.match(/[?&]m=([\w-]+)/);history.replaceState(null,'',PREV||'#/');if(!id&&!mm&&CT.open)chatHide();else chatShow(id,mm?.[1]);if(PREV)return;return route()}
+ PREV=location.hash||'#/';
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
  if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'))view='wheel';
@@ -100,8 +103,6 @@ function route(){
  else if(view==='inbox')renderInbox(id,sub);
  else if(view==='people')renderPeople();
  else if(view==='forum')renderForum(id,sub);
- else if(view==='chat')renderChat(id);
- if(view!=='chat')chatClose();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -1092,15 +1093,14 @@ async function forumThread(id){
  const h=location.hash.match(/[?&]p=([\w-]+)/);if(h)document.getElementById('post-'+h[1])?.scrollIntoView({block:'center'})}
 
 /* ---------- live chat ---------- */
-// #/chat opens the room you had open last (else the first); #/chat/<room> one room, and ?m=<message> scrolls to a message.
-// New messages, edits, reactions and who's online arrive over a WebSocket to the room. Without one (or while it
-// reconnects) new messages are fetched every few seconds instead.
-const C_PHOTOS=4,C_PAINTS=6,CHK='pd-chat';
-const CT={gen:0,ws:null,timers:[],rooms:[],room:null,msgs:[],pins:[],more:false,online:[],blocks:new Set(),emoji:[],why:'',live:false,
- reply:null,images:[],paints:[],ment:new Map(),busy:0,readT:0};
-function chatClose(){CT.gen++;CT.timers.forEach(t=>{clearTimeout(t);clearInterval(t)});CT.timers=[];
- if(CT.ws){CT.ws.onclose=CT.ws.onmessage=null;try{CT.ws.close()}catch(e){}CT.ws=null}}
-const cNotOpen='<h1>Chat</h1><p class="s">Chat isn\'t open yet. Check back soon.</p>';
+// Chat is a popup over whatever page you're on, opened and closed with 💬 in the nav. It stays open from page to page
+// until it is closed. Links to #/chat/<room>?m=<message> (from Messages) open it on that message and leave the page as it was.
+// Every signed-in page keeps one live connection to the site. It brings new messages, edits and reactions in any room,
+// and says who is online: signed in, with the site open and used in the last ACTIVE_MS (a tab hidden for over
+// HIDDEN_MS counts as away). While the connection is down, the open popup fetches new messages every 5 seconds instead.
+const C_PHOTOS=4,C_PAINTS=6,CHK='pd-chat',CHO='pd-chat-open',ACTIVE_MS=5*60000,HIDDEN_MS=60000;
+const CT={ready:false,open:false,pending:null,ws:null,poll:0,rooms:[],room:null,msgs:[],pins:[],more:false,online:[],blocks:new Set(),emoji:[],why:'',live:false,
+ reply:null,images:[],paints:[],ment:new Map(),busy:0,readT:0,seq:0,act:Date.now(),hidAt:0,state:'active'};
 const chatTime=t=>{const d=new Date(t),hm=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?hm:d.toLocaleDateString([],{month:'short',day:'numeric'})+', '+hm};
 // The text with links, and the painters it mentions picked out (you in yellow).
 function chatBody(m){let h=linkify(m.body);for(const x of m.mentions){const t='@'+esc(x.name);h=h.split(t).join(`<span class="at${x.id===ME.id?' me':''}">${t}</span>`)}return h}
@@ -1110,7 +1110,7 @@ function chatMsgHTML(m,prev){
  const rx=Object.entries(m.reactions).map(([e,ids])=>`<button class="crx${ids.includes(ME.id)?' on':''}" type="button" data-rx="${e}" aria-pressed="${ids.includes(ME.id)}" title="${ids.length} ${ids.length===1?'reaction':'reactions'}">${e} ${ids.length}</button>`).join('');
  const content=`${m.reply?`<button class="crep" type="button" data-jump="${esc(m.reply.id)}">↪ ${m.reply.gone?'<i>a deleted message</i>':`<b>${esc(m.reply.name)}</b> ${esc(m.reply.body)}`}</button>`:''}
   ${m.body?`<div class="cbody">${chatBody(m)}${m.edited_at?' <span class="s">(edited)</span>':''}</div>`:''}
-  ${m.images.length?`<div class="cimgs">${m.images.map(id=>`<a href="${imgURL(id)}" target="_blank"><img src="${imgURL(id)}" alt="Photo" loading="lazy"></a>`).join('')}</div>`:''}
+  ${m.images.length?`<div class="cimgs">${m.images.map(id=>`<a href="${imgURL(id)}" target="_blank" data-big="${esc(id)}"><img src="${imgURL(id)}" alt="Photo" loading="lazy"></a>`).join('')}</div>`:''}
   ${m.paints.length?`<div class="chips cpp">${m.paints.map(k=>pchip(k)).join('')}</div>`:''}
   ${rx?`<div class="crxs">${rx}</div>`:''}`;
  const b=(a,t,i)=>`<button type="button" data-a="${a}" title="${t}" aria-label="${t}">${i}</button>`;
@@ -1126,21 +1126,24 @@ function chatMsgHTML(m,prev){
 const nearEnd=L=>L.scrollHeight-L.scrollTop-L.clientHeight<80;
 // Redraw the messages, keeping the reader where they were (or at the bottom if they were there).
 function chatDraw(stick){
- const L=$('chList');if(!L)return;const end=stick||nearEnd(L),fromEnd=L.scrollHeight-L.scrollTop;
+ const L=$('chList');if(!L||!CT.room)return;const end=stick||nearEnd(L),fromEnd=L.scrollHeight-L.scrollTop;
  L.innerHTML=(CT.more?'<p style="text-align:center"><button class="btn sm" type="button" id="chOld">Load older messages</button></p>':'')
   +(CT.msgs.length?CT.msgs.map((m,i)=>chatMsgHTML(m,CT.msgs[i-1])).join(''):`<p class="s" style="padding:0 14px">No messages in #${esc(CT.room.name)} yet. Say hello!</p>`)
   +'<button class="btn sm pri cnew" type="button" id="chNew" hidden>New messages ↓</button>';
- L.scrollTop=end?L.scrollHeight:L.scrollHeight-fromEnd;
+ L.scrollTop=end?L.scrollHeight:L.scrollHeight-fromEnd;CT.stick=end;
  if($('chOld'))$('chOld').onclick=()=>chatOlder()}
-function chatPins(){const B=$('chPinB'),P=$('chPins');if(!B)return;B.hidden=!CT.pins.length;B.textContent=`📌 ${CT.pins.length} pinned`;
+function chatPins(){const B=$('chPinB'),P=$('chPins');if(!B)return;B.hidden=!CT.pins.length;B.textContent=`📌 ${CT.pins.length}`;B.title=`${CT.pins.length} pinned`;
  P.innerHTML=CT.pins.map(m=>`<button type="button" data-jump="${esc(m.id)}"><b>${esc(m.author.name)}:</b> ${esc(m.body||'(photo)')}</button>`).join('');if(!CT.pins.length)P.hidden=true}
 function chatOnline(){const O=$('chOn'),B=$('chOnB');if(!O)return;
  O.innerHTML=`<h2>Online now · ${CT.online.length}</h2>${CT.online.map(u=>`<a class="u" href="#/u/${esc(u.id)}">${avHTML(u)}<span>${esc(u.name)}</span></a>`).join('')||`<p class="s">${CT.live?'Connecting…':'Live updates are off, so new messages arrive every few seconds.'}</p>`}`;
  B.textContent=`● ${CT.online.length} online`}
 function chatRooms(){const R=$('chRooms');if(!R)return;
- R.innerHTML=CT.rooms.filter(r=>!r.archived||ME.admin).map(r=>`<a class="croom${r.id===CT.room?.id?' on':''}${r.unread&&r.id!==CT.room?.id?' new':''}${r.archived?' arch':''}" href="#/chat/${esc(r.id)}"><span># ${esc(r.name)}</span>${r.id!==CT.room?.id&&r.mentions?`<b class="bdg" title="Mentions you">${r.mentions}</b>`:r.unread&&r.id!==CT.room?.id?'<i title="New messages"></i>':''}</a>`).join('')}
-function chatTop(){const T=$('chTop');if(!T)return;const r=CT.room;
- T.querySelector('b').textContent='# '+r.name;T.querySelector('.s').textContent=(r.topic||'')+(r.slow?` · slow mode: one message every ${r.slow} s`:'')+(r.archived?' · archived':'')}
+ R.innerHTML=CT.rooms.filter(r=>!r.archived||ME.admin).map(r=>`<button type="button" class="croom${r.id===CT.room?.id?' on':''}${r.unread&&r.id!==CT.room?.id?' new':''}${r.archived?' arch':''}" data-room="${esc(r.id)}"><span># ${esc(r.name)}</span>${r.id!==CT.room?.id&&r.mentions?`<b class="bdg" title="Mentions you">${r.mentions}</b>`:r.unread&&r.id!==CT.room?.id?'<i title="New messages"></i>':''}</button>`).join('')}
+function chatTop(){const r=CT.room,T=$('chTopic');if(!T||!r)return;
+ $('chName').textContent='# '+r.name;T.textContent=(r.topic||'')+(r.slow?` · slow mode: one message every ${r.slow} s`:'')+(r.archived?' · archived':'');T.title=T.textContent}
+// The 💬 button shows how many messages mention you, or a dot when a room has something new.
+function chatBadge(){const D=$('chatD');if(!D)return;const rs=CT.rooms.filter(r=>!r.archived&&!(CT.open&&r.id===CT.room?.id)),n=rs.reduce((a,r)=>a+(r.mentions||0),0),u=rs.some(r=>r.unread);
+ D.hidden=!n&&!u;D.textContent=n?(n>99?'99+':n):'';D.classList.toggle('dot',!n&&u);$('chatN').title=n?`Chat (${n} mention${n===1?'':'s'})`:u?'Chat (new messages)':'Chat'}
 
 // Add or replace messages (from the server, the live connection or a catch-up), oldest first.
 function chatMerge(list){let added=false;for(const m of list){const i=CT.msgs.findIndex(x=>x.id===m.id);if(i>=0)CT.msgs[i]=m;else{CT.msgs.push(m);added=true}}
@@ -1149,77 +1152,104 @@ function chatIncoming(list){const L=$('chList');if(!L)return;const end=nearEnd(L
  if(!chatMerge(list))return chatDraw();chatDraw(end||mine);
  if(!(end||mine))$('chNew').hidden=false,$('chNew').onclick=()=>{L.scrollTop=L.scrollHeight;$('chNew').hidden=true};
  chatSeen()}
-// The room counts as read while it is open and the page is visible (sent at most every few seconds).
-function chatSeen(){if(document.visibilityState!=='visible'||!CT.room)return;const t=Date.now();if(t-CT.readT<4000)return;CT.readT=t;
- api(`/chat/rooms/${CT.room.id}/read`,{method:'PUT'}).then(()=>unread()).catch(()=>{})}
-async function chatCatchUp(){const g=CT.gen,last=CT.msgs[CT.msgs.length-1];if(!last)return;
- try{const d=await api(`/chat/rooms/${CT.room.id}/messages?after=${last.created_at}`);if(g===CT.gen&&d.messages.length)chatIncoming(d.messages)}catch(e){}}
+// The room counts as read while the popup shows it and the page is visible (sent at most every few seconds).
+function chatSeen(){if(!CT.open||document.visibilityState!=='visible'||!CT.room)return;const r=CT.rooms.find(x=>x.id===CT.room.id);if(r){r.unread=false;r.mentions=0}chatBadge();
+ const t=Date.now();if(t-CT.readT<4000)return;CT.readT=t;api(`/chat/rooms/${CT.room.id}/read`,{method:'PUT'}).then(()=>unread()).catch(()=>{})}
+async function chatCatchUp(){const s=CT.seq,last=CT.msgs[CT.msgs.length-1];if(!CT.open||!CT.room)return;
+ try{const d=await api(`/chat/rooms/${CT.room.id}/messages${last?'?after='+last.created_at:''}`);if(s===CT.seq&&d.messages.length)chatIncoming(d.messages)}catch(e){}}
+function chatPolling(on){clearInterval(CT.poll);CT.poll=on?setInterval(chatCatchUp,5000):0}
 
-// The live connection, reconnecting with a growing wait; while it is down, catch up every 5 seconds.
+// The site-wide live connection, reconnecting with a growing wait.
 function chatConnect(tries=0){
- const g=CT.gen;if(!CT.live)return chatPoll();
- let ws;try{ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/chat/rooms/${encodeURIComponent(CT.room.id)}/ws`)}catch(e){return chatPoll()}
- CT.ws=ws;let poll=0,ping=0;
- ws.onopen=()=>{tries=0;clearInterval(poll);ping=setInterval(()=>{try{ws.send('ping')}catch(e){}},30000);CT.timers.push(ping);chatCatchUp()};
- ws.onmessage=e=>{if(g!==CT.gen||e.data==='pong')return;let d;try{d=JSON.parse(e.data)}catch(x){return}
-  if(d.type==='msg')chatIncoming([d.m]);
+ if(!CT.live||!ME)return chatPolling(true);
+ let ws;try{ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/chat/ws`)}catch(e){return chatPolling(true)}
+ CT.ws=ws;let ping=0;
+ ws.onopen=()=>{tries=0;chatPolling(false);ping=setInterval(()=>{try{ws.send('ping')}catch(e){}},30000);if(CT.state!=='active')ws.send(CT.state);chatCatchUp()};
+ ws.onmessage=e=>{if(e.data==='pong')return;let d;try{d=JSON.parse(e.data)}catch(x){return}
+  const here=CT.open&&d.room===CT.room?.id;
+  if(d.type==='presence'){CT.online=d.users;chatOnline()}
+  else if(d.type==='msg'){if(here)return chatIncoming([d.m]);const r=CT.rooms.find(x=>x.id===d.room);if(!r||d.m.author.id===ME.id)return;
+   r.unread=true;if(d.m.mentions.some(x=>x.id===ME.id)){r.mentions=(r.mentions||0)+1;unread()}chatRooms();chatBadge()}
+  else if(!here){if(d.type==='room'){const i=CT.rooms.findIndex(r=>r.id===d.room);if(i>=0){CT.rooms[i]={...CT.rooms[i],...d.room};chatRooms()}}}
   else if(d.type==='update'){chatMerge([d.m]);CT.pins=CT.pins.filter(x=>x.id!==d.m.id);if(d.m.pinned)CT.pins.unshift(d.m);chatPins();chatDraw()}
   else if(d.type==='delete'){CT.msgs=CT.msgs.filter(x=>x.id!==d.id);CT.pins=CT.pins.filter(x=>x.id!==d.id);chatPins();chatDraw()}
   else if(d.type==='react'){const m=CT.msgs.find(x=>x.id===d.id);if(m){m.reactions=d.reactions;chatDraw()}}
-  else if(d.type==='presence'){CT.online=d.users;chatOnline()}
   else if(d.type==='room'){CT.room=d.room;const i=CT.rooms.findIndex(r=>r.id===d.room.id);if(i>=0)CT.rooms[i]={...CT.rooms[i],...d.room};chatTop();chatRooms()}};
- ws.onclose=()=>{clearInterval(ping);if(g!==CT.gen)return;CT.ws=null;CT.online=[];chatOnline();
-  poll=setInterval(chatCatchUp,5000);CT.timers.push(poll);
-  CT.timers.push(setTimeout(()=>{clearInterval(poll);if(g===CT.gen)chatConnect(tries+1)},Math.min(30000,1000*2**tries)))}}
-function chatPoll(){const t=setInterval(chatCatchUp,5000);CT.timers.push(t)}
+ ws.onclose=()=>{clearInterval(ping);if(CT.ws!==ws)return;CT.ws=null;CT.online=[];chatOnline();chatPolling(true);
+  CT.retry=setTimeout(()=>{if(CT.ws===null&&ME)chatConnect(tries+1)},Math.min(30000,1000*2**tries))}}
+function chatDisconnect(){clearTimeout(CT.retry);chatPolling(false);const ws=CT.ws;CT.ws=null;if(ws){ws.onclose=ws.onmessage=null;try{ws.close()}catch(e){}}}
+// Active or away: any click, key, scroll or touch counts as activity.
+function chatState(){const t=Date.now(),s=(document.hidden&&t-CT.hidAt>HIDDEN_MS)||t-CT.act>ACTIVE_MS?'idle':'active';
+ if(s!==CT.state){CT.state=s;try{CT.ws?.readyState===1&&CT.ws.send(s)}catch(e){}}}
+['pointerdown','keydown','scroll','touchstart','mousemove'].forEach(ev=>addEventListener(ev,()=>{CT.act=Date.now();if(CT.state!=='active')chatState()},{passive:true,capture:true}));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)CT.hidAt=Date.now();else{CT.act=Date.now();chatSeen()}chatState()});
+setInterval(chatState,20000);
 
-async function chatOlder(){const first=CT.msgs[0];if(!first)return;
- const d=await api(`/chat/rooms/${CT.room.id}/messages?before=${first.created_at}`);CT.more=d.more;CT.msgs=[...d.messages,...CT.msgs.filter(m=>!d.messages.some(x=>x.id===m.id))];
- const L=$('chList'),fromEnd=L.scrollHeight-L.scrollTop;chatDraw();L.scrollTop=L.scrollHeight-fromEnd}
-// Scroll to a message, loading older pages until it turns up (up to 10 pages back).
-async function chatJump(id){for(let i=0;i<10&&!CT.msgs.some(m=>m.id===id)&&CT.more;i++)try{await chatOlder()}catch(e){break}
- const el=document.getElementById('cm-'+id);if(!el){$('chE').textContent='That message is no longer here.';return}
- el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),2000)}
+// After sign-in (or sign-out): the rooms and the 💬 badge, the live connection, and the popup if it was left open.
+async function chatStart(){
+ chatDisconnect();CT.ready=false;
+ $('chatN').hidden=!(INFO&&INFO.chat&&API);
+ if(!ME||!INFO?.chat){CT.rooms=[];chatBadge();if(CT.open||CT.pending)chatShell();return}
+ try{const d=await api('/chat');if(d.unavailable)return;Object.assign(CT,{rooms:d.rooms,emoji:d.emoji,live:d.live,why:d.why});
+  if(INFO.messages)CT.blocks=new Set((await api('/blocks')).blocks.map(b=>b.id))}catch(e){return}
+ CT.ready=true;chatBadge();chatConnect();
+ let open=false;try{open=localStorage.getItem(CHO)==='1'}catch(e){}
+ if(CT.pending){const p=CT.pending;CT.pending=null;chatShow(p.room,p.m)}else if(open)chatShow()}
 
-async function renderChat(id){
- chatClose();const el=$('v-chat'),g=CT.gen;
- if(!INFO.chat){el.innerHTML=cNotOpen;return}
- if(!ME){el.innerHTML='<h1>Chat</h1><p class="s">Live chat rooms for painters: ask quick questions, share what\'s on your desk and hang out.</p>'+signInLink('Chat is for members.');return}
- el.innerHTML='<h1>Chat</h1><p class="s">Loading…</p>';
- let d;try{d=await api('/chat');if(INFO.messages&&!CT.blocks.size)CT.blocks=new Set((await api('/blocks')).blocks.map(b=>b.id))}catch(e){el.innerHTML=`<h1>Chat</h1><p class="err">${esc(e.message)}</p>`;return}
- if(g!==CT.gen)return;
- if(d.unavailable){el.innerHTML=cNotOpen;return}
- Object.assign(CT,{rooms:d.rooms,emoji:d.emoji,live:d.live,readT:0,reply:null,images:[],paints:[],ment:new Map(),online:[]});
- let last='';try{last=localStorage.getItem(CHK)||''}catch(e){}
- const room=d.rooms.find(r=>r.id===id)||d.rooms.find(r=>r.id===last&&!r.archived)||d.rooms.find(r=>!r.archived);
- if(!room){el.innerHTML='<h1>Chat</h1><p class="s">There are no chat rooms yet.</p>';return}
- if(room.id!==id)history.replaceState(null,'','#/chat/'+room.id);
- try{localStorage.setItem(CHK,room.id)}catch(e){}
- let m;try{m=await api(`/chat/rooms/${room.id}/messages`)}catch(e){el.innerHTML=`<h1>Chat</h1><p class="err">${esc(e.message)}</p>`;return}
- if(g!==CT.gen)return;
- Object.assign(CT,{room:m.room,msgs:m.messages,more:m.more,pins:m.pins,why:m.why});
- el.innerHTML=`<div class="chat"><aside class="crooms"><h2>Rooms</h2><div id="chRooms"></div>${ME.admin?'<button class="lnk" type="button" id="chManB">Manage rooms</button>':''}</aside>
- <section class="cmain"><div class="ctop" id="chTop"><b></b><span class="s"></span><button class="btn sm" type="button" id="chPinB" hidden></button><button class="btn sm" type="button" id="chOnB" aria-controls="chOn"></button></div>
- <div class="cpins" id="chPins" hidden></div><div class="clist" id="chList" aria-live="polite"></div>
- <div class="cbox" id="chBox">${CT.why?`<p class="s">${esc(CT.why)}</p>`:`<div class="creply" id="chRep" hidden></div><div class="catt"><div class="pgal ed" id="chImgs"></div><div class="chips" id="chPcs"></div></div>
-  <div class="fps" id="chPs" hidden></div><div class="res cat" id="chAt" hidden></div>
-  <div class="cin"><label class="btn sm" title="Add a photo" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden id="chF"></label><button class="btn sm" type="button" id="chPB" title="Tag a paint" aria-label="Tag a paint">🎨</button>
-  <textarea id="chT" rows="1" maxlength="1000" placeholder="Message #${esc(CT.room.name)}" aria-label="Message"></textarea><button class="btn pri" type="button" id="chS">Send</button></div>`}
-  <p class="s" id="chE" role="alert"></p></div></section>
- <aside class="conl" id="chOn"></aside></div><div id="chMan"></div>
- <p class="s">Be kind, and keep to the <a href="terms" target="_blank">site rules</a>. Hover or tap a message to reply, react or report it. Type @ to mention someone.</p>`;
- chatRooms();chatTop();chatPins();chatOnline();chatDraw(true);chatSeen();
+// Open the popup (on a room, and scrolled to a message), or close it.
+function chatShow(room,m){
+ if(!CT.ready&&ME&&INFO?.chat){CT.pending={room,m};return}
+ CT.open=true;try{localStorage.setItem(CHO,'1')}catch(e){}document.body.classList.add('chat-on');$('chatN').classList.add('on');
+ chatShell();if(ME&&CT.ready)chatRoom(room||CT.room?.id,m)}
+function chatHide(){CT.open=false;CT.seq++;try{localStorage.setItem(CHO,'0')}catch(e){}$('chatPop').hidden=true;document.body.classList.remove('chat-on');$('chatN').classList.remove('on');
+ if(!CT.ws)chatPolling(false);chatBadge()}
+window.pdChat=()=>CT.open?chatHide():chatShow();
+// The popup's frame: header, rooms, messages and the writing box (filled in by chatRoom).
+function chatShell(){const P=$('chatPop');P.hidden=false;
+ if(!ME||!INFO?.chat){P.innerHTML=`<div class="cphead"><b class="cpn">💬 Chat</b><span class="sp"></span><button class="cpx" type="button" id="chX" aria-label="Close chat">×</button></div>
+  <div class="cpmsg">${INFO?.chat?`<p>Live chat rooms for painters: ask quick questions, share what's on your desk and see who's around.</p>${signInLink('Chat is for members.')}`:'<p class="s">Chat isn\'t open yet. Check back soon.</p>'}</div>`;
+  $('chX').onclick=chatHide;$('chatPop').querySelector('a')?.addEventListener('click',chatHide);return}
+ if(P.dataset.on)return;P.dataset.on=1;
+ P.innerHTML=`<div class="cphead"><b class="cpn" id="chName">💬 Chat</b><span class="s cptp" id="chTopic"></span><span class="sp"></span><button class="btn sm" type="button" id="chPinB" hidden></button>
+ <button class="btn sm" type="button" id="chOnB" aria-controls="chOn"></button><button class="cpx" type="button" id="chX" aria-label="Close chat" title="Close chat">×</button></div>
+ <div class="cpbody"><aside class="crooms"><div id="chRooms"></div>${ME.admin?'<button class="lnk" type="button" id="chManB">Manage rooms</button>':''}</aside>
+ <section class="cmain"><div class="cpins" id="chPins" hidden></div><div class="clist" id="chList" aria-live="polite"><p class="s" style="padding:0 14px">Loading…</p></div><div class="cbox" id="chBox"></div></section></div>
+ <aside class="conl" id="chOn"></aside><div class="cman" id="chMan" hidden></div>`;
+ chatRooms();chatOnline();
+ $('chX').onclick=chatHide;
  $('chPinB').onclick=()=>{$('chPins').hidden=!$('chPins').hidden};
  $('chOnB').onclick=()=>$('chOn').classList.toggle('open');
+ $('chOn').onclick=e=>{if(e.target.closest('a'))$('chOn').classList.remove('open')};
  $('chPins').onclick=e=>{const b=e.target.closest('[data-jump]');if(b)chatJump(b.dataset.jump)};
+ $('chRooms').onclick=e=>{const b=e.target.closest('[data-room]');if(b)chatRoom(b.dataset.room)};
  $('chList').onclick=chatClick;
- if($('chManB'))$('chManB').onclick=()=>chatManage();
+ // Photos finish loading after the list is drawn: keep a reader who was at the bottom there.
+ {const L=$('chList');L.onscroll=()=>{CT.stick=nearEnd(L)};L.addEventListener('load',e=>{if(e.target.tagName==='IMG'&&CT.stick)L.scrollTop=L.scrollHeight},true)}
+ if($('chManB'))$('chManB').onclick=()=>chatManage()}
+// Show a room: its newest messages, pins and the writing box.
+async function chatRoom(id,mid){
+ let last='';try{last=localStorage.getItem(CHK)||''}catch(e){}
+ const room=CT.rooms.find(r=>r.id===id)||CT.rooms.find(r=>r.id===last&&!r.archived)||CT.rooms.find(r=>!r.archived);
+ if(!room){$('chList').innerHTML='<p class="s" style="padding:0 14px">There are no chat rooms yet.</p>';return}
+ try{localStorage.setItem(CHK,room.id)}catch(e){}
+ const s=++CT.seq;
+ if(CT.room?.id!==room.id)Object.assign(CT,{reply:null,images:[],paints:[],ment:new Map(),readT:0});
+ let m;try{m=await api(`/chat/rooms/${room.id}/messages`)}catch(e){$('chList').innerHTML=`<p class="err" style="padding:0 14px">${esc(e.message)}</p>`;return}
+ if(s!==CT.seq)return;
+ Object.assign(CT,{room:m.room,msgs:m.messages,more:m.more,pins:m.pins,why:m.why});
+ chatRooms();chatTop();chatPins();chatDraw(true);chatSeen();
+ $('chBox').innerHTML=CT.why?`<p class="s">${esc(CT.why)}</p><p class="s" id="chE" role="alert"></p>`:`<div class="creply" id="chRep" hidden></div><div class="catt"><div class="pgal ed" id="chImgs"></div><div class="chips" id="chPcs"></div></div>
+  <div class="fps" id="chPs" hidden></div><div class="res cat" id="chAt" hidden></div>
+  <div class="cin"><label class="btn sm" title="Add a photo" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden id="chF"></label><button class="btn sm" type="button" id="chPB" title="Tag a paint" aria-label="Tag a paint">🎨</button>
+  <textarea id="chT" rows="1" maxlength="1000" placeholder="Message #${esc(CT.room.name)}" aria-label="Message"></textarea><button class="btn pri" type="button" id="chS">Send</button></div>
+  <p class="s" id="chE" role="alert"></p>`;
  if(!CT.why)chatComposer();
- chatConnect();
- // The room list (unread dots and mention counts) refreshes every minute.
- CT.timers.push(setInterval(async()=>{try{const r=await api('/chat');if(g===CT.gen){CT.rooms=r.rooms;chatRooms()}}catch(e){}},60000));
- const mm=location.hash.match(/[?&]m=([\w-]+)/);if(mm)chatJump(mm[1])}
-document.addEventListener('visibilitychange',()=>{if(!$('v-chat').hidden)chatSeen()});
+ if(!CT.ws)chatPolling(true);
+ if(mid)chatJump(mid);else if(matchMedia('(hover: hover)').matches)$('chT')?.focus()}
+// Photos in chat open large over the page; a tap anywhere (or Esc) closes them.
+$('chImg').onclick=()=>$('chImg').close();
+// On phones the popup covers the page, so following a link out of it (a profile) closes it.
+$('chatPop').addEventListener('click',e=>{if(innerWidth<=700&&e.target.closest('a[href^="#/"]'))chatHide()});
 
 // The writing box: text with @mentions, a photo or two, paint chips, and the message being replied to.
 function chatComposer(){
@@ -1273,7 +1303,8 @@ async function chatClick(e){
  if(!M)return;const id=M.dataset.m,m=CT.msgs.find(x=>x.id===id),X=M.querySelector('[data-x]'),E=$('chE');if(!m)return;
  const fail=x=>{E.className='err';E.textContent=x.message};
  if(t.closest('[data-sh]')){t.closest('p').hidden=true;M.querySelector('[data-bc]').hidden=false;return}
- const ch=t.closest('.cpp .chip');if(ch){const p=BYKEY.get(ch.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}return}
+ const big=t.closest('[data-big]');if(big){e.preventDefault();$('chImgI').src=imgURL(big.dataset.big);$('chImg').showModal();return}
+ const ch=t.closest('.cpp .chip');if(ch){const p=BYKEY.get(ch.dataset.k);if(p){if(innerWidth<=700)chatHide();showOnWheel([p.k]);setTimeout(()=>showP(p),0)}return}
  const react=async em=>{const on=!(m.reactions[em]||[]).includes(ME.id);try{const r=await api(`/chat/messages/${id}/react`,{method:'PUT',body:{emoji:em,on}});m.reactions=r.reactions;chatDraw()}catch(x){fail(x)}};
  const rx=t.closest('[data-rx]');if(rx){if(!CT.why)react(rx.dataset.rx);return}
  const pk=t.closest('[data-pk]');if(pk){react(pk.dataset.pk);return}
@@ -1296,15 +1327,16 @@ async function chatClick(e){
   TA.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}else if(e.key==='Escape')chatDraw()}}}
 
 // Admins: add, rename, reorder, set slow mode on and archive rooms.
-function chatManage(){const P=$('chMan');if(P.innerHTML){P.innerHTML='';return}
- P.innerHTML=`<div class="panel cman"><h2>Manage rooms <span class="tag">admin</span></h2><p class="s">Lower numbers come first. Slow mode is the seconds each member waits between messages (0 = off). Archived rooms leave the list and take no new messages; only admins can still open them.</p>
+function chatManage(){const P=$('chMan');if(!P.hidden){P.hidden=true;return}P.hidden=false;
+ P.innerHTML=`<div class="row"><h2 style="flex:1">Manage rooms <span class="tag">admin</span></h2><button class="cpx" type="button" id="chManX" aria-label="Close">×</button></div><p class="s">Lower numbers come first. Slow mode is the seconds each member waits between messages (0 = off). Archived rooms leave the list and take no new messages; only admins can still open them.</p>
  ${CT.rooms.map(r=>`<div class="row fman" data-rm="${esc(r.id)}"><input class="inp" value="${esc(r.sort)}" type="number" aria-label="Order" style="width:70px"><input class="inp" value="${esc(r.name)}" maxlength="30" aria-label="Name" style="flex:1 1 140px"><input class="inp" value="${esc(r.topic)}" maxlength="120" aria-label="Topic" style="flex:3 1 220px">
   <label class="s">Slow <input class="inp" value="${esc(r.slow)}" type="number" min="0" max="3600" aria-label="Slow mode seconds" style="width:70px"></label><label class="s"><input type="checkbox"${r.archived?' checked':''}> Archived</label><button class="btn sm pri" type="button" data-sv>Save</button><span class="s" data-m></span></div>`).join('')}
- <form class="row" id="chAdd"><input class="inp" id="chAN" maxlength="30" placeholder="New room name" required style="flex:1 1 140px"><input class="inp" id="chAT" maxlength="120" placeholder="Topic" style="flex:3 1 220px"><button class="btn" type="submit">Add room</button><span class="s" id="chAM"></span></form></div>`;
+ <form class="row" id="chAdd"><input class="inp" id="chAN" maxlength="30" placeholder="New room name" required style="flex:1 1 140px"><input class="inp" id="chAT" maxlength="120" placeholder="Topic" style="flex:3 1 220px"><button class="btn" type="submit">Add room</button><span class="s" id="chAM"></span></form>`;
+ $('chManX').onclick=()=>{P.hidden=true};
  P.querySelectorAll('[data-rm]').forEach(r=>{const id=r.dataset.rm,[so,nm,tp,sl]=r.querySelectorAll('.inp'),ar=r.querySelector('[type=checkbox]'),m=r.querySelector('[data-m]');
   r.querySelector('[data-sv]').onclick=async()=>{m.className='s';m.textContent='Saving…';try{const x=await api('/chat/rooms/'+id,{method:'PUT',body:{sort:so.value,name:nm.value,topic:tp.value,slow:sl.value,archived:ar.checked}});
    const i=CT.rooms.findIndex(y=>y.id===id);CT.rooms[i]={...CT.rooms[i],...x.room};if(CT.room.id===id){CT.room=x.room;chatTop()}chatRooms();m.textContent='Saved.'}catch(e){m.className='err';m.textContent=e.message}}});
- $('chAdd').onsubmit=async e=>{e.preventDefault();try{const x=await api('/chat/rooms',{method:'POST',body:{name:$('chAN').value,topic:$('chAT').value}});location.hash='#/chat/'+x.room.id}catch(err){$('chAM').className='err';$('chAM').textContent=err.message}}}
+ $('chAdd').onsubmit=async e=>{e.preventDefault();try{const x=await api('/chat/rooms',{method:'POST',body:{name:$('chAN').value,topic:$('chAT').value}});CT.rooms.push({...x.room,unread:false,mentions:0});P.hidden=true;chatRoom(x.room.id)}catch(err){$('chAM').className='err';$('chAM').textContent=err.message}}}
 
 /* ---------- feedback ---------- */
 // The floating Feedback button on every page opens this popup; messages go to /api/feedback.

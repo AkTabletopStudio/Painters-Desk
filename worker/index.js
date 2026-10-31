@@ -171,7 +171,7 @@ async function route(request, env, url) {
   if (p === '/api/chat/mentions' && m === 'GET') return chatMentions(request, env);
   if (p === '/api/chat/mentions' && m === 'POST') return readChatMentions(request, env);
   if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)$/)) && m === 'PUT') return chatEditRoom(request, env, r[1]);
-  if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)\/ws$/)) && m === 'GET') return chatSocket(request, env, url, r[1]);
+  if (p === '/api/chat/ws' && m === 'GET') return chatSocket(request, env, url);
   if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)\/read$/)) && m === 'PUT') return chatRead(request, env, r[1]);
   if ((r = p.match(/^\/api\/chat\/rooms\/([\w-]+)\/messages$/))) {
     if (m === 'GET') return chatMessages(request, env, url, r[1]);
@@ -2603,9 +2603,10 @@ self.addEventListener('activate', e => e.waitUntil((async () => {
 /* ---------- live chat ---------- */
 
 // Rooms, messages, reactions, mentions and mutes live in migration 0019 (see it for what each column means). Until it is
-// applied the Chat page says it isn't open yet. Each room has a ChatRoom Durable Object (the CHAT binding) holding the
-// open WebSocket connections: the Worker saves every change in D1 first, then hands it to the room to pass on.
-// Without the binding (or if the connection drops) the page fetches new messages every few seconds instead.
+// applied the chat popup says it isn't open yet. One ChatRoom Durable Object (the CHAT binding, named 'site') holds a
+// WebSocket from every signed-in page that is open, so it knows who is online and can pass on new messages in any
+// room: the Worker saves every change in D1 first, then hands it over. Without the binding (or while the connection
+// is down) the open popup fetches new messages every few seconds instead.
 // A message is up to CHAT_MAX characters with CHAT_PHOTOS photos, CHAT_PAINTS paints and CHAT_MENTIONS @mentions.
 // Members write at most CHAT_PER_MINUTE / CHAT_PER_HOUR / CHAT_PER_DAY messages, CHAT_GAP apart (or the room's slow mode).
 const CHAT_MAX = 1000, CHAT_PHOTOS = 4, CHAT_PAINTS = 6, CHAT_MENTIONS = 5, CHAT_PAGE = 50;
@@ -2643,12 +2644,13 @@ async function loadRoom(env, id) {
 }
 const roomOut = r => ({ id: r.id, name: r.name, topic: r.topic, sort: r.sort, slow: r.slow, archived: !!r.archived });
 
-// Hand an event to everyone with the room open. Saving already happened, so a failure here only delays it
+// Hand an event about a room to every signed-in page. Saving already happened, so a failure here only delays it
 // until their page next catches up.
+const chatHub = env => env.CHAT.get(env.CHAT.idFromName('site'));
 async function chatBroadcast(env, roomId, event) {
   if (!env.CHAT) return;
   try {
-    await env.CHAT.get(env.CHAT.idFromName(roomId)).fetch('https://chat/broadcast', { method: 'POST', body: JSON.stringify(event) });
+    await chatHub(env).fetch('https://chat/broadcast', { method: 'POST', body: JSON.stringify({ ...event, room: roomId }) });
   } catch (e) { console.error('Chat broadcast failed', e); }
 }
 
@@ -2866,18 +2868,17 @@ async function readChatMentions(request, env) {
   return json({ ok: true });
 }
 
-// GET /api/chat/rooms/:id/ws: the live connection. The browser sends its session cookie with it; the Worker checks it
-// and tells the room who connected (the room is only reachable through here).
-async function chatSocket(request, env, url, id) {
+// GET /api/chat/ws: the live connection every signed-in page keeps open. The browser sends its session cookie with it;
+// the Worker checks it and tells the hub who connected (the hub is only reachable through here).
+async function chatSocket(request, env, url) {
   if (request.headers.get('Upgrade') !== 'websocket') throw new HttpError(426, 'Expected a WebSocket');
   // Browsers send Origin with WebSockets but other sites' pages can open them too, so only this site's own pages may.
   if (request.headers.get('Origin') !== url.origin) return json({ error: 'Bad origin' }, 403);
   if (!env.CHAT) throw new HttpError(503, 'Live chat is not set up on this server');
-  const u = await chatUser(request, env), room = await loadRoom(env, id);
-  if (room.archived && !u.admin) throw new HttpError(404, 'Room not found');
+  const u = await chatUser(request, env);
   const h = new Headers(request.headers);
   h.set('X-Chat-User', JSON.stringify({ id: u.id, name: u.name, avatar: u.avatar || null }));
-  return env.CHAT.get(env.CHAT.idFromName(id)).fetch(new Request('https://chat/ws', { headers: h }));
+  return chatHub(env).fetch(new Request('https://chat/ws', { headers: h }));
 }
 
 // Admins: POST /api/chat/rooms { name, topic } adds a room; PUT /api/chat/rooms/:id { name, topic, sort, slow, archived } edits one.
@@ -2929,12 +2930,16 @@ async function chatMute(request, env, id) {
   return json({ ok: true, until: hours ? now() + hours * 3600000 : null });
 }
 
-// One live chat room. It keeps no data of its own: it holds the open connections (asleep between messages, thanks to
-// WebSocket hibernation), tells everyone who is online, and passes on what the Worker hands it.
+// The live side of chat. It keeps no data of its own: it holds a connection from every signed-in page (asleep between
+// events, thanks to WebSocket hibernation), keeps the list of who is online, and passes on what the Worker hands it.
+// A page says 'active' or 'idle' as its visitor comes and goes; online means at least one active page. Changes to the
+// list are sent at most every PRESENCE_WAIT, so a burst of page loads makes one update.
+// (The class is still called ChatRoom because the deployed Durable Object kept that name.)
+const PRESENCE_WAIT = 2000;
 export class ChatRoom {
   constructor(ctx) {
     this.ctx = ctx;
-    // Browsers ping every so often to keep the connection open; the answer doesn't need to wake the room.
+    // Pages ping every so often to keep the connection open; the answer doesn't need to wake the hub.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
   async fetch(request) {
@@ -2947,23 +2952,38 @@ export class ChatRoom {
     if (!user) return new Response('No user', { status: 400 });
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment(user);
-    this.presence();
+    server.serializeAttachment({ ...user, active: true });
+    // The new page gets the list straight away; everyone else with the next update.
+    server.send(JSON.stringify({ type: 'presence', users: this.online() }));
+    await this.changed();
     return new Response(null, { status: 101, webSocket: client });
   }
-  send(text, skip) {
-    for (const ws of this.ctx.getWebSockets()) if (ws !== skip) try { ws.send(text); } catch (e) {}
+  send(text) {
+    for (const ws of this.ctx.getWebSockets()) try { ws.send(text); } catch (e) {}
   }
-  // Everyone with the room open, once each however many tabs they have.
-  presence(skip) {
+  // Everyone with at least one active page, once each however many tabs they have.
+  online(skip) {
     const seen = new Map();
-    for (const ws of this.ctx.getWebSockets()) if (ws !== skip) { const u = ws.deserializeAttachment(); if (u && !seen.has(u.id)) seen.set(u.id, u); }
-    this.send(JSON.stringify({ type: 'presence', users: [...seen.values()] }), skip);
+    for (const ws of this.ctx.getWebSockets()) if (ws !== skip) {
+      const u = ws.deserializeAttachment();
+      if (u?.active && !seen.has(u.id)) seen.set(u.id, { id: u.id, name: u.name, avatar: u.avatar });
+    }
+    return [...seen.values()];
   }
-  webSocketMessage() {}
-  webSocketClose(ws) {
+  async changed() {
+    if (await this.ctx.storage.getAlarm() == null) await this.ctx.storage.setAlarm(Date.now() + PRESENCE_WAIT);
+  }
+  alarm() { this.send(JSON.stringify({ type: 'presence', users: this.online() })); }
+  async webSocketMessage(ws, msg) {
+    if (msg !== 'active' && msg !== 'idle') return;
+    const u = ws.deserializeAttachment();
+    if (!u || u.active === (msg === 'active')) return;
+    ws.serializeAttachment({ ...u, active: msg === 'active' });
+    await this.changed();
+  }
+  async webSocketClose(ws) {
     try { ws.close(1000); } catch (e) {}
-    this.presence(ws);
+    await this.changed();
   }
-  webSocketError(ws) { this.presence(ws); }
+  async webSocketError() { await this.changed(); }
 }
