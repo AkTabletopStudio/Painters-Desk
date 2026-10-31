@@ -257,9 +257,10 @@ async function renderProfile(id){
  const el=$('v-profile');el.innerHTML='<p class="s">Loading…</p>';
  let d;try{d=await api('/users/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
  const p=d.profile,mine=ME&&ME.id===p.id;
- el.innerHTML=`<div class="prof">${avHTML(p,'av huge')}<div><h1>${esc(p.name)}</h1><p class="s">Painting with us since ${fmtDate(p.created_at)}</p>
+ const F=p.follows,fc=n=>`${n} follower${n===1?'':'s'}`;
+ el.innerHTML=`<div class="prof">${avHTML(p,'av huge')}<div><h1>${esc(p.name)}</h1><p class="s">Painting with us since ${fmtDate(p.created_at)}${F?` · <span id="pFc">${fc(F.followers)}</span> · following ${F.following}`:''}</p>
  ${p.link?`<p><a href="${esc(p.link)}" target="_blank" rel="noopener nofollow ugc">${esc(p.link.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,''))}</a></p>`:''}
- ${mine?'<a class="btn" href="#/account">Edit profile</a>':`${p.canMessage&&INFO.messages?`<p><a class="btn" href="#/inbox/u/${esc(p.id)}">✉ Message</a></p>`:''}<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
+ ${mine?'<a class="btn" href="#/account">Edit profile</a>':`${(F&&INFO.follows)||(p.canMessage&&INFO.messages)?`<p class="row">${F&&INFO.follows?(ME?`<button class="btn${F.followed?'':' pri'}" type="button" id="pFol" aria-pressed="${F.followed}">${F.followed?'✓ Following':'+ Follow'}</button>`:'<a class="btn pri" href="#/account">+ Follow</a>'):''}${p.canMessage&&INFO.messages?`<a class="btn" href="#/inbox/u/${esc(p.id)}">✉ Message</a>`:''}</p>`:''}<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
  ${p.bio?`<div class="panel"><div class="steps">${esc(p.bio)}</div></div>`:''}
  ${d.commission?commissionHTML(d.commission,p,mine):''}
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
@@ -268,6 +269,10 @@ async function renderProfile(id){
  el.querySelectorAll('#fp .chip').forEach(c=>c.onclick=()=>{const q=BYKEY.get(c.dataset.k);if(q){showOnWheel([q.k]);setTimeout(()=>showP(q),0)}});
  if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites);
  if($('pRep'))$('pRep').onclick=()=>openReport('user',p.id,p.name);
+ if($('pFol'))$('pFol').onclick=async()=>{const b=$('pFol');b.disabled=true;
+  try{const r=await api('/follows/'+encodeURIComponent(p.id),{method:'PUT',body:{on:!F.followed}});Object.assign(F,r);
+   b.textContent=F.followed?'✓ Following':'+ Follow';b.classList.toggle('pri',!F.followed);b.setAttribute('aria-pressed',F.followed);$('pFc').textContent=fc(F.followers)}
+  catch(e){b.insertAdjacentHTML('afterend',`<span class="err">${esc(e.message)}</span>`)}b.disabled=false};
  if($('cmMsg'))$('cmMsg').onclick=()=>openMessage(p)}
 
 /* ---------- my paints ---------- */
@@ -355,7 +360,7 @@ async function renderRecipes(){
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint),kb=(k,t)=>`<button class="btn${rKind===k?' pri':''}" data-kd="${k}" type="button">${t}</button>`;
  el.innerHTML=`<h1>Recipes &amp; tutorials</h1>
  <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p><p><span class="tag topen">Commission painters</span> Painters who take commissions, with photos of their work. <a href="#/painters">Find a painter →</a></p><p><span class="tag">Painters</span> Everyone sharing on the site. Search by name, see their work and send a message. <a href="#/people">Browse painters →</a></p></div>
- <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new/recipe">+ New recipe</a><a class="btn pri" href="#/new">+ New tutorial</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
+ <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new/recipe">+ New recipe</a><a class="btn pri" href="#/new">+ New tutorial</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
  <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}<a class="btn" href="#/painters">🖌 Commission painters</a><a class="btn" href="#/people">👥 Find painters</a>${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
  <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
@@ -366,7 +371,7 @@ async function renderRecipes(){
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&kind=${rKind}&paint=${encodeURIComponent(rPaint)}&q=${encodeURIComponent($('rq').value)}`);
    L.innerHTML=d.recipes.length?d.recipes.map(cardHTML).join('')
-    :`<p class="s">${rScope==='mine'?`You have not written any ${what} yet.`:rScope==='saved'?'Nothing saved yet. Press ☆ Save on a tutorial or recipe to keep it here.':`No public ${what} yet. Be the first to share one.`}</p>`}
+    :`<p class="s">${rScope==='mine'?`You have not written any ${what} yet.`:rScope==='saved'?'Nothing saved yet. Press ☆ Save on a tutorial or recipe to keep it here.':rScope==='following'?'Nothing here yet. <a href="#/people">Find painters</a> and press Follow on their profile to see their new work here.':`No public ${what} yet. Be the first to share one.`}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  load()}
 
@@ -756,23 +761,25 @@ async function renderAdmin(){
 
 /* ---------- painters list ---------- */
 // #/people: everyone who shares on the site, searchable by name. Most active (most public work) or newest first.
-let pSort='active';
+let pSort='active',pRel='';
 async function renderPeople(){
- const el=$('v-people'),sb=(k,t)=>`<button class="btn${pSort===k?' pri':''}" data-ps="${k}" type="button">${t}</button>`;
+ if(!(ME&&INFO.follows))pRel='';
+ const el=$('v-people'),sb=(k,t)=>`<button class="btn${!pRel&&pSort===k?' pri':''}" data-ps="${k}" type="button">${t}</button>`,rb=(k,t)=>`<button class="btn${pRel===k?' pri':''}" data-pr="${k}" type="button">${t}</button>`;
  el.innerHTML=`<p><a href="#/recipes">← Tutorials &amp; recipes</a></p><h1>Painters</h1>
  <p class="s">Painters sharing on The Painters Desk. Open a profile to see their tutorials, recipes and favourite paints${INFO.messages?', or send them a message':''}.${ME?' You can hide yourself from this list on your <a href="#/account">account page</a>.':''}</p>
- <div class="row">${sb('active','Most active')}${sb('new','Newest')}<span class="sp" style="flex:1"></span><a class="btn" href="#/painters">🖌 Commission painters</a></div>
+ <div class="row">${sb('active','Most active')}${sb('new','Newest')}${ME&&INFO.follows?rb('following','Following')+rb('followers','Followers'):''}<span class="sp" style="flex:1"></span><a class="btn" href="#/painters">🖌 Commission painters</a></div>
  <div class="bar"><input id="pq" type="search" placeholder="Search by name" aria-label="Search painters by name"></div><div id="plist" class="cards"><p class="s">Loading…</p></div>
  <div class="row" id="pMoreR" hidden><button class="btn" type="button" id="pMore">Show more</button></div>`;
- el.querySelectorAll('[data-ps]').forEach(b=>b.onclick=()=>{pSort=b.dataset.ps;renderPeople()});
+ el.querySelectorAll('[data-ps]').forEach(b=>b.onclick=()=>{pSort=b.dataset.ps;pRel='';renderPeople()});
+ el.querySelectorAll('[data-pr]').forEach(b=>b.onclick=()=>{pRel=b.dataset.pr;renderPeople()});
  const n=(c,w)=>c?`<span class="tag">${c} ${w}${c===1?'':'s'}</span>`:'';
  const card=p=>`<a class="card ppl" href="#/u/${esc(p.id)}"><h3>${avHTML(p)}${esc(p.name)}</h3>
   ${n(p.tutorials,'tutorial')}${n(p.recipes,'recipe')}${n(p.palettes,'palette')}${p.commissions?'<span class="tag topen">Takes commissions</span>':''}
   ${p.bio?`<div class="s pclip">${esc(p.bio)}</div>`:''}<div class="s">Joined ${fmtDate(p.created_at)}</div></a>`;
  let off=0,seq=0;
  async function load(more){const L=$('plist'),my=++seq;if(!more)off=0;
-  try{const d=await api(`/people?sort=${pSort}&offset=${off}&q=${encodeURIComponent($('pq').value)}`);if(my!==seq)return;
-   const h=d.people.map(card).join('');L.innerHTML=more?L.innerHTML+h:(h||`<p class="s">${$('pq').value?'No painters match that name.':'No painters yet.'}</p>`);
+  try{const d=await api(`/people?sort=${pSort}&rel=${pRel}&offset=${off}&q=${encodeURIComponent($('pq').value)}`);if(my!==seq)return;
+   const h=d.people.map(card).join('');L.innerHTML=more?L.innerHTML+h:(h||`<p class="s">${$('pq').value?'No painters match that name.':pRel==='following'?'You aren\'t following anyone yet. Open a painter and press Follow.':pRel==='followers'?'Nobody follows you yet. Share a tutorial or recipe to get noticed.':'No painters yet.'}</p>`);
    off+=d.people.length;$('pMoreR').hidden=!d.more}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  let t=0;$('pq').oninput=()=>{clearTimeout(t);t=setTimeout(()=>load(false),250)};
