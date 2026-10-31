@@ -96,6 +96,7 @@ async function route(request, env, url) {
   if (p === '/api/painters' && m === 'GET') return listPainters(request, env, url);
   if (p === '/api/people' && m === 'GET') return listPeople(request, env, url);
   if (p === '/api/me/findable' && m === 'PUT') return setFindable(request, env);
+  if ((r = p.match(/^\/api\/follows\/([\w-]+)$/)) && m === 'PUT') return setFollow(request, env, r[1]);
   if ((r = p.match(/^\/api\/painters\/([\w-]+)\/message$/)) && m === 'POST') return messagePainter(request, env, url, r[1]);
   if (p === '/api/me/commission' && m === 'GET') return getCommission(request, env);
   if (p === '/api/me/commission' && m === 'PUT') return saveCommission(request, env);
@@ -268,10 +269,10 @@ async function me(request, env) {
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // messages: the Messages pages work (migration 0015).
-  const messages = await hasMessages(env);
+  const messages = await hasMessages(env), follows = await hasFollows(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, devLogin: env.DEV_LOGIN === '1' });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, devLogin: env.DEV_LOGIN === '1' });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -669,6 +670,7 @@ async function getProfile(request, env, id) {
   const commission = blocked ? null : await commissionFor(env, id);
   // canMessage: shows the Message button. The checks that depend on who is asking happen when they open it.
   p.canMessage = !blocked && await hasMessages(env) && !!(await env.DB.prepare('SELECT dm FROM users WHERE id = ?').bind(id).first()).dm;
+  p.follows = blocked ? null : await followInfo(env, id, await currentUser(request, env));
   return json({ profile: p, recipes: rows.map(listItem), commission });
 }
 
@@ -692,6 +694,7 @@ async function deleteAccount(request, env) {
       env.DB.prepare('DELETE FROM conversations WHERE a_id = ?1 OR b_id = ?1').bind(u.id),
       env.DB.prepare('DELETE FROM user_blocks WHERE user_id = ?1 OR blocked_id = ?1').bind(u.id),
     ] : []),
+    ...(await hasFollows(env) ? [env.DB.prepare('DELETE FROM follows WHERE user_id = ?1 OR followed_id = ?1').bind(u.id)] : []),
     env.DB.prepare('DELETE FROM images WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM passwords WHERE user_id = ?').bind(u.id),
@@ -766,7 +769,7 @@ const recipeOut = r => ({
 });
 
 async function listRecipes(request, env, url) {
-  const scope = ['mine', 'saved'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'public';
+  const scope = ['mine', 'saved', 'following'].includes(url.searchParams.get('scope')) ? url.searchParams.get('scope') : 'public';
   const q = str(url.searchParams.get('q') || '', 100, 'Search');
   const where = [], args = [];
   let from = 'recipes r', order = 'r.updated_at DESC';
@@ -776,6 +779,12 @@ async function listRecipes(request, env, url) {
     const uid = (await requireUser(request, env)).id;
     from = 'saves s JOIN recipes r ON r.id = s.recipe_id'; order = 's.created_at DESC';
     where.push("s.user_id = ? AND (r.visibility = 'public' OR r.user_id = ?)"); args.push(uid, uid);
+  }
+  else if (scope === 'following') {
+    // Public work by the painters you follow, newest first.
+    const uid = (await requireUser(request, env)).id;
+    if (!await hasFollows(env)) return json({ recipes: [] });
+    where.push("r.visibility = 'public' AND r.user_id IN (SELECT followed_id FROM follows WHERE user_id = ?)"); args.push(uid);
   }
   else where.push("r.visibility = 'public'");
   if (q) { where.push('(r.title LIKE ? OR r.summary LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
@@ -1365,6 +1374,43 @@ async function messagePainter(request, env, url, id) {
   return json({ ok: true });
 }
 
+/* ---------- following ---------- */
+
+// The table comes with migration 0017. Until it is applied the Follow button and the Following lists are hidden.
+// A painter can follow FOLLOWS_PER_DAY painters a day, so following can't be used to spam people's follower counts.
+const FOLLOWS_PER_DAY = 100;
+let followsReady = false;
+async function hasFollows(env) {
+  if (!followsReady) followsReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'follows'").first());
+  return followsReady;
+}
+
+// Follower counts for a profile, and whether the viewer follows them.
+async function followInfo(env, id, viewer) {
+  if (!await hasFollows(env)) return null;
+  const r = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM follows WHERE followed_id = ?1) AS followers, (SELECT COUNT(*) FROM follows WHERE user_id = ?1) AS following, (SELECT COUNT(*) FROM follows WHERE user_id = ?2 AND followed_id = ?1) AS mine').bind(id, viewer?.id || '').first();
+  return { followers: r.followers, following: r.following, followed: !!r.mine };
+}
+
+// PUT /api/follows/:id { on }: follow or unfollow a painter.
+async function setFollow(request, env, id) {
+  const u = await requireUser(request, env), b = await body(request);
+  if (!await hasFollows(env)) throw new HttpError(503, 'Following is not set up on this server yet');
+  if (b.on === false) await env.DB.prepare('DELETE FROM follows WHERE user_id = ? AND followed_id = ?').bind(u.id, id).run();
+  else {
+    if (id === u.id) throw new HttpError(400, "You can't follow yourself");
+    const o = await env.DB.prepare('SELECT name, blocked FROM users WHERE id = ?').bind(id).first();
+    if (!o || o.blocked) throw new HttpError(404, 'Painter not found');
+    // Someone who blocked you (or whom you blocked) can't be followed. It reads like any other refusal.
+    if (await hasMessages(env) && await env.DB.prepare('SELECT 1 FROM user_blocks WHERE (user_id = ?1 AND blocked_id = ?2) OR (user_id = ?2 AND blocked_id = ?1)').bind(u.id, id).first())
+      throw new HttpError(403, `You can't follow ${o.name}.`);
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM follows WHERE user_id = ? AND created_at > ?').bind(u.id, now() - 86400000).first();
+    if (n.n >= FOLLOWS_PER_DAY) throw new HttpError(429, "You've followed a lot of painters today, please try again tomorrow");
+    await env.DB.prepare('INSERT OR IGNORE INTO follows (user_id, followed_id, created_at) VALUES (?, ?, ?)').bind(u.id, id, now()).run();
+  }
+  return json(await followInfo(env, id, u));
+}
+
 /* ---------- the Painters list ---------- */
 
 // The column comes with migration 0016. Until it is applied everyone is listed and the setting to hide is missing.
@@ -1376,6 +1422,7 @@ async function hasFindable(env) {
 
 // GET /api/people?q=&sort=active|new&offset=: painters to find and message, PEOPLE_PAGE at a time. Blocked accounts,
 // sign-ups that never confirmed their email, and people who turned the list off are left out.
+// rel=following|followers (signed in): only the painters you follow, or who follow you, including ones not in the list.
 // active: the most public recipes, tutorials and palettes first, then the most recently active.
 const PEOPLE_PAGE = 48;
 async function listPeople(request, env, url) {
@@ -1383,7 +1430,13 @@ async function listPeople(request, env, url) {
   const sort = url.searchParams.get('sort') === 'new' ? 'new' : 'active';
   const offset = Math.max(0, Math.min(5000, parseInt(url.searchParams.get('offset'), 10) || 0));
   const where = ['u.blocked = 0', "(u.email IS NULL OR u.email = '' OR u.email_verified = 1)"], args = [];
-  if (await hasFindable(env)) where.push('u.findable = 1');
+  const rel = ['following', 'followers'].includes(url.searchParams.get('rel')) ? url.searchParams.get('rel') : '';
+  if (rel) {
+    const me = await requireUser(request, env);
+    if (!await hasFollows(env)) return json({ people: [], more: false });
+    where.push(rel === 'following' ? 'u.id IN (SELECT followed_id FROM follows WHERE user_id = ?)' : 'u.id IN (SELECT user_id FROM follows WHERE followed_id = ?)');
+    args.push(me.id);
+  } else if (await hasFindable(env)) where.push('u.findable = 1');
   if (q) { where.push('u.name LIKE ?'); args.push(`%${q}%`); }
   const listed = await hasCommissions(env) ? '(SELECT c.listed FROM commissions c WHERE c.user_id = u.id)' : '0';
   const rows = (await env.DB.prepare(
@@ -1691,7 +1744,11 @@ async function setBlock(request, env, id) {
   if (id === u.id) throw new HttpError(400, "You can't block yourself");
   if (!await env.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind(id).first()) throw new HttpError(404, 'Painter not found');
   if (b.blocked === false) await env.DB.prepare('DELETE FROM user_blocks WHERE user_id = ? AND blocked_id = ?').bind(u.id, id).run();
-  else await env.DB.prepare('INSERT OR IGNORE INTO user_blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)').bind(u.id, id, now()).run();
+  else {
+    await env.DB.prepare('INSERT OR IGNORE INTO user_blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)').bind(u.id, id, now()).run();
+    // Blocking someone also ends following either way.
+    if (await hasFollows(env)) await env.DB.prepare('DELETE FROM follows WHERE (user_id = ?1 AND followed_id = ?2) OR (user_id = ?2 AND followed_id = ?1)').bind(u.id, id).run();
+  }
   return json({ ok: true, blocked: b.blocked !== false });
 }
 
