@@ -13,7 +13,7 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox'];
+const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people'];
 let ME=null,INFO=null,API=false;
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
@@ -84,7 +84,7 @@ function route(){
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
- document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'))));
+ document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'))));
  {const s=document.querySelector('#nav .secs'),o=s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8}
  if(view==='welcome')renderWelcome();
  else if(view==='paints')renderPaints();
@@ -97,6 +97,7 @@ function route(){
  else if(view==='admin')renderAdmin();
  else if(view==='painters')renderPainters();
  else if(view==='inbox')renderInbox(id,sub);
+ else if(view==='people')renderPeople();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -148,6 +149,7 @@ function renderAccount(){
  const h=location.hash,note=/verify=done/.test(h)?'<p class="ok">Thanks, your email is confirmed.</p>':/verify=expired/.test(h)?'<p class="err">That confirmation link has expired or was already used. Send a new one below.</p>':/welcome/.test(h)&&INFO.mail&&!ME.email_verified?`<p class="ok">Welcome! We've sent a confirmation link to ${esc(ME.email)}.</p>`:'';
  el.innerHTML=`<h1>${avHTML(ME)}${esc(ME.name)}</h1>${note}
  <p><a href="#/u/${esc(ME.id)}">View your public profile →</a></p>
+ ${ME.findable!==undefined?`<p><label><input type="checkbox" id="pFind"${ME.findable?' checked':''}> Show me in the <a href="#/people">Painters list</a> and its name search</label> <span class="s" id="pFindM"></span></p>`:''}
  <div class="panel"><h2>Your profile</h2><p class="s">Everything here is public: anyone can see your icon, name, about text, link, favourite paints and your public recipes and tutorials. Your email is never shown.</p>
  <div class="f"><span>Icon</span><div id="pIcon"></div></div>
  <label class="f"><span>Display name</span><input type="text" id="pName" maxlength="40"></label>
@@ -210,6 +212,9 @@ function renderAccount(){
   catch(e){c.checked=!c.checked;$('uMsg').className='err';$('uMsg').textContent=e.message}c.disabled=false};
  if(ME.admin)annPanel();
  if(INFO.messages)msgPanel();
+ if($('pFind'))$('pFind').onchange=async()=>{const c=$('pFind');c.disabled=true;$('pFindM').className='s';
+  try{ME=(await api('/me/findable',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('pFindM').textContent=c.checked?'You\'re in the list.':'Hidden from the list. Your profile page is still public.'}
+  catch(e){c.checked=!c.checked;$('pFindM').className='err';$('pFindM').textContent=e.message}c.disabled=false};
  commissionPanel();
  $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
@@ -349,9 +354,9 @@ async function renderRecipes(){
  if(!ME)rScope='public';
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint),kb=(k,t)=>`<button class="btn${rKind===k?' pri':''}" data-kd="${k}" type="button">${t}</button>`;
  el.innerHTML=`<h1>Recipes &amp; tutorials</h1>
- <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p><p><span class="tag topen">Commission painters</span> Painters who take commissions, with photos of their work. <a href="#/painters">Find a painter →</a></p></div>
+ <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p><p><span class="tag topen">Commission painters</span> Painters who take commissions, with photos of their work. <a href="#/painters">Find a painter →</a></p><p><span class="tag">Painters</span> Everyone sharing on the site. Search by name, see their work and send a message. <a href="#/people">Browse painters →</a></p></div>
  <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new/recipe">+ New recipe</a><a class="btn pri" href="#/new">+ New tutorial</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
- <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}<a class="btn" href="#/painters">🖌 Commission painters</a>${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
+ <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}<a class="btn" href="#/painters">🖌 Commission painters</a><a class="btn" href="#/people">👥 Find painters</a>${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
  <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  el.querySelectorAll('[data-kd]').forEach(b=>b.onclick=()=>{rKind=b.dataset.kd;renderRecipes()});
@@ -749,6 +754,31 @@ async function renderAdmin(){
  el.querySelectorAll('[data-blk]').forEach(b=>b.onclick=()=>(b.dataset.on!=='1'||twice(b,'Click again to block'))&&act(b,()=>api('/admin/users/'+b.dataset.blk,{method:'PUT',body:{blocked:b.dataset.on==='1'}})));
  el.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>act(b,()=>api('/admin/reports/'+b.closest('[data-rep]').dataset.rep,{method:'PUT',body:{status:'done'}})))}
 
+/* ---------- painters list ---------- */
+// #/people: everyone who shares on the site, searchable by name. Most active (most public work) or newest first.
+let pSort='active';
+async function renderPeople(){
+ const el=$('v-people'),sb=(k,t)=>`<button class="btn${pSort===k?' pri':''}" data-ps="${k}" type="button">${t}</button>`;
+ el.innerHTML=`<p><a href="#/recipes">← Tutorials &amp; recipes</a></p><h1>Painters</h1>
+ <p class="s">Painters sharing on The Painters Desk. Open a profile to see their tutorials, recipes and favourite paints${INFO.messages?', or send them a message':''}.${ME?' You can hide yourself from this list on your <a href="#/account">account page</a>.':''}</p>
+ <div class="row">${sb('active','Most active')}${sb('new','Newest')}<span class="sp" style="flex:1"></span><a class="btn" href="#/painters">🖌 Commission painters</a></div>
+ <div class="bar"><input id="pq" type="search" placeholder="Search by name" aria-label="Search painters by name"></div><div id="plist" class="cards"><p class="s">Loading…</p></div>
+ <div class="row" id="pMoreR" hidden><button class="btn" type="button" id="pMore">Show more</button></div>`;
+ el.querySelectorAll('[data-ps]').forEach(b=>b.onclick=()=>{pSort=b.dataset.ps;renderPeople()});
+ const n=(c,w)=>c?`<span class="tag">${c} ${w}${c===1?'':'s'}</span>`:'';
+ const card=p=>`<a class="card ppl" href="#/u/${esc(p.id)}"><h3>${avHTML(p)}${esc(p.name)}</h3>
+  ${n(p.tutorials,'tutorial')}${n(p.recipes,'recipe')}${n(p.palettes,'palette')}${p.commissions?'<span class="tag topen">Takes commissions</span>':''}
+  ${p.bio?`<div class="s pclip">${esc(p.bio)}</div>`:''}<div class="s">Joined ${fmtDate(p.created_at)}</div></a>`;
+ let off=0,seq=0;
+ async function load(more){const L=$('plist'),my=++seq;if(!more)off=0;
+  try{const d=await api(`/people?sort=${pSort}&offset=${off}&q=${encodeURIComponent($('pq').value)}`);if(my!==seq)return;
+   const h=d.people.map(card).join('');L.innerHTML=more?L.innerHTML+h:(h||`<p class="s">${$('pq').value?'No painters match that name.':'No painters yet.'}</p>`);
+   off+=d.people.length;$('pMoreR').hidden=!d.more}
+  catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
+ let t=0;$('pq').oninput=()=>{clearTimeout(t);t=setTimeout(()=>load(false),250)};
+ $('pMore').onclick=()=>load(true);
+ load(false)}
+
 /* ---------- messages ---------- */
 // One inbox for replies to feedback and private messages between painters. #/inbox lists them, #/inbox/<id> opens
 // one, #/inbox/u/<user id> starts or continues one with that painter, and #/inbox?team (admins) lists all feedback.
@@ -774,7 +804,7 @@ async function renderInbox(id,sub){
  const row=c=>{const w=convWho(c);return `<a class="conv${c.unread?' new':''}" href="#/inbox/${esc(c.id)}">${avHTML(w)}<span class="cv"><b>${esc(team?w.name:c.kind==='feedback'?'Your feedback':w.name)}</b> ${tags(c)}${c.unread?'<span class="tag dang">new</span>':''}
   <span class="s">${c.last?(c.last.mine?'You: ':'')+esc(c.last.body):''}</span></span><span class="s cvt">${ago(c.updated_at)}</span></a>`};
  const intro=team?'Everything sent with the Feedback button, open ones first. Replies show in the sender\'s Messages, and go by email when they gave one.'
-  :ME?'Replies to your feedback, and conversations with other painters. To message a painter, open their profile and press Message.'
+  :ME?'Replies to your feedback, and conversations with other painters. To message a painter, <a href="#/people">find them</a> and press Message on their profile.'
   :'Replies to feedback you sent from this browser. <a href="#/account">Sign in</a> to message other painters and keep your replies on every device.';
  el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1>${tabs}<p class="s">${intro}</p><div class="convs">${d.conversations.map(row).join('')||`<p class="s">${team?'No feedback yet.':'Nothing here yet.'}</p>`}</div>`}
 async function inboxWith(uid){

@@ -113,7 +113,7 @@ dialog.pd.fb textarea{min-height:120px;resize:vertical}.fbhp{position:absolute;l
 .tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}.tag.tpal{background:#c9b3ff}.tag.topen{background:#8fe3a1}
 .pgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}.pgal img{width:100%;aspect-ratio:1;object-fit:cover;border:3px solid var(--ink);border-radius:12px;display:block;background:var(--bg)}
 .pgal.ed>div{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}.pgal.ed .x{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:2px solid var(--ink);background:var(--card);color:var(--fg);font-size:18px;line-height:1;cursor:pointer}.pgal.ed .lnk{font-size:13px;padding:0}
-.pcard h3 .av{width:26px;height:26px}.pmini{display:flex;gap:6px;margin:-4px 0 8px}.pmini img{width:48px;height:48px;object-fit:cover;border:2px solid var(--ink);border-radius:8px}
+.pcard h3 .av,.ppl h3 .av{width:26px;height:26px}.ppl h3{display:flex;align-items:center;gap:8px}.pmini{display:flex;gap:6px;margin:-4px 0 8px}.pmini img{width:48px;height:48px;object-fit:cover;border:2px solid var(--ink);border-radius:8px}
 .pclip{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:6px}
 .cmp h2 .tag{vertical-align:middle;font-family:Rubik,sans-serif}.cmf{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:10px 0}.cmf dt{font-weight:700}.cmf dd{margin:0}
 dialog.pd.fb textarea#cmText{min-height:140px}
@@ -364,6 +364,7 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>31 October 2026</h2><ul>
+<li><span class="tg nw">New</span><b>Find painters.</b> A new Painters page lists everyone sharing on the site, most active or newest first, with a name search. Open it from Tutorials &amp; Recipes. Prefer not to be listed? Turn it off on your account page.</li>
 <li><span class="tg nw">New</span><b>Messages.</b> Send a private message to another painter with the Message button on their profile. Replies to your feedback show up in Messages too, even if you sent it without signing in. You can block or report anyone, and choose on your account page whether people can start conversations with you.</li>
 </ul></div>
 <div class="panel cl"><h2>30 October 2026</h2><ul>
@@ -484,6 +485,7 @@ dialog.pd.phd{width:640px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 
 <section id="v-reset" hidden></section>
 <section id="v-admin" hidden></section>
 <section id="v-inbox" hidden></section>
+<section id="v-people" hidden></section>
 <dialog class="pd" id="tyDlg" aria-labelledby="tyT"><form method="dialog"><h2 id="tyT">Paint types on the wheel</h2><p>Washes, inks and effect paints only show their colour over a basecoat, so they can crowd out better complements. Untick a type to hide it from the wheel and the neutrals.</p><div id="tyList"></div><div class="row"><button class="btn pri" value="ok" autofocus>Done</button></div></form></dialog>
 <dialog class="pd phd" id="phDlg" aria-labelledby="phT"><h2 id="phT">Palette from a photo</h2><p>Pick a photo you like (artwork, a scene, a painted miniature) and get the paints closest to its main colours. Your photo stays on this device: it is only uploaded if you add it to a saved palette card.</p>
 <div class="row"><label class="btn pri phf">Choose a photo<input type="file" id="phFile" accept="image/*"></label><label>Colours <select id="phK" class="nsel"><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>10</option></select></label><label id="phMineL" hidden><input type="checkbox" id="phMine"> My paints only</label></div>
