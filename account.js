@@ -65,6 +65,7 @@ async function loadMe(){
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
  $('mine').hidden=!ME;
+ $('navForum').hidden=!INFO?.forum;
  chatStart();
  $('fbBtn').hidden=!API;
  // Feedback sent from this browser while signed out moves to the account on sign-in.
