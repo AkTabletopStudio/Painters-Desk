@@ -11,7 +11,7 @@ const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
 
 let DATA = null;
-// The site themes (Neon 1984, Grimdark, Forest, Dwarven) come from index.html, so these pages follow the look a visitor
+// The site themes (Neon 1984, Grimdark, Forest, Dwarven and the eight added in Nov 2026) come from index.html, so these pages follow the look a visitor
 // picked on the colour wheel. The look is applied in the browser from localStorage, so every visitor and search engine
 // gets the same HTML.
 const NAV0 = '<nav class="top"><a href="/">Colour wheel</a><a href="/paints">Paints</a><a href="/guides">Guides</a></nav>';
