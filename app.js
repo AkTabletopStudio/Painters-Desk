@@ -292,7 +292,7 @@ const schSave=()=>{try{localStorage.setItem('pd-scheme',JSON.stringify({s:SCH,t:
 const hAng=h=>U(h)*Math.PI/180-Math.PI/2;
 function harmony(b){const sc=HSC[SCH],tol=SCH==='mono'?Math.min(HTOL,14):HTOL,mine=p=>!ONLY_MINE||own(p);
 const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);const band=[b,...l].filter(p=>hd(p.H,t)<=tol||p===b);
-if(SCH==='mono')l=[b,...l].sort((x,y)=>x.L-y.L).slice(0,12);
+if(SCH==='mono')l=[b,...l].sort((x,y)=>x.lab[0]-y.lab[0]).slice(0,12);
 else{l.sort((x,y)=>hd(x.H,t)-hd(y.H,t));l=main?[b,...l.slice(0,4)]:l.slice(0,6)}
 const sc2=p=>hd(p.H,t)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
 return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k],bl:pk&&SCH!=='mono'?hBlend(pk,band.filter(p=>p===pk||nmmOK(p)),mine):null}});return{sc,groups,tol}}
@@ -316,11 +316,19 @@ return s}
 function hOver(HS){const {groups}=HS;let s='<g pointer-events="none">';
 if(SCH!=='mono')groups.forEach((g,k)=>{const a=hAng(g.t),x=CX+300*Math.cos(a),y=CY+300*Math.sin(a);
  s+=`<circle cx="${x}" cy="${y}" r="13" fill="${g.pk?g.pk.h:'#888'}" stroke="currentColor" stroke-width="3"/><text x="${x}" y="${y+4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${g.pk&&g.pk.lum>.55?'#111':'#fff'}">${k+1}</text>`});
-if(SCH==='mono'){const l=groups[0].l,n=l.length;l.slice().reverse().forEach((p,i)=>s+=`<circle cx="${CX}" cy="${CY}" r="${(96*(n-i)/n).toFixed(1)}" fill="${p.h}"/>`)}
-else{const gp=groups.filter(g=>g.pk),tot=gp.reduce((a,g)=>a+g.prop,0);let acc=0;gp.forEach(g=>{const a0=acc/tot*360,a1=(acc+g.prop)/tot*360;acc+=g.prop;
- const A=(a0-90)*Math.PI/180,B=(a1-90)*Math.PI/180,L=a1-a0>180?1:0;
- s+=gp.length===1?`<circle cx="${CX}" cy="${CY}" r="96" fill="${g.pk.h}"/>`:`<path d="M${CX} ${CY}L${CX+96*Math.cos(A)} ${CY+96*Math.sin(A)}A96 96 0 ${L} 1 ${CX+96*Math.cos(B)} ${CY+96*Math.sin(B)}Z" fill="${g.pk.h}" stroke="#1b1b1b" stroke-width="2"/>`})}
+if(SCH==='mono'){const K=groups[0].l.map(p=>okLab(p.h)),lo=Math.min(...K.map(k=>k[0])),hi=Math.max(...K.map(k=>k[0])),sd=Math.max(.02,(hi-lo)/5),M=7,
+ st=Array.from({length:M},(_,i)=>{const T=lo+(hi-lo)*i/(M-1);let w=0,c=[0,0,0];K.forEach(k=>{const x=Math.exp(-(((k[0]-T)/sd)**2));w+=x;c=c.map((v,j)=>v+k[j]*x)});return okHex(c.map(v=>v/w))});
+ s+=`<defs><radialGradient id="hmg">${st.map((h,k)=>`<stop offset="${(k/(M-1)).toFixed(3)}" stop-color="${h}"/>`).join('')}</radialGradient></defs><circle cx="${CX}" cy="${CY}" r="96" fill="url(#hmg)"/>`}
+else s+=hDisc(groups.filter(g=>g.pk));
 return s+`<circle cx="${CX}" cy="${CY}" r="96" fill="none" stroke="#1b1b1b" stroke-width="3"/><title>${HSC[SCH].n} palette</title></g>`}
+// Centre disc for a scheme: the picks blend smoothly round the disc (OKLab), each holding its own colour across the middle
+// of its share (shares = the palette strip's rough proportions) and blending into its neighbours over the rest.
+function hDisc(gp){if(!gp.length)return'';if(gp.length===1)return`<circle cx="${CX}" cy="${CY}" r="96" fill="${gp[0].pk.h}"/>`;
+const tot=gp.reduce((a,g)=>a+g.prop,0),N=180,HOLD=.45;let acc=0;const C=gp.map(g=>{const w=g.prop/tot*360,c={a:acc+w/2,w,k:okLab(g.pk.h)};acc+=w;return c});
+const col=f=>{for(let i=0;i<C.length;i++){const A=C[i],B=C[(i+1)%C.length],a0=A.a,a1=B.a+(i===C.length-1?360:0);let x=f;if(x<a0)x+=360;if(x>=a0&&x<a1){
+ const h0=a0+A.w*HOLD/2,h1=a1-B.w*HOLD/2,u=x<=h0?0:x>=h1?1:(x-h0)/(h1-h0),e=u*u*(3-2*u);return okHex(A.k.map((v,j)=>v+(B.k[j]-v)*e))}}return gp[0].pk.h};
+let s='';for(let i=0;i<N;i++){const f0=i*360/N,f1=(i+1)*360/N+.6,A=(f0-90)*Math.PI/180,B=(f1-90)*Math.PI/180,c=col(f0+180/N);
+ s+=`<path d="M${CX} ${CY}L${(CX+96*Math.cos(A)).toFixed(2)} ${(CY+96*Math.sin(A)).toFixed(2)}A96 96 0 0 1 ${(CX+96*Math.cos(B)).toFixed(2)} ${(CY+96*Math.sin(B)).toFixed(2)}Z" fill="${c}" stroke="${c}" stroke-width="1.2" stroke-linejoin="round"/>`}return s}
 function hChip(p,pk){return`<button type="button" class="chip hch${pk?' hsel':''}" data-i="${p.i}" title="Make this the main colour"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></button>`}
 function hPanel(HS,b){const {sc,groups}=HS;let h=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${b.n} <span style="color:var(--mut)">${b.c}</span></span></div><h2>${sc.n}</h2><p class="s">${sc.why}</p>`;
 if(SCH==='mono'){const l=groups[0].l;h+=`<h3 class="hh">Value ramp <small>darkest to lightest, ${l.length} paint${l.length===1?'':'s'}</small></h3><div class="hramp">${l.map(p=>`<button type="button" data-i="${p.i}" style="background:${p.h}" title="${p.n} (${p.c})" aria-label="${p.n}"></button>`).join('')}</div><div class="chips">${l.map(p=>hChip(p,p===b)).join('')}</div>`}
