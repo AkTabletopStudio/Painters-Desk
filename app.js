@@ -228,7 +228,7 @@ el.innerHTML=`<b>${esc(T.full)} ramp from:</b> <div class="chips"><span class="c
 el.querySelectorAll('[data-sk]').forEach(e=>e.onclick=()=>{const i=+e.dataset.sk;nmmSkip[i]=(nmmSkip[i]||0)+1;draw()});
 document.getElementById('nmmTut').onclick=()=>{NMM_DRAFT={kind:'recipe',title:T.name+' '+b.n.trim(),summary:T.sum,
  steps:R.filter(x=>x.p).map(x=>({title:x.r,text:T.tip[x.r]||'',image:'',mix:[{k:x.p.k,parts:1}].concat(T.glaze?[{k:'water',parts:x.w}]:[])}))};location.hash='#/new'}}
-function nmmUI(){const n=MODE==='nmm',T=TQN(),ss=T.steps||['5','7'];[['mCol','col'],['mNmm','nmm'],['mMix','mix']].forEach(([id,m])=>{const e=document.getElementById(id);e.classList.toggle('pri',MODE===m);e.setAttribute('aria-pressed',MODE===m)});document.getElementById('nmmOpt').hidden=!n;
+function nmmUI(){try{schUI()}catch(e){}const n=MODE==='nmm',T=TQN(),ss=T.steps||['5','7'];[['mCol','col'],['mNmm','nmm'],['mMix','mix']].forEach(([id,m])=>{const e=document.getElementById(id);e.classList.toggle('pri',MODE===m);e.setAttribute('aria-pressed',MODE===m)});document.getElementById('nmmOpt').hidden=!n;
 document.getElementById('nTech').value=NMO.q;const o=document.getElementById('nSteps').options;o[0].textContent=ss[0];o[1].textContent=ss[1];
 document.getElementById('nSteps').value=String(NMO.n);document.getElementById('nTint').checked=NMO.t;document.getElementById('nTintL').hidden=!T.tint;document.getElementById('nTintT').textContent=T.tint;
 const gl=document.getElementById('nGuide'),gs=TQ_GUIDE[NMO.q];gl.hidden=!gs;if(gs){gl.href='guides/'+gs;gl.textContent=T.name+' guide →'}}
@@ -262,6 +262,101 @@ function discStops(sel,comp,ana){
  seq.forEach((c,i)=>{out.push([okHex(c),off[i]]);if(i<seq.length-1){const K=i===jx-1?16:6;for(let k=1;k<K;k++){const t=k/K;out.push([okHex(c.map((v,j)=>v+(seq[i+1][j]-v)*t)),off[i]+(off[i+1]-off[i])*t])}}});
  return out}
 const svg=document.getElementById('w');let sel=null;
+/* ---------- Colour harmony schemes (Colours mode) ----------
+   The Scheme button picks how the wheel answers a tapped paint. Complementary is the original view (complements + neighbours).
+   The others mark a hue band for each colour in the scheme (offset from the paint's hue, ± the hue width), join the bands with
+   the scheme's shape, and suggest one paint per role: closest hue, then closest lightness to the paint you picked.
+   The centre disc shows those picks in rough proportion (60/30/10 style); Monochrome shows a dark-to-light ramp instead. */
+const HSC={
+ comp:{n:'Complementary',offs:[0,180],why:'Opposites on the wheel. The strongest contrast you can get.'},
+ split:{n:'Split complementary',offs:[0,150,210],roles:['Main','Split A','Split B'],prop:[60,25,15],
+  why:'The main colour plus the two hues either side of its opposite.',
+  tip:'Softer than straight complements and easier to balance. Put one split on cloth, the other on small details.'},
+ ana:{n:'Analogous',offs:[-30,0,30],roles:['Neighbour A','Main','Neighbour B'],prop:[25,60,15],
+  why:'Neighbours on the wheel. Calm and natural, low contrast.',
+  tip:'Good for smooth glazes and transitions. Shade toward one neighbour and highlight toward the other for a richer ramp.'},
+ triad:{n:'Triadic',offs:[0,120,240],roles:['Main','Triad 2','Triad 3'],prop:[60,30,10],
+  why:'Three hues spaced evenly around the wheel. Bright and balanced.',
+  tip:'Let one colour dominate. Mute the second with a grey, and keep the third for small accents so the model doesn\'t look like a toy.'},
+ rect:{n:'Rectangle',offs:[0,60,180,240],roles:['Main','Partner','Complement','Partner\'s complement'],prop:[45,25,20,10],
+  why:'Two complementary pairs, 60° apart. Lots of colour to work with.',
+  tip:'Pick one warm pair member to lead. Works well for squads where each unit role gets its own colour.'},
+ square:{n:'Square',offs:[0,90,180,270],roles:['Main','Quarter','Complement','Three-quarter'],prop:[45,25,20,10],
+  why:'Four hues evenly spaced. The busiest scheme.',
+  tip:'Hard to keep calm on one figure. Try it across a diorama or warband instead, one hue per area.'},
+ mono:{n:'Monochrome',offs:[0],roles:['Main'],prop:[100],
+  why:'One hue, many values. Every paint here sits close to the main hue, darkest to lightest.',
+  tip:'Contrast comes from value alone, so push the darkest shadows and brightest highlights further than feels natural. A neutral grey or a single complement dot keeps it from going flat.'}};
+let SCH='comp',HTOL=20;try{const o=JSON.parse(localStorage.getItem('pd-scheme'));if(o){if(HSC[o.s])SCH=o.s;if(o.t>=10&&o.t<=30)HTOL=+o.t}}catch(e){}
+const schSave=()=>{try{localStorage.setItem('pd-scheme',JSON.stringify({s:SCH,t:HTOL}))}catch(e){}};
+const hAng=h=>U(h)*Math.PI/180-Math.PI/2;
+function harmony(b){const sc=HSC[SCH],tol=SCH==='mono'?Math.min(HTOL,14):HTOL,mine=p=>!ONLY_MINE||own(p);
+const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);const band=[b,...l].filter(p=>hd(p.H,t)<=tol||p===b);
+if(SCH==='mono')l=[b,...l].sort((x,y)=>x.lab[0]-y.lab[0]).slice(0,12);
+else{l.sort((x,y)=>hd(x.H,t)-hd(y.H,t));l=main?[b,...l.slice(0,4)]:l.slice(0,6)}
+const sc2=p=>hd(p.H,t)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
+return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k],bl:pk&&SCH!=='mono'?hBlend(pk,band.filter(p=>p===pk||nmmOK(p)),mine):null}});return{sc,groups,tol}}
+// A 3-step blend for one scheme colour: the pick as the mid tone, plus the paints in its hue band closest to ~18 Lab L darker and lighter
+// (at least 8 apart, owned paints first when 'Only my paints' is on). A step stays empty when the band has nothing dark or light enough.
+function hBlend(m,band,mine){const L=m.lab[0],f=(dir)=>{const c=band.filter(p=>p!==m&&(dir<0?p.lab[0]<=L-8:p.lab[0]>=L+8));if(!c.length)return null;
+ const tg=L+dir*18,sc=p=>Math.abs(p.lab[0]-tg)+.5*hd(p.H,m.H)+(mine(p)?0:1000);return c.sort((x,y)=>sc(x)-sc(y))[0]};return[f(-1),m,f(1)]}
+// Opens Blends with the colour's 3-step blend fixed in place (shadow and highlight count as the painter's own picks).
+function hOpenBlend(bl){const[sh,m,hi]=bl;sel=m;NB=m;BL={b:m,s:[...(sh?[{p:sh,sp:sh,m:0,man:1}]:[]),{p:m,base:1},...(hi?[{p:hi,sp:hi,m:0,man:1}]:[])]};setMode('mix');document.getElementById('w').scrollIntoView({block:'start'})}
+function hArc(t,tol,r0,r1){const a0=hAng(t-tol),a1=hAng(t+tol),L=tol*2>180?1:0;
+return`M${CX+r0*Math.cos(a0)} ${CY+r0*Math.sin(a0)}L${CX+r1*Math.cos(a0)} ${CY+r1*Math.sin(a0)}A${r1} ${r1} 0 ${L} 1 ${CX+r1*Math.cos(a1)} ${CY+r1*Math.sin(a1)}L${CX+r0*Math.cos(a1)} ${CY+r0*Math.sin(a1)}A${r0} ${r0} 0 ${L} 0 ${CX+r0*Math.cos(a0)} ${CY+r0*Math.sin(a0)}Z`}
+// Bands and the joining shape go under the dots.
+function hUnder(HS,b){const {groups,tol}=HS;let s='';
+groups.forEach(g=>s+=`<path d="${hArc(g.t,tol,112,470)}" fill="currentColor" opacity="${g.off===0?.09:.06}" stroke="currentColor" stroke-opacity=".45" stroke-width="2" stroke-dasharray="8 6"/>`);
+const V=groups.map(g=>[CX+300*Math.cos(hAng(g.t)),CY+300*Math.sin(hAng(g.t)),g.t]);
+if(V.length===2)s+=`<line x1="${V[0][0]}" y1="${V[0][1]}" x2="${V[1][0]}" y2="${V[1][1]}" stroke="currentColor" stroke-width="4" opacity=".7"/>`;
+else if(V.length>2){const o=SCH==='ana'?V:[...V].sort((x,y)=>x[2]-y[2]);s+=`<${SCH==='ana'?'polyline':'polygon'} points="${o.map(v=>v[0].toFixed(1)+','+v[1].toFixed(1)).join(' ')}" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" opacity=".7"/>`}
+else{const a=hAng(b.H);s+=`<line x1="${CX+112*Math.cos(a)}" y1="${CY+112*Math.sin(a)}" x2="${CX+470*Math.cos(a)}" y2="${CY+470*Math.sin(a)}" stroke="currentColor" stroke-width="4" opacity=".6" stroke-dasharray="2 8" stroke-linecap="round"/>`}
+return s}
+// Numbered role badges and the palette disc go over the dots (they don't take taps).
+function hOver(HS){const {groups}=HS;let s='<g pointer-events="none">';
+if(SCH!=='mono')groups.forEach((g,k)=>{const a=hAng(g.t),x=CX+300*Math.cos(a),y=CY+300*Math.sin(a);
+ s+=`<circle cx="${x}" cy="${y}" r="13" fill="${g.pk?g.pk.h:'#888'}" stroke="currentColor" stroke-width="3"/><text x="${x}" y="${y+4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${g.pk&&g.pk.lum>.55?'#111':'#fff'}">${k+1}</text>`});
+if(SCH==='mono'){const K=groups[0].l.map(p=>okLab(p.h)),lo=Math.min(...K.map(k=>k[0])),hi=Math.max(...K.map(k=>k[0])),sd=Math.max(.02,(hi-lo)/5),M=7,
+ st=Array.from({length:M},(_,i)=>{const T=lo+(hi-lo)*i/(M-1);let w=0,c=[0,0,0];K.forEach(k=>{const x=Math.exp(-(((k[0]-T)/sd)**2));w+=x;c=c.map((v,j)=>v+k[j]*x)});return okHex(c.map(v=>v/w))});
+ s+=`<defs><radialGradient id="hmg">${st.map((h,k)=>`<stop offset="${(k/(M-1)).toFixed(3)}" stop-color="${h}"/>`).join('')}</radialGradient></defs><circle cx="${CX}" cy="${CY}" r="96" fill="url(#hmg)"/>`}
+else s+=hDisc(groups.filter(g=>g.pk));
+return s+`<circle cx="${CX}" cy="${CY}" r="96" fill="none" stroke="#1b1b1b" stroke-width="3"/><title>${HSC[SCH].n} palette</title></g>`}
+// Centre disc for a scheme: the picks blend smoothly round the disc (OKLab), each holding its own colour across the middle
+// of its share (shares = the palette strip's rough proportions) and blending into its neighbours over the rest.
+function hDisc(gp){if(!gp.length)return'';if(gp.length===1)return`<circle cx="${CX}" cy="${CY}" r="96" fill="${gp[0].pk.h}"/>`;
+const tot=gp.reduce((a,g)=>a+g.prop,0),N=180,HOLD=.45;let acc=0;const C=gp.map(g=>{const w=g.prop/tot*360,c={a:acc+w/2,w,k:okLab(g.pk.h)};acc+=w;return c});
+const col=f=>{for(let i=0;i<C.length;i++){const A=C[i],B=C[(i+1)%C.length],a0=A.a,a1=B.a+(i===C.length-1?360:0);let x=f;if(x<a0)x+=360;if(x>=a0&&x<a1){
+ const h0=a0+A.w*HOLD/2,h1=a1-B.w*HOLD/2,u=x<=h0?0:x>=h1?1:(x-h0)/(h1-h0),e=u*u*(3-2*u);return okHex(A.k.map((v,j)=>v+(B.k[j]-v)*e))}}return gp[0].pk.h};
+let s='';for(let i=0;i<N;i++){const f0=i*360/N,f1=(i+1)*360/N+.6,A=(f0-90)*Math.PI/180,B=(f1-90)*Math.PI/180,c=col(f0+180/N);
+ s+=`<path d="M${CX} ${CY}L${(CX+96*Math.cos(A)).toFixed(2)} ${(CY+96*Math.sin(A)).toFixed(2)}A96 96 0 0 1 ${(CX+96*Math.cos(B)).toFixed(2)} ${(CY+96*Math.sin(B)).toFixed(2)}Z" fill="${c}" stroke="${c}" stroke-width="1.2" stroke-linejoin="round"/>`}return s}
+function hChip(p,pk){return`<button type="button" class="chip hch${pk?' hsel':''}" data-i="${p.i}" title="Make this the main colour"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></button>`}
+function hPanel(HS,b){const {sc,groups}=HS;let h=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${b.n} <span style="color:var(--mut)">${b.c}</span></span></div><h2>${sc.n}</h2><p class="s">${sc.why}</p>`;
+if(SCH==='mono'){const l=groups[0].l;h+=`<h3 class="hh">Value ramp <small>darkest to lightest, ${l.length} paint${l.length===1?'':'s'}</small></h3><div class="hramp">${l.map(p=>`<button type="button" data-i="${p.i}" style="background:${p.h}" title="${p.n} (${p.c})" aria-label="${p.n}"></button>`).join('')}</div><div class="chips">${l.map(p=>hChip(p,p===b)).join('')}</div>`}
+else{const gp=groups.filter(g=>g.pk),tot=gp.reduce((a,g)=>a+g.prop,0);
+h+=`<h3 class="hh">Suggested palette <small>rough share of the model</small></h3><div class="hpal">${gp.map(g=>`<div style="flex:${g.prop};background:${g.pk.h};color:${g.pk.lum>.55?'#111':'#fff'}">${Math.round(g.prop/tot*100)}%</div>`).join('')}</div>
+<h3 class="hh">Blend for each colour <small>shadow, mid tone, highlight</small></h3><div class="hbl">${groups.map((g,k)=>`<div class="hbr"><b class="hbn">${k+1}. ${g.role}</b>${g.bl?`<span class="hbs">${g.bl.map((p,j)=>p?`<button type="button" class="hch hbsw" data-i="${p.i}" title="${['Shadow','Mid tone','Highlight'][j]}: ${p.n} (${p.c})"><i style="background:${p.h}"></i><span>${star(p)}${p.n}</span></button>`:`<span class="hbsw hbx" title="Nothing ${j?'lighter':'darker'} in this hue band"><i></i><span>${j?'no lighter paint':'no darker paint'}</span></span>`).join('')}</span><button type="button" class="btn hbo" data-g="${k}" title="Open this blend in Blends mode to swap, add or mix steps">Open in Blends</button>`:'<span class="s">No paint on the wheel for this colour.</span>'}</div>`).join('')}</div>`;
+groups.forEach((g,k)=>{const d=g.off>180?g.off-360:g.off,oth=g.off===0?g.l.filter(p=>p!==b):g.l;
+h+=`<h3 class="hh">${k+1}. ${g.role} <small>${Math.round(g.t)}° hue${d?`, ${d>0?'+':''}${d}°`:''}</small></h3><div class="chips">${
+ g.off===0?(oth.length?oth.map(p=>hChip(p,false)).join(''):'<span class="s">No other paints this close in hue.</span>')
+ :(g.l.length?g.l.map(p=>hChip(p,p===g.pk)).join(''):`<span class="s">Nothing on the wheel within ±${HS.tol}°. Widen the hue band in Scheme, tick more ranges, or mix one.</span>`)}</div>`})}
+h+=`<p class="s"><b>Painting tip.</b> ${sc.tip}</p>`;HBL=groups.map(g=>g.bl);return h}
+let HBL=[];
+function hIcon(offs){const pts=offs.map(o=>[12+8*Math.cos((o-60)*Math.PI/180),12+8*Math.sin((o-60)*Math.PI/180)]);
+let s=`<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".45"/>`;
+if(pts.length===1)s+=`<line x1="12" y1="12" x2="${pts[0][0]}" y2="${pts[0][1]}" stroke="currentColor" stroke-width="2"/>`;
+else if(pts.length===2)s+=`<line x1="${pts[0][0]}" y1="${pts[0][1]}" x2="${pts[1][0]}" y2="${pts[1][1]}" stroke="currentColor" stroke-width="2"/>`;
+else s+=`<polygon points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>`;
+const C=['#f2545b','#3a86ff','#ffd23f','#2ec4b6'];pts.forEach((p,i)=>s+=`<circle cx="${p[0]}" cy="${p[1]}" r="2.8" fill="${C[i]}" stroke="#1b1b1b" stroke-width="1"/>`);return s+'</svg>'}
+function schUI(){const b=document.getElementById('hSch');b.innerHTML=hIcon(HSC[SCH].offs)+'Scheme: '+HSC[SCH].n.replace(' complementary','');b.hidden=MODE!=='col'}
+(()=>{const d=document.getElementById('schDlg'),t=document.getElementById('schTol'),tv=document.getElementById('schTolV');
+document.getElementById('schList').innerHTML=Object.keys(HSC).map(k=>`<label class="tyr"><input type="radio" name="sch" value="${k}"${k===SCH?' checked':''}>${hIcon(HSC[k].offs)}<span><b>${HSC[k].n}</b><small>${HSC[k].why}</small></span></label>`).join('');
+t.value=HTOL;tv.textContent='±'+HTOL+'°';
+document.getElementById('hSch').onclick=()=>d.showModal();
+d.addEventListener('change',e=>{if(e.target.name==='sch'){SCH=e.target.value;schUI()}schSave();draw()});
+t.oninput=()=>{HTOL=+t.value;tv.textContent='±'+HTOL+'°';schSave();draw()};
+document.getElementById('sel').addEventListener('click',e=>{const o=e.target.closest('.hbo');if(o){const bl=HBL[+o.dataset.g];if(bl)hOpenBlend(bl);return}const c=e.target.closest('.hch,.hramp button');if(!c)return;const p=P[+c.dataset.i];if(p&&CH.includes(p)){sel=p;NB=p;draw()}})})();
+schUI();
+
 function draw(){let s='';OFF=[];
 for(let h=0;h<360;h+=10){const a0=U(h-5)*Math.PI/180-Math.PI/2,a1=U(h+5)*Math.PI/180-Math.PI/2,R=480,r=110;
 s+=`<path d="M${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}L${CX+R*Math.cos(a0)} ${CY+R*Math.sin(a0)}A${R} ${R} 0 0 1 ${CX+R*Math.cos(a1)} ${CY+R*Math.sin(a1)}L${CX+r*Math.cos(a1)} ${CY+r*Math.sin(a1)}A${r} ${r} 0 0 0 ${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}Z" fill="hsl(${h},65%,50%)" opacity=".16"/>`}
@@ -271,22 +366,25 @@ const hn={0:'Red',30:'Orange',60:'Yellow',120:'Green',180:'Cyan',240:'Blue',280:
 for(const h in hn){const a=U(+h)*Math.PI/180-Math.PI/2;s+=`<text x="${CX+492*Math.cos(a)}" y="${CY+492*Math.sin(a)+4}" text-anchor="middle" font-size="13" fill="currentColor" opacity=".6">${hn[h]}</text>`}
 let comp=[],ana=[];const NBp=MODE==='nmm'?NB:null,R=NBp?nmmRamp(NBp):null,MB=MODE==='mix'?NB:null;
 if(MB&&(!BL||BL.b!==MB))blendSeed(MB);if(MB)blendAuto();const MX=MB?BL.s.map(x=>x.p):null;
-if(sel&&!R&&!MX){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.filter(p=>hd(p.H,th)<=22).sort((a,b)=>hd(a.H,th)-hd(b.H,th)).slice(0,6);
+const HS=sel&&!R&&!MX&&MODE==='col'&&SCH!=='comp'?harmony(sel):null,HIN=HS?new Set(HS.groups.flatMap(g=>g.l)):null,HPK=HS&&SCH!=='mono'?new Set(HS.groups.map(g=>g.pk).filter(Boolean)):new Set();
+if(HS)s+=hUnder(HS,sel);
+if(sel&&!R&&!MX&&!HS){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.filter(p=>hd(p.H,th)<=HTOL).sort((a,b)=>hd(a.H,th)-hd(b.H,th)).slice(0,6);
 ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hd(a.H,sel.H)-hd(b.H,sel.H)).slice(0,6);
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
 if(R)s+=nmmWheel(R);
 if(MX)s+=blendWheel();
-if(sel&&!R&&!MX){const ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
+if(sel&&!R&&!MX&&!HS){const ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
 s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${discStops(sel,comp,ana).map(([h,o])=>`<stop offset="${o.toFixed(4)}" stop-color="${h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
 const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,kk=R0/26;
-CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
+CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):HS?HIN.has(p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
 const st=(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'||p.g==='!'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
 const sw=p===sel?5:comp.includes(p)?4:2;
-s+=`<g class="dot" data-i="${p.i}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))?' stroke="#fff" stroke-width="4"':''}/>`+
+s+=`<g class="dot" data-i="${p.i}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))||(HPK.has(p)&&p!==sel)?' stroke="#fff" stroke-width="4"':''}/>`+
 (show?`<g transform="translate(${p.x} ${p.y}) scale(${kk}) translate(${-p.x} ${-p.y})">`+ls.map((t,i)=>`<text x="${p.x}" y="${p.y-(ls.length*8-4)/1+i*8.5-2+4}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${p.x}" y="${p.y+20-(ls.length>1?1:-3)-(ls.length>1?0:0)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c})</title></g>`});
 OFF.forEach(([p,x,y])=>{const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';s+=`<g class="dot ndot" data-i="${p.i}"><circle cx="${x}" cy="${y}" r="${R0+3}" fill="none" stroke="#1b1b1b" stroke-width="3"/><circle cx="${x}" cy="${y}" r="${R0}" fill="${p.h}" stroke="#fff" stroke-width="4" stroke-dasharray="5 4"/>`+
  (show?`<g transform="translate(${x} ${y}) scale(${kk}) translate(${-x} ${-y})">`+ls.map((t,i)=>`<text x="${x}" y="${y-(ls.length*8-4)+i*8.5+2}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${x}" y="${y+20-(ls.length>1?1:-3)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c}) · a grey or white from the Neutrals list</title></g>`});
+if(HS)s+=hOver(HS);
 svg.innerHTML=s;
 svg.querySelectorAll('.dot').forEach(e=>e.onclick=()=>e.classList.contains('ndot')?neutralShow(P[+e.dataset.i]):pick(P[+e.dataset.i]));
 neuMark(MX?'blend':'ramp');
@@ -294,6 +392,7 @@ const chip=p=>`<span class="chip"><i style="background:${p.h}"></i>${star(p)}${p
 if(R){nmmPanel(NBp,R);return}
 if(MX){blendPanel();return}
 if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>'+TQN().hint+'</b>';return}
+if(HS){document.getElementById('sel').innerHTML=hPanel(HS,sel)+matchHTML(sel);wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel);return}
 if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to start a blend. It starts with the wheel\'s own complements and neighbours, then you swap in your own.</b>';return}
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
 function pick(p){if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
