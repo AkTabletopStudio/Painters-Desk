@@ -291,11 +291,17 @@ let SCH='comp',HTOL=20;try{const o=JSON.parse(localStorage.getItem('pd-scheme'))
 const schSave=()=>{try{localStorage.setItem('pd-scheme',JSON.stringify({s:SCH,t:HTOL}))}catch(e){}};
 const hAng=h=>U(h)*Math.PI/180-Math.PI/2;
 function harmony(b){const sc=HSC[SCH],tol=SCH==='mono'?Math.min(HTOL,14):HTOL,mine=p=>!ONLY_MINE||own(p);
-const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);
+const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);const band=[b,...l].filter(p=>hd(p.H,t)<=tol||p===b);
 if(SCH==='mono')l=[b,...l].sort((x,y)=>x.L-y.L).slice(0,12);
 else{l.sort((x,y)=>hd(x.H,t)-hd(y.H,t));l=main?[b,...l.slice(0,4)]:l.slice(0,6)}
 const sc2=p=>hd(p.H,t)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
-return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k]}});return{sc,groups,tol}}
+return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k],bl:pk&&SCH!=='mono'?hBlend(pk,band.filter(p=>p===pk||nmmOK(p)),mine):null}});return{sc,groups,tol}}
+// A 3-step blend for one scheme colour: the pick as the mid tone, plus the paints in its hue band closest to ~18 Lab L darker and lighter
+// (at least 8 apart, owned paints first when 'Only my paints' is on). A step stays empty when the band has nothing dark or light enough.
+function hBlend(m,band,mine){const L=m.lab[0],f=(dir)=>{const c=band.filter(p=>p!==m&&(dir<0?p.lab[0]<=L-8:p.lab[0]>=L+8));if(!c.length)return null;
+ const tg=L+dir*18,sc=p=>Math.abs(p.lab[0]-tg)+.5*hd(p.H,m.H)+(mine(p)?0:1000);return c.sort((x,y)=>sc(x)-sc(y))[0]};return[f(-1),m,f(1)]}
+// Opens Blends with the colour's 3-step blend fixed in place (shadow and highlight count as the painter's own picks).
+function hOpenBlend(bl){const[sh,m,hi]=bl;sel=m;NB=m;BL={b:m,s:[...(sh?[{p:sh,sp:sh,m:0,man:1}]:[]),{p:m,base:1},...(hi?[{p:hi,sp:hi,m:0,man:1}]:[])]};setMode('mix');document.getElementById('w').scrollIntoView({block:'start'})}
 function hArc(t,tol,r0,r1){const a0=hAng(t-tol),a1=hAng(t+tol),L=tol*2>180?1:0;
 return`M${CX+r0*Math.cos(a0)} ${CY+r0*Math.sin(a0)}L${CX+r1*Math.cos(a0)} ${CY+r1*Math.sin(a0)}A${r1} ${r1} 0 ${L} 1 ${CX+r1*Math.cos(a1)} ${CY+r1*Math.sin(a1)}L${CX+r0*Math.cos(a1)} ${CY+r0*Math.sin(a1)}A${r0} ${r0} 0 ${L} 0 ${CX+r0*Math.cos(a0)} ${CY+r0*Math.sin(a0)}Z`}
 // Bands and the joining shape go under the dots.
@@ -320,12 +326,13 @@ function hPanel(HS,b){const {sc,groups}=HS;let h=`<b>Selected:</b> <div class="c
 if(SCH==='mono'){const l=groups[0].l;h+=`<h3 class="hh">Value ramp <small>darkest to lightest, ${l.length} paint${l.length===1?'':'s'}</small></h3><div class="hramp">${l.map(p=>`<button type="button" data-i="${p.i}" style="background:${p.h}" title="${p.n} (${p.c})" aria-label="${p.n}"></button>`).join('')}</div><div class="chips">${l.map(p=>hChip(p,p===b)).join('')}</div>`}
 else{const gp=groups.filter(g=>g.pk),tot=gp.reduce((a,g)=>a+g.prop,0);
 h+=`<h3 class="hh">Suggested palette <small>rough share of the model</small></h3><div class="hpal">${gp.map(g=>`<div style="flex:${g.prop};background:${g.pk.h};color:${g.pk.lum>.55?'#111':'#fff'}">${Math.round(g.prop/tot*100)}%</div>`).join('')}</div>
-<div class="hpk">${groups.map((g,k)=>`<span><i style="background:${g.pk?g.pk.h:'transparent'}"></i><b>${k+1}. ${g.pk?g.pk.n:'none on the wheel'}</b></span>`).join('')}</div>`;
+<h3 class="hh">Blend for each colour <small>shadow, mid tone, highlight</small></h3><div class="hbl">${groups.map((g,k)=>`<div class="hbr"><b class="hbn">${k+1}. ${g.role}</b>${g.bl?`<span class="hbs">${g.bl.map((p,j)=>p?`<button type="button" class="hch hbsw" data-i="${p.i}" title="${['Shadow','Mid tone','Highlight'][j]}: ${p.n} (${p.c})"><i style="background:${p.h}"></i><span>${star(p)}${p.n}</span></button>`:`<span class="hbsw hbx" title="Nothing ${j?'lighter':'darker'} in this hue band"><i></i><span>${j?'no lighter paint':'no darker paint'}</span></span>`).join('')}</span><button type="button" class="btn hbo" data-g="${k}" title="Open this blend in Blends mode to swap, add or mix steps">Open in Blends</button>`:'<span class="s">No paint on the wheel for this colour.</span>'}</div>`).join('')}</div>`;
 groups.forEach((g,k)=>{const d=g.off>180?g.off-360:g.off,oth=g.off===0?g.l.filter(p=>p!==b):g.l;
 h+=`<h3 class="hh">${k+1}. ${g.role} <small>${Math.round(g.t)}° hue${d?`, ${d>0?'+':''}${d}°`:''}</small></h3><div class="chips">${
  g.off===0?(oth.length?oth.map(p=>hChip(p,false)).join(''):'<span class="s">No other paints this close in hue.</span>')
  :(g.l.length?g.l.map(p=>hChip(p,p===g.pk)).join(''):`<span class="s">Nothing on the wheel within ±${HS.tol}°. Widen the hue band in Scheme, tick more ranges, or mix one.</span>`)}</div>`})}
-h+=`<p class="s"><b>Painting tip.</b> ${sc.tip}</p>`;return h}
+h+=`<p class="s"><b>Painting tip.</b> ${sc.tip}</p>`;HBL=groups.map(g=>g.bl);return h}
+let HBL=[];
 function hIcon(offs){const pts=offs.map(o=>[12+8*Math.cos((o-60)*Math.PI/180),12+8*Math.sin((o-60)*Math.PI/180)]);
 let s=`<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".45"/>`;
 if(pts.length===1)s+=`<line x1="12" y1="12" x2="${pts[0][0]}" y2="${pts[0][1]}" stroke="currentColor" stroke-width="2"/>`;
@@ -339,7 +346,7 @@ t.value=HTOL;tv.textContent='±'+HTOL+'°';
 document.getElementById('hSch').onclick=()=>d.showModal();
 d.addEventListener('change',e=>{if(e.target.name==='sch'){SCH=e.target.value;schUI()}schSave();draw()});
 t.oninput=()=>{HTOL=+t.value;tv.textContent='±'+HTOL+'°';schSave();draw()};
-document.getElementById('sel').addEventListener('click',e=>{const c=e.target.closest('.hch,.hramp button');if(!c)return;const p=P[+c.dataset.i];if(p&&CH.includes(p)){sel=p;NB=p;draw()}})})();
+document.getElementById('sel').addEventListener('click',e=>{const o=e.target.closest('.hbo');if(o){const bl=HBL[+o.dataset.g];if(bl)hOpenBlend(bl);return}const c=e.target.closest('.hch,.hramp button');if(!c)return;const p=P[+c.dataset.i];if(p&&CH.includes(p)){sel=p;NB=p;draw()}})})();
 schUI();
 
 function draw(){let s='';OFF=[];
