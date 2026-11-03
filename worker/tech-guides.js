@@ -169,15 +169,16 @@ export const TECH_TEXT = {
   },
 
   skin: {
-    slug: 'best-paints-for-skin-tones', label: 'Skin tones', level: 4, blurb: 'Warm shadows and pale highlights for pale, mid and dark skin.', short: 'Skin', name: 'skin tones',
+    slug: 'best-paints-for-skin-tones', label: 'Skin tones', level: 4, blurb: 'Warm shadows and pale highlights, with ramps for six skin tones from pale to very dark.', short: 'Skin', name: 'skin tones',
     title: 'How to paint skin tones, with the best paints',
-    desc: 'How to paint skin on miniatures: shading and highlighting pale, mid and dark skin from deep shadow to top highlight, the colour theory behind skin ramps, how The Painters Desk builds a skin ramp, and the closest paints in every brand.',
+    bases: [['Pale skin', '#e8b89a'], ['Olive skin', '#c49a72'], ['Mid skin', '#c08060'], ['Brown skin', '#9a6446'], ['Dark skin', '#6a4030'], ['Very dark skin', '#4a2a20']],
+    desc: 'How to paint skin on miniatures: shading and highlighting pale, olive, mid, brown, dark and very dark skin from deep shadow to top highlight, the colour theory behind skin ramps, how The Painters Desk builds a skin ramp, and the closest paints in every brand.',
     intro: [
       'Skin is the part of a miniature people look at first, especially the face. A good skin ramp gives the face shape (brow, cheekbones, nose and chin), and keeps it looking alive: warm and slightly red in the shadows, paler and a little more yellow on the highest points.',
-      'The same ramp shape works for every skin tone, from pale to dark, and for fantasy skin too: orcs, undead, daemons or blue-skinned aliens. Pick the base skin colour, and the ramp builds the shadows and highlights around it.',
+      'The same ramp shape works for every skin tone, from pale to dark, and for fantasy skin too: orcs, undead, daemons or blue-skinned aliens. Pick the base skin colour, and the ramp builds the shadows and highlights around it. Below are ramps for six human skin tones, from pale to very dark, with the closest real paints in every brand; for any other skin, tap its colour on the wheel.',
     ],
     need: [
-      'A base skin colour, plus paints for the shadows and highlights (the ramps below for pale, mid and dark skin).',
+      'A base skin colour, plus paints for the shadows and highlights (the ramps below, for six skin tones from pale to very dark).',
       'A brush with a good point for the face, and a slightly bigger one for arms and legs.',
       'Optional: a reddish or purple glaze for lips, knuckles and the area around the eyes.',
     ],
@@ -193,6 +194,7 @@ export const TECH_TEXT = {
     colour: [
       'Skin is translucent, and blood shows through it most where it is thin or shaded. That is why skin shadows look warmer and redder than the base, not just darker. The highlights go the other way: paler, a little more yellow and less saturated, because light bounces off the surface before it can pick up much colour.',
       'The ramp runs from about lightness 18 in the deepest shadow to 91 at the top highlight, and keeps most of its saturation in the shadows. A grey or black shadow on skin looks dirty or dead, which is fine for zombies but not for heroes.',
+      'Every skin tone uses the same shape of ramp, so the six ramps below differ in where they start, not in how they work. Olive skin leans more yellow-green in the base and highlights, so keep its shadows a warm brown rather than red. Brown, dark and very dark skin have less room below the base for shadows, so the contrast comes mostly from the highlights: make them clearly lighter and warmer, and keep the deepest shadow close to a rich dark brown rather than black.',
       'Many painters add a cool or purple tint to the deepest shadows for extra depth, especially on pale skin: it is a hint of the complement, the same trick as in the <a href="/guides/colour-theory">colour theory guide</a>. For dark skin, keep the highlights warm and lean them toward a soft golden or coppery tone rather than grey.',
     ],
     wheel: [
