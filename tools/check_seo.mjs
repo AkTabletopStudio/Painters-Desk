@@ -36,3 +36,8 @@ if (/url\((?!["']?(data:|https?:|\/))/.test(th.css)) throw new Error('Relative u
 console.log(`${guides} guides, types ${JSON.stringify(types)}`);
 console.log(`${D.P.length} paints, ${urls.length} pages, ${D.brands.length} brands, ${gl} ranges, ${Object.keys(D.MT).length} chart-matched paints`);
 D.brands.forEach(b => console.log(' ', b.slug, b.paints.length));
+// Comparison pages and colour standards: build a sample so a broken page fails here, not live.
+{
+  const { renderExtra } = await import('../worker/seo.js');
+  console.log(renderExtra(D));
+}

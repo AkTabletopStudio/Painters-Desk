@@ -45,12 +45,23 @@ export async function seo(request, env, url) {
   else if (p.startsWith('/guides/')) {
     const g = GUIDES.find(x => '/guides/' + x.slug === p);
     r = g ? send(guideHTML(D, g)) : send(notFound(), 'text/html; charset=utf-8', 404);
+  } else if (p === '/paints/colour-standards') r = send(standardsPage(D));
+  else if (p.startsWith('/paints/colour-standards/')) {
+    const st = standards(D).find(x => '/paints/colour-standards/' + x.slug === p);
+    r = st ? send(standardPage(D, st)) : send(notFound(), 'text/html; charset=utf-8', 404);
   } else {
-    const [, b, s, extra] = p.split('/').slice(1);
+    const [, b, s, vs, b2, s2, extra] = p.split('/').slice(1);
     const br = D.brands.find(x => x.slug === b);
     const paint = br && s && br.bySlug.get(s);
+    const br2 = vs === 'vs' && D.brands.find(x => x.slug === b2), other = br2 && s2 && br2.bySlug.get(s2);
     if (br && !s) r = send(brandPage(D, br));
-    else if (paint && !extra) r = send(paintPage(D, paint, await usedIn(env, paint)));
+    else if (paint && !vs) r = send(paintPage(D, paint, await usedIn(env, paint)));
+    else if (paint && other && !extra && paint !== other) {
+      // One address per pair: the other order redirects, so search engines see a single page.
+      const c = vsUrl(paint, other);
+      if (c !== p) return Response.redirect(url.origin + c, 301);
+      r = send(comparePage(D, paint, other));
+    }
     else r = send(notFound(), 'text/html; charset=utf-8', 404);
   }
   // Paths with a trailing slash get one address, so search engines don't index both.
@@ -360,17 +371,186 @@ function paintPage(D, p, rs) {
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
 ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Swatches are estimates, so check the real paints before you commit.</p>
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a></p>
+${stdLinksHTML(D, p)}
 ${mt ? `<h2 class="sec">Metallic matches</h2><p class="s">${esc(p.n)} is a metallic${p.t === 'pearl' ? ' (pearl)' : ''} paint, so these are metallic and pearl paints only.</p>` : ''}
 ${grid('ch', 'near')}
 ${xgrid ? `<h2 class="sec">${mt ? 'Non-metallic colours' : 'Metallic matches'}</h2><p class="s">${mt
     ? `The nearest non-metallic paint in each brand to ${esc(p.n)}'s swatch, for non-metallic metal (NMM) or a matt alternative. A different finish, so not a straight swap.`
     : `The nearest metallic paint in each brand to ${esc(p.n)}'s colour. A different finish, so not a straight swap.`}</p>${xgrid}` : ''}
+${compareLinksHTML(D, p)}
 ${usedInHTML(p, rs)}`;
   return page({
     title, desc, path: paintUrl(p), body,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
     ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` } })],
   });
+}
+
+/* ---------- "X vs Y" comparison pages: /paints/<brand>/<paint>/vs/<brand>/<paint> ---------- */
+
+// The pair's address puts the two paints in a fixed order, so each pair has one page.
+const vsUrl = (a, b) => a.url < b.url ? `${a.url}/vs/${b.url.slice(8)}` : `${b.url}/vs/${a.url.slice(8)}`;
+const hdS2 = (a, b) => (b - a + 540) % 360 - 180;
+const TYPE_ONE = { op: 'an opaque base/layer paint', met: 'a metallic', pearl: 'a pearl paint', con: 'a one-coat contrast-style paint', wash: 'a wash/shade', ink: 'an ink, glaze or transparent paint', fx: 'a fluorescent or effect paint', tech: 'a technical paint or medium' };
+
+// The pairs the site links to and lists in the sitemap: for each paint, its nearest same-type paint in its own brand
+// (people compare e.g. two Citadel shades) and its closest match in Citadel, Vallejo and Army Painter, when under ΔE 15.
+// Pairs people search for as "X vs Y" (Search Console, Nov 2026) that the nearest-paint rule doesn't pick on its own.
+const EXTRA_VS = [['citadel/carroburg-crimson', 'citadel/berserker-bloodshade'], ['citadel/pallid-wych-flesh', 'citadel/rakarth-flesh'],
+  ['citadel/tesseract-glow', 'citadel/striking-scorpion-green'], ['pro-acryl/ivory', 'pro-acryl/bright-ivory'],
+  ['citadel/nuln-oil', 'citadel/agrax-earthshade'], ['citadel/agrax-earthshade', 'citadel/reikland-fleshshade']];
+const bySlugPath = (D, x) => { const [b, s] = x.split('/'), br = D.brands.find(y => y.slug === b); return br && br.bySlug.get(s) };
+// Tone Pro tones (T1-T7 of one colour) are only compared with each other, so they don't crowd out plain paints.
+const noTone = (D, p, bi) => p.g === 'p' ? undefined : D.brands[bi].groups.filter(g => g !== 'p');
+function vsOf(D, p) {
+  if (!D.vsOf) D.vsOf = new Map();
+  if (D.vsOf.has(p)) return D.vsOf.get(p);
+  const mine = [];
+  const own = D.brands[p.b].paints.filter(q => q !== p && q.n !== p.n && q.t === p.t && (q.g !== 'p' || p.g === 'p')).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d)[0];
+  if (own && own.d < 15) mine.push(own.p);
+  ['citadel', 'vallejo', 'army-painter'].forEach(sl => {
+    const bi = D.brands.findIndex(b => b.slug === sl);
+    if (bi < 0 || bi === p.b) return;
+    const m = bestIn(D, p, bi, noTone(D, p, bi)).best;
+    if (m && m.d < 15 && !mine.includes(m.p)) mine.push(m.p);
+  });
+  EXTRA_VS.forEach(([x, y]) => {
+    const a = bySlugPath(D, x), b = bySlugPath(D, y), q = a === p ? b : b === p ? a : null;
+    if (q && !mine.includes(q)) mine.push(q);
+  });
+  D.vsOf.set(p, mine);
+  return mine;
+}
+function vsPairs(D) {
+  if (D.vs) return D.vs;
+  const seen = new Map();
+  D.P.filter(p => p.url).forEach(p => vsOf(D, p).forEach(q => { const u = vsUrl(p, q); if (!seen.has(u)) seen.set(u, [p, q]) }));
+  return D.vs = [...seen.values()];
+}
+
+function compareLinksHTML(D, p) {
+  const qs = vsOf(D, p);
+  if (!qs.length) return '';
+  return `<section class="panel"><h2>Compare side by side</h2><ul class="m">${qs.map(q => `<li><i class="sw" style="background:${q.h}"></i><span><a href="${vsUrl(p, q)}">${esc(p.n)} vs ${esc(q.n)}</a><em>${esc(short(D.brands[q.b]))} ${esc(D.GL[q.g])} · ΔE ${dE(p, q).toFixed(0)}, ${closeness(dE(p, q))}</em></span></li>`).join('')}</ul></section>`;
+}
+
+// How b differs from a, in words: lighter/darker, brighter/more muted, warmer/cooler.
+function diffWords(a, b) {
+  const out = [], dL = b.lab[0] - a.lab[0], dC = chromaOf(b) - chromaOf(a);
+  if (Math.abs(dL) >= 3) out.push(`${Math.abs(dL) >= 10 ? 'noticeably ' : 'a little '}${dL > 0 ? 'lighter' : 'darker'}`);
+  if (Math.abs(dC) >= 4) out.push(`${Math.abs(dC) >= 12 ? 'much ' : ''}${dC > 0 ? 'more saturated' : 'more muted'}`);
+  if (chromaOf(a) > 8 && chromaOf(b) > 8) {
+    const toWarm = Math.abs(hdS2(hueOf(a), 60)) - Math.abs(hdS2(hueOf(b), 60));
+    if (Math.abs(toWarm) >= 6) out.push(toWarm > 0 ? 'warmer' : 'cooler');
+  }
+  return out;
+}
+
+function comparePage(D, a, b) {
+  const A = D.brands[a.b], B = D.brands[b.b], d = dE(a, b), same = A === B;
+  const chart = (links(D).get(a.i) || []).find(([j]) => j === b.i);
+  const words = diffWords(a, b), wordsB = diffWords(b, a);
+  const who = p => `${short(D.brands[p.b])} ${p.n}`;
+  const path = vsUrl(a, b);
+  const title = same ? `${a.n} vs ${b.n} (${short(A)}): compared side by side` : `${a.n} vs ${b.n}: ${short(A)} vs ${short(B)} compared`;
+  const verdict = d < 6 ? 'very close: most people won’t see a difference side by side' : d < 10 ? 'close: similar, with a visible difference side by side' : d < 15 ? 'fair: the same colour family, but not a straight swap' : 'loose: different enough that you should pick on purpose';
+  const typeNote = a.t !== b.t ? ` They are different kinds of paint: ${esc(who(a))} is ${TYPE_ONE[a.t]} and ${esc(who(b))} is ${TYPE_ONE[b.t]}, so they won’t behave the same on the model even where the colour is close.` : '';
+  const desc = `${who(a)} vs ${who(b)}: ΔE ${d.toFixed(0)} (${closeness(d)})${words.length ? `; ${b.n} is ${words.join(', ')}` : ''}${chart ? '; listed as equivalents in a conversion chart' : ''}. Swatches side by side, plus closer alternatives. Swatch colours are estimates.`;
+  const ans = `${closeness(d)[0].toUpperCase() + closeness(d).slice(1)} match (ΔE ${d.toFixed(0)}).` + (words.length ? ` ${b.n} is ${words.join(', ')} than ${a.n}.` : ` The swatches are almost the same.`) + (a.t !== b.t ? ' They are different kinds of paint.' : '');
+  const side = p => `<div class="panel"><div class="big" style="background:${p.h};width:100%;height:140px;border-radius:12px" role="img" aria-label="Estimated swatch colour ${p.h}"></div>
+<h2><a href="${p.url}">${esc(p.n)}</a></h2><dl><dt>Brand</dt><dd><a href="/paints/${D.brands[p.b].slug}">${esc(D.brands[p.b].name)}</a></dd><dt>Range</dt><dd>${esc(D.GL[p.g])}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Type</dt><dd>${esc(TYPE_ONE[p.t])}</dd><dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>`;
+  const alts = (p, q) => {
+    const bi = q.b, pool = D.brands[bi].paints.filter(x => x !== p && x !== q && isMetT(x) === isMetT(p) && (x.g !== 'p' || p.g === 'p')), sameT = pool.filter(x => x.t === p.t);
+    const xs = (sameT.length ? sameT : pool).map(x => ({ p: x, d: dE(p, x) })).sort((u, v) => u.d - v.d).slice(0, 3);
+    return xs.length ? `<section class="panel"><h2>Other ${esc(short(D.brands[bi]))} paints close to ${esc(p.n)}</h2><ul class="m">${xs.map(m => `<li><i class="sw" style="background:${m.p.h}"></i><span><a href="${vsUrl(p, m.p)}">${esc(p.n)} vs ${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${m.d < d ? ' · closer than ' + esc(q.n) : ''}</em></span></li>`).join('')}</ul></section>` : '';
+  };
+  const body = `<h1>${esc(a.n)} vs ${esc(b.n)}</h1>
+<div class="grid">${side(a)}${side(b)}</div>
+<section class="panel prose"><h2>How close are they?</h2>
+<p><b>ΔE ${d.toFixed(1)}, ${verdict}.</b> ${words.length ? `${esc(b.n)} is ${words.join(', ')} than ${esc(a.n)}.` : 'Our swatches for the two are almost the same.'}${typeNote}</p>
+${chart ? `<p><span class="ck">✓</span> ${esc(D.msrc[chart[1]] || 'A conversion chart')} lists these two as equivalents.</p>` : ''}
+<h3>Can I use ${esc(b.n)} instead of ${esc(a.n)}?</h3><p>${d < 6 ? 'Yes, for most jobs.' : d < 10 ? 'Usually, if you are not matching paint already on the model.' : d < 15 ? 'Only where an exact match doesn’t matter, such as a new unit or a highlight.' : 'Not as a straight swap; see the closer alternatives below.'} ${esc(ans)}</p>
+<h3>Can I use ${esc(a.n)} instead of ${esc(b.n)}?</h3><p>The same difference applies the other way round${wordsB.length ? `: ${esc(a.n)} is ${wordsB.join(', ')}` : ''}.</p>
+<p class="s">ΔE is the colour difference between our two swatch estimates: under about 6 is close, over about 15 is loose. Real paints also differ in finish, coverage and how they thin, so test before you commit.</p></section>
+<p><a class="btn" href="/#/?paint=${encodeURIComponent(a.g + '|' + a.c + '|' + a.n)}">See ${esc(a.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(b.g + '|' + b.c + '|' + b.n)}">See ${esc(b.n)} on the colour wheel</a></p>
+${alts(a, b)}${alts(b, a)}
+<p>All matches: <a href="${a.url}">${esc(a.n)} equivalents</a> · <a href="${b.url}">${esc(b.n)} equivalents</a></p>`;
+  const faq = { '@type': 'FAQPage', '@id': SITE + path + '#faq', mainEntity: [
+    { '@type': 'Question', name: `Can I use ${b.n} instead of ${a.n}?`, acceptedAnswer: { '@type': 'Answer', text: ans } },
+    { '@type': 'Question', name: `What is the difference between ${a.n} and ${b.n}?`, acceptedAnswer: { '@type': 'Answer', text: `ΔE ${d.toFixed(0)} (${closeness(d)}).${words.length ? ` ${b.n} is ${words.join(', ')}.` : ''} Swatch colours are estimates.` } }] };
+  return page({
+    title, desc, path, body,
+    crumbs: [['Paints', '/paints'], [A.name, '/paints/' + A.slug], [a.n, a.url], [`vs ${b.n}`, path]],
+    ld: [webPage(path, title, desc), faq],
+  });
+}
+
+// For tools/check_seo.mjs: builds the standards pages and a spread of comparison pages, returns a summary line.
+export function renderExtra(D) {
+  const pairs = vsPairs(D), sts = standards(D);
+  standardsPage(D); sts.forEach(st => standardPage(D, st));
+  pairs.filter((x, i) => i % 50 === 0).forEach(([a, b]) => { if (!comparePage(D, a, b).includes('FAQPage')) throw new Error('Bad compare page') });
+  return `${pairs.length} comparison pages, ${sts.length} colour standards (${Object.keys(STD).map(k => k + ' ' + sts.filter(x => x.k === k).length).join(', ')})`;
+}
+
+/* ---------- colour standards: RAL, RLM and FS numbers named by the paint makers ---------- */
+
+// Only numbers the maker prints in the paint's name or code count; nothing is guessed from colour.
+const STD = { RAL: { len: [4], full: 'RAL', about: 'RAL is the German colour standard used for most German Army vehicle colours (Dunkelgelb, Olivgrün, Rotbraun and more).' },
+  RLM: { len: [2], full: 'RLM', about: 'RLM numbers are the German Air Ministry colours used on Luftwaffe aircraft.' },
+  FS: { len: [5], full: 'FS', about: 'FS (Federal Standard 595) numbers are the US colour standard used on American aircraft and vehicles.' } };
+function standards(D) {
+  if (D.std) return D.std;
+  const by = new Map();
+  D.P.filter(p => p.url).forEach(p => {
+    for (const m of (p.n + ' ' + p.c).matchAll(/\b(RAL|RLM|FS)\s?(\d{2,5})(?!\d)/g)) {
+      const [, k, n] = m;
+      if (!STD[k].len.includes(n.length)) continue;
+      const id = k + ' ' + n;
+      if (!by.has(id)) by.set(id, { k, n, id, slug: (k + '-' + n).toLowerCase(), ps: [] });
+      if (!by.get(id).ps.includes(p)) by.get(id).ps.push(p);
+    }
+  });
+  const nameOf = p => p.n.replace(/\b(RAL|RLM|FS)\s?\d+[A-Z]?\b/g, '').replace(/N[ºo°]\s?\d+|\bopt\.?\s?\d|\bF9\b|\(Met\.\)|\(\s*\)|[\/()]/gi, ' ').replace(/\s+/g, ' ').trim();
+  by.forEach(st => {
+    const names = st.ps.map(nameOf).filter(Boolean).sort((a, b) => a.length - b.length);
+    st.name = names[0] || '';
+  });
+  return D.std = [...by.values()].sort((a, b) => a.k.localeCompare(b.k) || a.n.localeCompare(b.n));
+}
+
+function stdLinksHTML(D, p) {
+  const sts = standards(D).filter(st => st.ps.includes(p));
+  return sts.length ? `<p>Colour standard: ${sts.map(st => `<a href="/paints/colour-standards/${st.slug}">${esc(st.id)}${st.name ? ' ' + esc(st.name) : ''}</a>`).join(', ')}</p>` : '';
+}
+
+function standardPage(D, st) {
+  const ref = st.ps[0], path = '/paints/colour-standards/' + st.slug, nm = st.id + (st.name ? ' ' + st.name : '');
+  const makers = [...new Set(st.ps.map(p => short(D.brands[p.b])))];
+  // Plain opaque ranges only: Tone Pro tones and colour-shift paints aren't what a vehicle or aircraft gets painted with.
+  const NOT_STD = ['p', 'D', 'I', 'Q'];
+  const others = D.brands.map((B, bi) => ({ B, m: st.ps.some(p => p.b === bi) ? null : bestIn(D, ref, bi, B.groups.filter(g => !NOT_STD.includes(g))).best })).filter(x => x.m).sort((x, y) => popRank(x.B) - popRank(y.B));
+  const title = `${nm} paint: model paint matches`;
+  const desc = `Paints for ${nm}: ${st.ps.slice(0, 3).map(p => `${short(D.brands[p.b])} ${p.n}${p.c ? ' (' + p.c + ')' : ''}`).join(', ')}, plus the nearest colours in ${others.slice(0, 3).map(x => short(x.B)).join(', ')} and more. Swatch colours are estimates.`;
+  const li = (p, extra = '') => `<li><i class="sw" style="background:${p.h}"></i><span><a href="${p.url}">${esc(short(D.brands[p.b]))} ${esc(label(p))}</a><em>${esc(D.GL[p.g])}${extra}</em></span></li>`;
+  const body = `<h1>${esc(nm)} paint</h1>
+<div class="panel hero"><div class="big" style="background:${ref.h}" role="img" aria-label="Estimated swatch colour ${ref.h}"></div>
+<dl><dt>Standard</dt><dd>${esc(st.k)}</dd><dt>Number</dt><dd>${esc(st.n)}</dd>${st.name ? `<dt>Name</dt><dd>${esc(st.name)}</dd>` : ''}<dt>Swatch</dt><dd>${ref.h} (estimate, from ${esc(short(D.brands[ref.b]))} ${esc(ref.n)})</dd></dl></div>
+<p class="prose">${esc(STD[st.k].about)} Paint makers each mix their own version of a standard colour, and faded or weathered vehicles vary a lot, so expect some difference between brands.</p>
+<section class="panel"><h2>Paints labelled ${esc(st.id)}</h2><p class="s">${esc(makers.join(' and '))} name${makers.length === 1 ? 's' : ''} these paints for ${esc(st.id)}.</p><ul class="m">${st.ps.map(p => li(p)).join('')}</ul></section>
+${others.length ? `<section class="panel"><h2>Nearest colours in other brands</h2><p class="s">Brands that don't label a paint ${esc(st.id)}: the nearest swatch to ${esc(short(D.brands[ref.b]))} ${esc(ref.n)}. These are colour matches from our estimates, not the maker's own pairing.</p><ul class="m">${others.map(x => li(x.m.p, ` · ΔE ${x.m.d.toFixed(0)}, ${closeness(x.m.d)}`)).join('')}</ul></section>` : ''}
+<p><a href="/paints/colour-standards">All RAL, RLM and FS colours</a></p>`;
+  return page({ title, desc, path, body, crumbs: [['Paints', '/paints'], ['Colour standards', '/paints/colour-standards'], [st.id, path]], ld: [webPage(path, title, desc)] });
+}
+
+function standardsPage(D) {
+  const all = standards(D), path = '/paints/colour-standards';
+  const title = 'RAL, RLM and FS colours: matching model paints';
+  const desc = `Find model paints by colour number: ${all.length} RAL, RLM and FS colours with the paints labelled for each and the nearest colours in other brands. Swatch colours are estimates.`;
+  const body = `<h1>RAL, RLM and FS colour numbers</h1>
+<p class="prose">Military colours go by a standard number: RAL for German Army vehicles, RLM for Luftwaffe aircraft and FS 595 for US aircraft and vehicles. Pick a number to see the paints whose makers label them with it, and the nearest colours in other brands.</p>
+${Object.keys(STD).map(k => { const xs = all.filter(st => st.k === k); return xs.length ? `<section class="panel"><h2>${k}</h2><p class="s">${esc(STD[k].about)}</p><ul class="m">${xs.map(st => `<li><i class="sw" style="background:${st.ps[0].h}"></i><span><a href="/paints/colour-standards/${st.slug}">${esc(st.id)}${st.name ? ' ' + esc(st.name) : ''}</a><em>${st.ps.length} paint${st.ps.length === 1 ? '' : 's'}</em></span></li>`).join('')}</ul></section>` : '' }).join('')}`;
+  return page({ title, desc, path, body, crumbs: [['Paints', '/paints'], ['Colour standards', path]], ld: [webPage(path, title, desc, 'CollectionPage')] });
 }
 
 /* ---------- paint search (the box at the top of every /paints page) ---------- */
@@ -544,7 +724,7 @@ function indexPage(D) {
 <p>Find the closest match for any of ${n} miniature paints across ${D.brands.length} brands: Citadel, Vallejo, Army Painter, Pro Acryl, AK Interactive, Scale75 and more.
 Each paint page lists the conversion-chart equivalents and the nearest swatch colours in every other brand. Swatch colours are estimates.</p>
 <div class="grid">${D.brands.map(b => `<a class="panel" style="text-decoration:none" href="/paints/${b.slug}"><h2>${esc(b.name)}</h2><p class="s">${b.paints.length} paints</p></a>`).join('')}</div>
-<p>Want a whole range at once? See the <a href="/guides">conversion charts and paint guides</a>.</p>`;
+<p>Want a whole range at once? See the <a href="/guides">conversion charts and paint guides</a>. Painting scale models? Find paints by <a href="/paints/colour-standards">RAL, RLM and FS colour number</a>.</p>`;
   return page({
     title, desc, path: '/paints', body, crumbs: [['Paints', '/paints']],
     ld: [webPage('/paints', title, desc, 'CollectionPage')],
@@ -1033,7 +1213,8 @@ function notFound() {
 }
 
 function sitemap(D) {
-  const u = ['/', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl))];
+  const u = ['/', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
+    '/paints/colour-standards', ...standards(D).map(x => '/paints/colour-standards/' + x.slug), ...vsPairs(D).map(([a, b]) => vsUrl(a, b))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     u.map(x => `<url><loc>${SITE}${esc(x)}</loc></url>`).join('\n') + '\n</urlset>\n';
 }
