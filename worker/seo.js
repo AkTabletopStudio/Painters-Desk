@@ -634,12 +634,13 @@ const BRAND_INFO = {
   'turbo-dork': 'Turbo Dork is an American brand that only makes metallic and colour-shift paints. TurboShift and ZeniShift paints change colour with the viewing angle and look best over the recommended basecoat.',
   tamiya: 'Tamiya is a Japanese model kit maker. Its XF (flat) and X (gloss) acrylics and its spray cans are made for scale models, but are popular for vehicles, terrain and airbrushing miniatures too.',
   scale75: 'Scale75 is a Spanish miniatures and paint company. Scalecolor is a very matt acrylic range, Fantasy & Games has brighter colours, Instant Colors is the one-coat range and Metal n\' Alchemy is its metallics.',
+  'ammo-by-mig': 'AMMO by Mig Jimenez is a Spanish scale modelling company. ATOM is its acrylic range for brush and airbrush, with military and aircraft camouflage colours alongside brights, metallics and washable paints.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
 const TYPE_NAME = { op: 'opaque base and layer paints', met: 'metallics', pearl: 'pearls', con: 'one-coat contrast-style paints', wash: 'washes and shades', ink: 'inks, glazes and transparents', fx: 'fluorescents and effects', tech: 'technical paints, primers and mediums' };
 const short = br => br.name.replace(' / Warhammer', '');
 // Brands in the order people search for them, used to pick which matches go in a paint page's description.
-const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'scale75', 'tamiya', 'green-stuff-world', 'turbo-dork'];
+const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'scale75', 'tamiya', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
 const popRank = br => { const k = POP.indexOf(br.slug); return k < 0 ? POP.length : k; };
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0 };
 const pct = (k, n) => n ? Math.round(100 * k / n) + '%' : '0%';
