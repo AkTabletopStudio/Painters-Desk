@@ -169,15 +169,18 @@ function hexLab(h) {
 }
 const dE = (a, b) => Math.hypot(a.lab[0] - b.lab[0], a.lab[1] - b.lab[1], a.lab[2] - b.lab[2]);
 
-// Same rule as matchData() in app.js: per other brand, the chart-listed equivalents (closest first), then the 2-3 nearest swatches.
+// Same rule as matchData() in app.js: per other brand, the chart-listed equivalents (closest first), then the 2-3 nearest swatches,
+// of the same finish only (metallic and pearl paints match each other, other paints match other paints). xch/xnear: the other
+// finish, listed apart on the page (chart pairs across finishes, else the one nearest swatch).
+const isMetT = p => p.t === 'met' || p.t === 'pearl';
 export function matches(D, p) {
-  const doc = (D.MT[p.i] || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug);
+  const mt = isMetT(p), doc = (D.MT[p.i] || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug);
   return D.brands.map((br, bi) => {
     if (bi === p.b) return null;
-    const ch = doc.filter(m => m.p.b === bi).sort((a, b) => a.d - b.d);
-    const have = new Set(ch.map(m => m.p));
-    const near = br.paints.filter(q => !have.has(q)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d).slice(0, ch.length ? 2 : 3);
-    return { br, ch, near };
+    const b = doc.filter(m => m.p.b === bi).sort((a, b) => a.d - b.d), ch = b.filter(m => isMetT(m.p) === mt), xch = b.filter(m => isMetT(m.p) !== mt);
+    const have = new Set(b.map(m => m.p)), pool = br.paints.filter(q => !have.has(q)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d);
+    const near = pool.filter(m => isMetT(m.p) === mt).slice(0, ch.length ? 2 : 3), xnear = pool.filter(m => isMetT(m.p) !== mt).slice(0, xch.length ? 0 : 1);
+    return { br, ch, near, xch, xnear };
   }).filter(Boolean);
 }
 
@@ -248,6 +251,7 @@ p.s{color:var(--mut);font-size:14px;margin:0 0 12px}
 .hero{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .big{width:96px;height:96px;border-radius:50%;border:3px solid var(--ink);flex:none}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{color:var(--mut)}dd{margin:0}
+.sec{margin:22px 0 4px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .br h3{margin:0 0 6px;font-size:17px}
 ul.m{list-style:none;margin:0;padding:0}
@@ -338,12 +342,14 @@ function usedInHTML(p, rs) {
 function paintPage(D, p, rs) {
   const br = D.brands[p.b], range = D.GL[p.g] || '', md = matches(D, p);
   const best = md.map(o => ({ br: o.br, m: [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0] })).filter(o => o.m);
+  const mt = isMetT(p), grid = (a, b) => { const g = md.filter(o => o[a].length || o[b].length); return g.length ? `<div class="grid">${g.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o[a].map(m => item(m, 1)).join('')}${o[b].map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>` : '' };
   const brandName = br.name.replace(' / Warhammer', '');
   const title = `${p.n} equivalents & closest matches (${brandName})`;
   const desc = `Closest matches to ${brandName} ${p.n}${p.c ? ' (' + p.c + ')' : ''}: ` +
     best.slice(0, 4).map(o => `${o.br.name.replace(' / Warhammer', '')} ${o.m.p.n}`).join(', ') +
     `, and more. Swatch colours are estimates.`;
   const item = (m, k) => `<li><i class="sw" style="background:${m.p.h}"></i><span>${k ? `<span class="ck" title="${esc(D.msrc[m.s] || 'Conversion chart')}">✓</span> ` : '≈ '}<a href="${paintUrl(m.p)}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${k ? ' · listed in ' + esc(D.msrc[m.s] || 'a conversion chart') : ''}</em></span></li>`;
+  const xgrid = grid('xch', 'xnear');
   const body = `<h1>${esc(p.n)} equivalents</h1>
 <div class="panel hero"><div class="big" style="background:${p.h}" role="img" aria-label="Estimated swatch colour ${p.h}"></div>
 <dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
@@ -351,7 +357,11 @@ function paintPage(D, p, rs) {
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
 ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Swatches are estimates, so check the real paints before you commit.</p>
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a></p>
-<div class="grid">${md.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o.ch.map(m => item(m, 1)).join('')}${o.near.map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>
+${mt ? `<h2 class="sec">Metallic matches</h2><p class="s">${esc(p.n)} is a metallic${p.t === 'pearl' ? ' (pearl)' : ''} paint, so these are metallic and pearl paints only.</p>` : ''}
+${grid('ch', 'near')}
+${xgrid ? `<h2 class="sec">${mt ? 'Non-metallic colours' : 'Metallic matches'}</h2><p class="s">${mt
+    ? `The nearest non-metallic paint in each brand to ${esc(p.n)}'s swatch, for non-metallic metal (NMM) or a matt alternative. A different finish, so not a straight swap.`
+    : `The nearest metallic paint in each brand to ${esc(p.n)}'s colour. A different finish, so not a straight swap.`}</p>${xgrid}` : ''}
 ${usedInHTML(p, rs)}`;
   return page({
     title, desc, path: paintUrl(p), body,

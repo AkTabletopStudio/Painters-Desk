@@ -435,10 +435,14 @@ return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
 P.forEach(p=>p.lab=hexLab(p.h));
 const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
 const MSRC={t:'Two Thin Coats comparison chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart'};
-function matchData(p){const i=p.i,mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
-BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;const ch=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d);
-const have=new Set(ch.map(m=>m.p));const near=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d).slice(0,ch.length?2:3);
-out.push({bn,ch,near})});return out}
+// Metallic and pearl paints only match each other, and other paints only match other paints: a gold is never a yellow's match.
+// The other finish is listed apart (Metallic matches / Non-metallic colours), one nearest per brand plus any chart pairs.
+const isMetT=p=>{const t=paintType(p);return t==='met'||t==='pearl'};
+function matchData(p){const i=p.i,mt=isMetT(p),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
+BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;const b=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d),ch=b.filter(m=>isMetT(m.p)===mt),xch=b.filter(m=>isMetT(m.p)!==mt);
+const have=new Set(b.map(m=>m.p)),pool=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d);
+const near=pool.filter(m=>isMetT(m.p)===mt).slice(0,ch.length?2:3),xnear=pool.filter(m=>isMetT(m.p)!==mt).slice(0,xch.length?0:1);
+out.push({bn,ch,near,xch,xnear})});return out}
 // Links from a selected paint to its own paint page (the Worker's /paints/find looks up the page by paint key) and to a conversion chart for its brand.
 const CONV_G={'Citadel / Warhammer':['guides','Conversion charts'],'Army Painter':['guides/army-painter-to-citadel','Army Painter to Citadel chart'],'Vallejo':['guides/vallejo-to-citadel','Vallejo to Citadel chart'],
  'Pro Acryl':['guides/pro-acryl-to-citadel','Pro Acryl to Citadel chart'],'AK Interactive':['guides/citadel-to-ak-interactive','Citadel to AK chart'],'Scale75':['guides/citadel-to-scale75','Citadel to Scale75 chart']};
@@ -446,14 +450,16 @@ function guideLinks(p){if(p.g==='B')return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][
  return`<p class="s glinks"><a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
 function matchHTML(p){const md=matchData(p);let h=guideLinks(p)+'<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>';
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
-md.forEach(o=>{if(!o.ch.length&&!o.near.length)return;h+=`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o.ch.map(m=>c(m,1)).join('')}${o.near.map(m=>c(m,0)).join('')}</div></div>`});
-if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
+const rows=(a,b)=>md.map(o=>!o[a].length&&!o[b].length?'':`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o[a].map(m=>c(m,1)).join('')}${o[b].map(m=>c(m,0)).join('')}</div></div>`).join('');
+const mt=isMetT(p),x=rows('xch','xnear');h+=(mt?'<p class="s"><b>Metallic matches</b> (metallic and pearl paints only)</p>':'')+rows('ch','near');
+if(x)h+=`<h3 class="mx">${mt?'Non-metallic colours':'Metallic matches'}</h3><p class="s">${mt?'The nearest non-metallic paint in each brand, for non-metallic metal (NMM) or a matt alternative. A different finish, so not a straight swap.':'The nearest metallic paint in each brand. A different finish, so not a straight swap.'}</p>`+x;
+if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length||o.xch.length||o.xnear.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
 function addOn(list,p){list.forEach(q=>q.on=true);layout();renderNeu();boxes();showP(p);remember()}
 function showP(p){if(MODE==='nmm'){NB=p;sel=CH.includes(p)?p:null;draw()}else if(CH.includes(p)){sel=p;draw()}else{sel=null;draw();neutralShow(p)}}
 function wireMatch(p){const el=document.getElementById('sel');
 el.querySelectorAll('.mt .chip').forEach(e=>e.onclick=()=>{const q=P[+e.dataset.mi];addOn([q],q)});
 const md=matchData(p),a=document.getElementById('mAddDoc'),b=document.getElementById('mAddAll');
-if(a)a.onclick=()=>addOn(md.flatMap(o=>o.ch.map(m=>m.p)),p);if(b)b.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.near].map(m=>m.p)),p)}
+if(a)a.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.xch].map(m=>m.p)),p);if(b)b.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.near,...o.xch,...o.xnear].map(m=>m.p)),p)}
 function neutralShow(p){if(MODE==='mix'&&blendFill(p))return;if(MODE==='nmm'||MODE==='mix'){sel=null;NB=p;nmmSkip=[];draw();return}document.getElementById('sel').innerHTML=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span></div><p class="s">Neutral paint: it sits outside the hue wheel. Use it to dull a neighboring color or set value in an underpainting; warm greys pair with oranges and flesh, cool greys with blues.</p>`+matchHTML(p);wireMatch(p);window.pdRecipesFor&&pdRecipesFor(p)}
 // Last wheel selection: {t,g:[fully ticked ranges],k:[other ticked paint keys]}, kept in this browser and (via account.js) on the account.
 const WK='pd-wheel',GS=[...new Set(P.map(p=>p.g))];
@@ -574,7 +580,7 @@ function kmeans(k){let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647,
   const S=C.map(()=>[0,0,0,0]);PX.forEach((p,i)=>{const s=S[A[i]];s[0]+=p[3][0];s[1]+=p[3][1];s[2]+=p[3][2];s[3]++});S.forEach((s,j)=>{if(s[3])C[j]=[s[0]/s[3],s[1]/s[3],s[2]/s[3]]});if(!ch&&it)break}
  const R=C.map(c=>({lab:c,rgb:[0,0,0],n:0}));PX.forEach((p,i)=>{const r=R[A[i]];r.rgb[0]+=p[0];r.rgb[1]+=p[1];r.rgb[2]+=p[2];r.n++});
  return R.filter(r=>r.n).map(r=>({lab:r.lab,h:hx(...r.rgb.map(v=>v/r.n)),w:r.n/n})).sort((a,b)=>b.w-a.w)}
-const cands=()=>P.filter(p=>p.g!=='B'&&shown(p)&&(!$('phMine').checked||own(p)));
+const cands=()=>P.filter(p=>p.g!=='B'&&shown(p)&&!isMetT(p)&&(!$('phMine').checked||own(p)));
 function match(){const C=cands(),used=new Set();COLS.forEach(c=>{c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const f=c.m.find(m=>!used.has(m.p))||c.m[0];c.pick=f?f.p:null;if(c.pick)used.add(c.pick)});render()}
 function run(){if(!PX)return;COLS=kmeans(+$('phK').value);match()}
 function render(){const R=$('phRes');if(!COLS.length){R.innerHTML='';$('phGo').disabled=true;return}
