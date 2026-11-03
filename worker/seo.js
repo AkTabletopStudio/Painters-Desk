@@ -344,13 +344,16 @@ function paintPage(D, p, rs) {
   const best = md.map(o => ({ br: o.br, m: [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0] })).filter(o => o.m);
   const mt = isMetT(p), grid = (a, b) => { const g = md.filter(o => o[a].length || o[b].length); return g.length ? `<div class="grid">${g.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o[a].map(m => item(m, 1)).join('')}${o[b].map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>` : '' };
   const brandName = br.name.replace(' / Warhammer', '');
-  const title = `${p.n} equivalents & closest matches (${brandName})`;
-  const desc = `Closest matches to ${brandName} ${p.n}${p.c ? ' (' + p.c + ')' : ''}: ` +
-    best.slice(0, 4).map(o => `${o.br.name.replace(' / Warhammer', '')} ${o.m.p.n}`).join(', ') +
-    `, and more. Swatch colours are estimates.`;
+  // Titles use the words people search with ("<paint> equivalent", "<paint> alternative"); the description leads with the
+  // closest matches in the most-searched brands first.
+  const title = `${brandName} ${p.n} equivalent & alternatives`;
+  const pick = [...best].sort((a, b) => popRank(a.br) - popRank(b.br)).slice(0, 4);
+  const desc = `The closest matches to ${brandName} ${p.n}${p.c ? ' (' + p.c + ')' : ''}: ` +
+    pick.map(o => `${short(o.br)} ${o.m.p.n}`).join(', ') +
+    `, plus matches in ${D.brands.length - 1 - pick.length} more brands. Swatch colours are estimates.`;
   const item = (m, k) => `<li><i class="sw" style="background:${m.p.h}"></i><span>${k ? `<span class="ck" title="${esc(D.msrc[m.s] || 'Conversion chart')}">✓</span> ` : '≈ '}<a href="${paintUrl(m.p)}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${k ? ' · listed in ' + esc(D.msrc[m.s] || 'a conversion chart') : ''}</em></span></li>`;
   const xgrid = grid('xch', 'xnear');
-  const body = `<h1>${esc(p.n)} equivalents</h1>
+  const body = `<h1>${esc(p.n)} equivalent and alternatives</h1>
 <div class="panel hero"><div class="big" style="background:${p.h}" role="img" aria-label="Estimated swatch colour ${p.h}"></div>
 <dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
 <p>Looking for a substitute for ${esc(brandName)} ${esc(p.n)}? These are the closest paints in each other brand on The Painters Desk.
@@ -455,6 +458,9 @@ const BRAND_INFO = {
 };
 const TYPE_NAME = { op: 'opaque base and layer paints', met: 'metallics', pearl: 'pearls', con: 'one-coat contrast-style paints', wash: 'washes and shades', ink: 'inks, glazes and transparents', fx: 'fluorescents and effects', tech: 'technical paints, primers and mediums' };
 const short = br => br.name.replace(' / Warhammer', '');
+// Brands in the order people search for them, used to pick which matches go in a paint page's description.
+const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'scale75', 'tamiya', 'green-stuff-world', 'turbo-dork'];
+const popRank = br => { const k = POP.indexOf(br.slug); return k < 0 ? POP.length : k; };
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0 };
 const pct = (k, n) => n ? Math.round(100 * k / n) + '%' : '0%';
 const hueOf = p => (Math.atan2(p.lab[2], p.lab[1]) * 180 / Math.PI + 360) % 360;
@@ -470,9 +476,9 @@ function links(D) {
 
 // Matches for p in brand bi: the closest chart-listed equivalent (if any), and the nearest other paint of the same type
 // (shade for shade, metallic for metallic) when the brand has that type, else the nearest of any type.
-function bestIn(D, p, bi) {
-  const doc = (links(D).get(p.i) || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug && m.p.b === bi).sort((a, b) => a.d - b.d);
-  const all = D.brands[bi].paints, same = all.filter(q => q.t === p.t), have = new Set(doc.map(m => m.p));
+function bestIn(D, p, bi, gs) {
+  const doc = (links(D).get(p.i) || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug && m.p.b === bi && (!gs || gs.includes(m.p.g))).sort((a, b) => a.d - b.d);
+  const all = D.brands[bi].paints.filter(q => !gs || gs.includes(q.g)), same = all.filter(q => q.t === p.t), have = new Set(doc.map(m => m.p));
   const near = (same.length ? same : all).filter(q => !have.has(q)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d);
   return { doc: doc[0], near: near[0], best: [doc[0], near[0]].filter(Boolean).sort((a, b) => a.d - b.d)[0] };
 }
@@ -548,7 +554,8 @@ Each paint page lists the conversion-chart equivalents and the nearest swatch co
 /* ---------- guides: conversion charts and technique paint lists ---------- */
 
 const GUIDE_DATE = '2026-10-25';
-const conv = (a, b, an, bn) => ({ slug: `${a}-to-${b}`, conv: [a, b], title: `${an} to ${bn} conversion chart`, label: `${an} → ${bn}` });
+// o.bg limits the target brand to some ranges (e.g. Vallejo Model Color/Air for Tamiya), o.note adds a line to the intro.
+const conv = (a, b, an, bn, o = {}) => ({ slug: `${a}-to-${b}`, conv: [a, b], title: `${an} to ${bn} conversion chart`, label: `${an} → ${bn}`, ...o });
 const GUIDES = [
   conv('citadel', 'vallejo', 'Citadel', 'Vallejo'),
   conv('citadel', 'army-painter', 'Citadel', 'Army Painter'),
@@ -558,6 +565,14 @@ const GUIDES = [
   conv('vallejo', 'citadel', 'Vallejo', 'Citadel'),
   conv('army-painter', 'citadel', 'Army Painter', 'Citadel'),
   conv('pro-acryl', 'citadel', 'Pro Acryl', 'Citadel'),
+  conv('citadel', 'two-thin-coats', 'Citadel', 'Two Thin Coats'),
+  conv('two-thin-coats', 'citadel', 'Two Thin Coats', 'Citadel'),
+  conv('ak-interactive', 'citadel', 'AK Interactive', 'Citadel'),
+  conv('tamiya', 'vallejo', 'Tamiya', 'Vallejo', { bg: ['Z', 'Y'], note: 'Matches come from Vallejo Model Color and Model Air, the ranges scale modellers use alongside Tamiya.' }),
+  // One Citadel range against several brands at once: conv has only the source brand, ag picks its ranges, to lists the targets.
+  { slug: 'tone-pro-conversion-chart', conv: ['citadel'], ag: ['p'], to: ['army-painter', 'vallejo', 'ak-interactive', 'pro-acryl', 'two-thin-coats'],
+    title: 'Citadel Tone Pro conversion chart', label: 'Tone Pro → other brands',
+    note: 'Each Tone Pro colour comes as a set of tones from T1 (darkest) upwards, so every tone is matched on its own. The matches are by swatch colour, so they will not have the same translucent finish.' },
   // Technique guides, one per technique in the wheel's Ramps mode plus drybrushing; the words are in tech-guides.js.
   ...Object.entries(TECH_TEXT).map(([q, t]) => ({ ...t, q, published: ['zen', 'edge', 'glaze', 'dry'].includes(q) ? '2026-10-26' : GUIDE_DATE })),
   { slug: 'colour-theory', page: theoryPage, title: 'Colour theory for miniature painters', learn: true, label: 'Colour theory',
@@ -576,9 +591,10 @@ const article = (path, title, desc, pub = GUIDE_DATE, mod = pub) => webPage(path
 });
 
 function convPage(D, g) {
+  if (g.to) return multiConvPage(D, g);
   const A = brandBy(D, g.conv[0]), B = brandBy(D, g.conv[1]), bi = D.brands.indexOf(B);
   const groups = A.groups.map(x => ({ g: x, ps: A.paints.filter(p => p.g === x) })).filter(x => x.ps.length);
-  const rows = A.paints.map(p => ({ p, ...bestIn(D, p, bi) }));
+  const rows = A.paints.map(p => ({ p, ...bestIn(D, p, bi, g.bg) }));
   const by = new Map(rows.map(r => [r.p, r]));
   const close = rows.filter(r => r.best && r.best.d < 6).length, charted = rows.filter(r => r.doc).length;
   const cell = m => m ? `<i class="sw" style="background:${m.p.h}"></i>${m.s ? `<span class="ck" title="${esc(D.msrc[m.s] || 'Conversion chart')}">✓</span> ` : '≈ '}<a href="${m.p.url}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}</em>` : '–';
@@ -588,10 +604,27 @@ function convPage(D, g) {
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} paint on The Painters Desk and its closest ${esc(short(B))} paints. The first column (<span class="ck">✓</span>) is the equivalent a manufacturer or community conversion chart lists, where there is one; the second (≈) is the nearest swatch colour of the same paint type (shade for shade, metallic for metallic), worked out from our swatch estimates. When the two disagree, either the chart pairing is a loose one or our swatch estimate is off, so compare the real paints.
 ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
-<p>${close} of ${A.paints.length} paints (${pct(close, A.paints.length)}) have a ${esc(short(B))} match under ΔE 6, and ${charted} have a chart-listed equivalent. Tap any paint for its matches in every other brand.</p></div>
+${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>${close} of ${A.paints.length} paints (${pct(close, A.paints.length)}) have a ${esc(short(B))} match under ΔE 6, and ${charted} have a chart-listed equivalent. Tap any paint for its matches in every other brand.</p></div>
 ${groups.map(x => `<section class="panel"><h2>${esc(short(A))} ${esc(D.GL[x.g])}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(short(A))}</th><th>Chart-listed ${esc(short(B))}</th><th>Nearest ${esc(short(B))} colour</th></tr></thead><tbody>${x.ps.map(p => { const r = by.get(p); return `<tr><td><i class="sw" style="background:${p.h}"></i><a href="${p.url}">${esc(label(p))}</a></td><td>${cell(r.doc)}</td><td>${cell(r.near)}</td></tr>` }).join('')}</tbody></table></div></section>`).join('')}
 ${guideLinks(g)}`;
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc)] });
+}
+
+// A chart of one range against several brands: one column per brand, the closest of the chart-listed and nearest-colour matches.
+function multiConvPage(D, g) {
+  const A = brandBy(D, g.conv[0]), Bs = g.to.map(s => brandBy(D, s)), ps = A.paints.filter(p => g.ag.includes(p.g));
+  const rng = g.ag.map(x => D.GL[x]).join(' / ');
+  const rows = ps.map(p => ({ p, m: Bs.map(B => bestIn(D, p, D.brands.indexOf(B)).best) }));
+  const cell = m => m ? `<i class="sw" style="background:${m.p.h}"></i>${m.s ? `<span class="ck" title="${esc(D.msrc[m.s] || 'Conversion chart')}">✓</span> ` : '≈ '}<a href="${m.p.url}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}</em>` : '–';
+  const path = '/guides/' + g.slug, title = g.title;
+  const desc = `${short(A)} ${rng} conversion chart: the closest ${Bs.map(short).join(', ')} match for all ${ps.length} ${rng} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
+  const body = `<h1>${esc(title)}</h1>
+<div class="prose"><p>Every ${esc(short(A))} ${esc(rng)} paint on The Painters Desk and its closest match in ${Bs.map(B => esc(short(B))).join(', ')}. A <span class="ck">✓</span> means a manufacturer or community conversion chart lists that pairing; ≈ means it is the nearest swatch colour of the same paint type, worked out from our swatch estimates.
+ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>Tap any paint for its matches in every brand.</p></div>
+<section class="panel"><h2>${esc(short(A))} ${esc(rng)}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(rng)}</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr><td><i class="sw" style="background:${r.p.h}"></i><a href="${r.p.url}">${esc(label(r.p))}</a></td>${r.m.map(m => `<td>${cell(m)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+${guideLinks(g)}`;
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc, '2026-11-03')] });
 }
 
 // Technique ramps: the same targets as the Ramps mode on the wheel (TQ in app.js, 7 steps, no tint).
@@ -978,7 +1011,7 @@ function guideLinks(cur) {
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
   const title = 'Miniature painting guides and paint conversion charts';
-  const desc = 'Colour theory for miniature painters, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and Citadel to Vallejo, Army Painter, Pro Acryl, AK and Scale75 conversion charts, built from ' + n + ' paints. Swatch colours are estimates.';
+  const desc = 'Colour theory for miniature painters, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and conversion charts between Citadel, Vallejo, Army Painter, Pro Acryl, AK, Two Thin Coats, Scale75 and Tamiya, plus a Tone Pro chart, built from ' + n + ' paints. Swatch colours are estimates.';
   const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${RAMPS[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
   const charts = (k, h) => `<div><h3>${h}</h3><ul class="m">${GUIDES.filter(g => g.conv && g.conv[k] === 'citadel').map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div>`;
   const body = `<h1>Paint guides</h1>
@@ -986,7 +1019,7 @@ function guidesPage(D) {
 <section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
 <section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
 <section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
-<section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}</div></section>
+<section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}<div><h3>Other charts</h3><ul class="m">${GUIDES.filter(g => g.conv && !g.conv.slice(0, 2).includes('citadel')).map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div></div></section>
 <p>Looking for one paint? <a href="/paints">Browse every brand</a>.</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
 }
