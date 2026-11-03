@@ -6,6 +6,7 @@
 
 import { TECH_TEXT } from './tech-guides.js';
 import { ANATOMY, HAIR, SHAPES, JOBS, CARE, MISTAKES, PICKS } from './brush-guides.js';
+import { CRAFT, CRAFT_DATE } from './craft-guides.js';
 
 const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
@@ -280,7 +281,8 @@ dialog.pd{background:var(--card);color:var(--fg);border:3px solid var(--ink);bor
 .prose p,p.prose{margin:0 0 12px;max-width:720px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
 .stats div{border:2px solid var(--ink);border-radius:12px;padding:8px 10px}.stats b{display:block;font:400 22px var(--hf)}
-.tw{overflow-x:auto}
+.tw{overflow-x:auto}a.pr{white-space:nowrap}a.pr i.sw{display:inline-block;width:16px;height:16px;vertical-align:-3px;margin:0 4px 0 0}
+.toc{columns:2 240px;margin:0 0 4px}.faq h3{margin:14px 0 4px}table.pk td{min-width:150px}table.pk a.pr{white-space:normal}table.pk th .sw{display:inline-block;vertical-align:-5px;margin-right:6px}
 table.cv{border-collapse:collapse;width:100%;font-size:15px}
 table.cv th{text-align:left;font-size:13px;color:var(--mut);padding:4px 6px}
 table.cv td{padding:5px 6px;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);vertical-align:top}
@@ -766,6 +768,9 @@ const GUIDES = [
     blurb: 'Hair, shapes and sizes, which brush for which job, and how to keep a point.' },
   { slug: 'best-brushes-for-miniature-painting', page: bestBrushesPage, brush: 2, title: 'The best brushes for miniature painting', label: 'The best brushes',
     blurb: 'Well-known brushes for each job, from cheap synthetics to kolinsky sable.' },
+  // Painting basics (thinning, priming and varnishing, airbrushing, contrast paints, black and white, basing, weathering):
+  // the words are in craft-guides.js, the page is craftPage.
+  ...CRAFT.map(t => ({ ...t, page: craftPage })),
 ];
 
 const brandBy = (D, s) => D.brands.find(b => b.slug === s);
@@ -1172,6 +1177,74 @@ ${guideLinks(g)}`;
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [brushLD(path, title, desc)] });
 }
 
+/* ---------- painting basics guides: the words are in craft-guides.js ---------- */
+
+// [[brand/paint-slug]] in the guide text becomes a link to that paint with its swatch. An unknown paint fails the build check.
+function paintRef(D, k) {
+  const p = bySlugPath(D, k);
+  if (!p) throw new Error('Unknown paint in guide text: ' + k);
+  return `<a class="pr" href="${p.url}"><i class="sw" style="background:${p.h}"></i>${esc(p.n)}</a>`;
+}
+const refs = (D, t) => t.replace(/\[\[([^\]]+)\]\]/g, (_, k) => paintRef(D, k));
+const CRAFT_POOL = { op: [p => p.ramp, 40], con: [p => p.t === 'con', 10] };
+
+// The nearest paint in each brand for each target colour, as a table (brands down, targets across). Opaque picks use the
+// same lightness-weighted fit as the ramps, without repeats; contrast picks only look at contrast-style paints.
+function picksTable(D, { steps, pool = 'op' }) {
+  const [ok, min] = CRAFT_POOL[pool], grade = d => d < 6 ? 'close' : d < 12 ? 'fair' : 'loose';
+  const T = steps.map(([r, h, rx]) => ({ r, t: hexLab(h), h, rx }));
+  // A step with a name pattern (a black base should be a paint called black) takes the nearest such paint when one is
+  // within ΔE 15, before the other steps are fitted.
+  const fitNamed = pool => {
+    const pre = T.map(x => x.rx ? pool.filter(q => x.rx.test(q.n)).map(q => ({ ...x, p: q, d: dE({ lab: x.t }, q) })).sort((a, b) => a.d - b.d)[0] : null).map(m => m && m.d < 15 ? m : null);
+    const rest = fit(T.filter((x, i) => !pre[i]), pool.filter(q => !pre.some(m => m && m.p === q)));
+    return T.map((x, i) => pre[i] || rest.shift());
+  };
+  const rows = D.brands.map(br => ({ br, pool: br.paints.filter(ok) })).filter(x => x.pool.length >= min).sort((a, b) => popRank(a.br) - popRank(b.br))
+    .map(x => [`<a href="/paints/${x.br.slug}">${esc(short(x.br))}</a>`, ...fitNamed(x.pool).map(s => !s.p ? '–' : s.d > 20 ? `<em>No close match</em>` :
+      `<a class="pr" href="${s.p.url}"><i class="sw" style="background:${s.p.h}"></i>${esc(s.p.n)}</a><em>${esc(D.GL[s.p.g])} · ΔE ${s.d.toFixed(0)}, ${grade(s.d)}</em>`)]);
+  return `<div class="tw"><table class="cv pk"><thead><tr><th>Brand</th>${T.map(x => `<th><i class="sw" style="background:${x.h}"></i>${esc(x.r)}</th>`).join('')}</tr></thead><tbody>${rows.map(row).join('')}</tbody></table></div>
+<p class="s" style="margin-top:8px">Target colours along the top; under each, the closest paint in that brand by swatch colour (ΔE under 6 is close, under 12 fair). Swatch colours are estimates, so check against the real pots.</p>`;
+}
+
+// Ranges of one kind (airbrush or contrast-style) with how many paints each has on the site.
+function rangesTable(D, kind) {
+  const rows = [];
+  D.brands.slice().sort((a, b) => popRank(a) - popRank(b)).forEach(br => br.groups.forEach(g => {
+    const ps = br.paints.filter(p => p.g === g), n = kind === 'air' ? (/\bAir\b/.test(D.GL[g]) ? ps.length : 0) : ps.filter(p => p.t === 'con').length;
+    if (n >= 10) rows.push([`<a href="/paints/${br.slug}">${esc(short(br))}</a>`, esc(D.GL[g]), String(n)]);
+  }));
+  return table(['Brand', 'Range', kind === 'air' ? 'Paints on the site' : 'Colours on the site'], rows);
+}
+
+function craftBlock(D, b) {
+  const t = x => refs(D, x);
+  if (typeof b === 'string') return `<p>${t(b)}</p>`;
+  if (b.h3) return `<h3>${t(b.h3)}</h3>`;
+  if (b.ul) return `<ul>${b.ul.map(x => `<li>${t(x)}</li>`).join('')}</ul>`;
+  if (b.ol) return `<ol>${b.ol.map(x => `<li>${t(x)}</li>`).join('')}</ol>`;
+  if (b.table) return table(b.table[0], b.table[1].map(r => r.map(t)));
+  if (b.picks) return picksTable(D, b.picks);
+  if (b.ranges) return rangesTable(D, b.ranges);
+  if (b.paints) return `<ul class="m sr">${b.paints.map(k => { const p = bySlugPath(D, k); if (!p) throw new Error('Unknown paint in guide: ' + k);
+    return `<li><i class="sw" style="background:${p.h}"></i><span><a href="${p.url}">${esc(p.n)}</a><em>${esc(short(D.brands[p.b]))} · ${esc(D.GL[p.g])}</em></span></li>` }).join('')}</ul>`;
+  throw new Error('Unknown guide block');
+}
+
+function craftPage(D, g) {
+  const path = '/guides/' + g.slug, title = g.title, desc = g.desc;
+  const secs = g.sections.map(x => `<section class="panel prose" id="${slug(x.h)}"><h2>${esc(x.h)}</h2>${x.body.map(b => craftBlock(D, b)).join('\n')}</section>`).join('\n');
+  const body = `<h1>${esc(title)}</h1>
+<div class="prose">${g.intro.map(p => `<p>${refs(D, p)}</p>`).join('')}</div>
+<section class="panel prose"><h2>On this page</h2><ul class="toc">${g.sections.map(x => `<li><a href="#${slug(x.h)}">${esc(x.h)}</a></li>`).join('')}${g.faq ? '<li><a href="#questions">Questions</a></li>' : ''}</ul></section>
+${secs}
+${g.faq ? `<section class="panel prose faq" id="questions"><h2>Questions</h2>${g.faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}</section>` : ''}
+${guideLinks(g)}`;
+  const ld = [article(path, title, desc, CRAFT_DATE)];
+  if (g.faq) ld.push({ '@type': 'FAQPage', '@id': SITE + path + '#questions', mainEntity: g.faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld });
+}
+
 // Exported for tools/check_seo.mjs: builds every guide page and the brand guides, returns how many guides there are.
 export function renderGuides(D) {
   GUIDES.forEach(g => {
@@ -1185,7 +1258,7 @@ export function renderGuides(D) {
 
 // The guides in the order the /guides list shows them: colour theory, techniques from easiest to hardest, brushes, then
 // conversion charts (from Citadel, then to Citadel).
-const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level),
+const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.basic).sort((a, b) => a.basic - b.basic), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level),
   ...GUIDES.filter(g => g.brush).sort((a, b) => a.brush - b.brush), ...GUIDES.filter(g => g.conv)];
 
 function guideLinks(cur) {
@@ -1196,12 +1269,13 @@ function guideLinks(cur) {
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
   const title = 'Miniature painting guides and paint conversion charts';
-  const desc = 'Colour theory for miniature painters, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and conversion charts between Citadel, Vallejo, Army Painter, Pro Acryl, AK, Two Thin Coats, Scale75 and Tamiya, plus a Tone Pro chart, built from ' + n + ' paints. Swatch colours are estimates.';
+  const desc = 'Colour theory for miniature painters, how to thin paints, prime, varnish, airbrush, use contrast paints, paint black and white, base and weather models, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and conversion charts between Citadel, Vallejo, Army Painter, Pro Acryl, AK, Two Thin Coats, Scale75 and Tamiya, plus a Tone Pro chart, built from ' + n + ' paints. Swatch colours are estimates.';
   const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${RAMPS[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
   const charts = (k, h) => `<div><h3>${h}</h3><ul class="m">${GUIDES.filter(g => g.conv && g.conv[k] === 'citadel').map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div>`;
   const body = `<h1>Paint guides</h1>
-<p class="prose">Guides to colour, painting techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
+<p class="prose">Guides to colour, painting basics, techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
+<section class="panel"><h2>Painting basics</h2><p class="s">The groundwork every model needs: thinning, priming and varnishing, airbrushing, contrast paints, black and white, bases and weathering.</p><ul class="m gl">${guideOrder().filter(g => g.basic).map(card).join('')}</ul></section>
 <section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
 <section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
 <section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}<div><h3>Other charts</h3><ul class="m">${GUIDES.filter(g => g.conv && !g.conv.slice(0, 2).includes('citadel')).map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div></div></section>
