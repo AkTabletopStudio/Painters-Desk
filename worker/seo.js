@@ -638,12 +638,13 @@ const BRAND_INFO = {
   'mr-hobby': 'Mr. Hobby is the hobby paint brand of GSI Creos in Japan. Mr. Color is its solvent-based acrylic lacquer, Aqueous Hobby Color the water-based acrylic and Acrysion the low-odour water-based range, all with large sets of aircraft, armour and ship colours.',
   reaper: 'Reaper Miniatures is an American miniatures company. Its Master Series Paints come in triads of a shadow, a midtone and a highlight, with skin, metallic, liner, clear and ink colours.',
   'formula-p3': 'Formula P3 is the paint range Privateer Press made for its Warmachine and Hordes miniatures. Many colours are named after the factions they were made for, and the range includes metallics, inks and washes.',
+  'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
 const TYPE_NAME = { op: 'opaque base and layer paints', met: 'metallics', pearl: 'pearls', con: 'one-coat contrast-style paints', wash: 'washes and shades', ink: 'inks, glazes and transparents', fx: 'fluorescents and effects', tech: 'technical paints, primers and mediums' };
 const short = br => br.name.replace(' / Warhammer', '');
 // Brands in the order people search for them, used to pick which matches go in a paint page's description.
-const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'reaper', 'formula-p3', 'scale75', 'tamiya', 'mr-hobby', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
+const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'reaper', 'formula-p3', 'kimera-kolors', 'scale75', 'tamiya', 'mr-hobby', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
 const popRank = br => { const k = POP.indexOf(br.slug); return k < 0 ? POP.length : k; };
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0 };
 const pct = (k, n) => n ? Math.round(100 * k / n) + '%' : '0%';
