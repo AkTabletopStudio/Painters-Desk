@@ -8,7 +8,8 @@ owner 2026-11-03, because Reaper publishes no colour chart and the sandbox can't
 flat colour bar, three to a row (one triad per row), with an abbreviated name. The chart's colours are its own
 estimates, so these swatches are estimates of estimates. Each bar is sampled from a strip at its left end, clear of
 the text and the tick marks.
-Names are Reaper's full names, expanded from the chart's abbreviations (typed in below).
+Names are Reaper's full names, expanded from the chart's abbreviations (typed in below) and checked against
+PaintHoarder's Reaper MSP list where it has them.
 Groups: '{' Master Series Paints, '}' Metallics (MET_G), '[' Clears & Inks (ink type). Codes '09001'.
 Left out: additives (Flow Improver, Brush-on Sealer and Primer, Black Primer, Matte Additive, Slow Dry).
 """
@@ -34,11 +35,11 @@ NAMES = {
     1: 'Red Brick', 2: 'Deep Red', 3: 'Blood Red', 4: 'Fire Red', 5: 'Phoenix Red', 6: 'Fire Orange', 7: 'Marigold Yellow',
     8: 'Sun Yellow', 9: 'Lemon Yellow', 10: 'Pine Green', 11: 'Leaf Green', 12: 'Pale Green', 13: 'Forest Green',
     14: 'Grass Green', 15: 'Jade Green', 16: 'Sapphire Blue', 17: 'True Blue', 18: 'Sky Blue', 19: 'Midnight Blue',
-    20: 'Twilight Blue', 21: 'Snowshadow Blue', 22: 'Nightshade Purple', 23: 'Imperial Purple', 24: 'Amethyst Purple',
+    20: 'Twilight Blue', 21: 'Snow Shadow', 22: 'Nightshade Purple', 23: 'Imperial Purple', 24: 'Amethyst Purple',
     25: 'Burgundy Wine', 26: 'Violet Red', 27: 'Pale Violet Red', 28: 'Muddy Brown', 29: 'Earth Brown', 30: 'Leather Brown',
-    31: 'Tanned Leather', 32: 'Amber Gold', 33: 'Golden Blond', 34: 'Muddy Olive', 35: 'Olive Green', 36: 'Pale Olive',
-    37: 'Pure Black', 38: 'Rainy Grey', 39: 'Pure White', 40: 'Dark Skin Shadow', 41: 'Dark Skin', 42: 'Dark Skin Highlight',
-    43: 'Tanned Shadow', 44: 'Tanned Skin', 45: 'Tanned Highlight', 46: 'Fair Shadow', 47: 'Fair Skin', 48: 'Fair Highlight',
+    31: 'Tanned Leather', 32: 'Amber Gold', 33: 'Golden Blonde', 34: 'Muddy Olive', 35: 'Olive Green', 36: 'Pale Olive',
+    37: 'Pure Black', 38: 'Rainy Grey', 39: 'Pure White', 40: 'Dark Shadow', 41: 'Dark Skin', 42: 'Dark Highlights',
+    43: 'Tanned Shadow', 44: 'Tanned Skin', 45: 'Tanned Highlight', 46: 'Fair Shadow', 47: 'Fair Skin', 48: 'Fair Highlights',
     49: 'Ancient Bronze', 50: 'Antique Gold', 51: 'New Gold', 52: 'Shadowed Steel', 53: 'Honed Steel', 54: 'Polished Silver',
     55: 'Breonne Blue', 56: 'Templar Blue', 57: 'Ashen Blue', 58: 'Aged Bone', 59: 'Bare Bone', 60: 'Polished Bone',
     61: 'Linen White', 62: 'Leather White', 63: 'Ghost White', 64: 'Brown Liner', 65: 'Grey Liner', 66: 'Blue Liner',
@@ -47,11 +48,11 @@ NAMES = {
     79: 'Deep Amethyst', 80: 'Indigo Sky', 81: 'Pale Indigo', 82: 'Jungle Moss', 83: 'Highland Moss', 84: 'Pale Lichen',
     85: 'Shadowed Stone', 86: 'Stone Grey', 87: 'Weathered Stone', 88: 'Stormy Grey', 89: 'Cloudy Grey', 90: 'Misty Grey',
     91: 'Golden Shadow', 92: 'Golden Skin', 93: 'Golden Highlight', 94: 'Clear Red', 95: 'Clear Yellow', 96: 'Clear Green',
-    97: 'Clear Blue', 98: 'Clear Magenta', 99: 'Clear Purple', 100: 'Pearl White', 101: 'Ruby Red', 102: 'Copper Orange',
-    103: 'Emerald Green', 104: 'Sparkle Blue', 105: 'Sparkling Amethyst', 109: 'Ruddy Leather', 110: 'Oiled Leather',
-    111: 'Burnt Orange', 112: 'Shadow Red', 113: 'Shadow Green', 114: 'Shadow Violet', 115: 'Ritter Blue',
+    97: 'Clear Blue', 98: 'Clear Magenta', 99: 'Clear Purple', 100: 'Pearl White', 101: 'Ruby Red', 102: 'Coppery Orange',
+    103: 'Emerald Green', 104: 'Sparkling Blue', 105: 'Sparkling Amethyst', 109: 'Ruddy Leather', 110: 'Oiled Leather',
+    111: 'Burnt Orange', 112: 'Shadow Red', 113: 'Shadow Green', 114: 'Shadow Violet', 115: 'Ritterlich Blue',
     116: 'Brilliant Blue', 117: 'Cyan Blue', 118: 'Dusky Grape', 119: 'Bruised Purple', 120: 'Faded Purple',
-    121: 'Khaki Shadow', 122: 'Terran Khaki', 123: 'Khaki Highlight', 124: 'Adamantium', 125: 'Scorched Metal',
+    121: 'Khaki Shadow', 122: 'Terran Khaki', 123: 'Khaki Highlight', 124: 'Adamantium Black', 125: 'Scorched Metal',
     126: 'Gunmetal Blue', 127: 'Uniform Brown', 128: 'Green Ochre', 129: 'Faded Khaki', 130: 'Clear Orange',
     131: 'Clear Viridian', 132: 'Clear Plum', 133: 'Bloodstain Red', 134: 'Clotted Red', 135: 'Carnage Red',
     136: 'Walnut Brown', 137: 'Blackened Brown', 138: 'Intense Brown', 139: 'Antique Rose', 140: 'Blushing Rose',
@@ -62,7 +63,7 @@ NAMES = {
     161: 'Shield Brown', 162: 'Driftwood Brown', 163: 'Dark Elf Shadow', 164: 'Dark Elf Skin', 165: 'Dark Elf Highlight',
     166: 'Shadowed Green', 167: 'Field Green', 168: 'Mist Green', 169: 'Muddy Clay', 170: 'Terracotta', 171: 'Fired Clay',
     172: 'Stormcover Grey', 173: 'Coldstone Grey', 174: 'Icy Grey', 175: 'Swamp Green', 176: 'Military Green',
-    177: 'Camouflage Green', 178: 'Cinder Brown', 179: 'Volcanic Brown', 180: 'Ashen Brown', 181: 'Bright Coral',
+    177: 'Camouflage Green', 178: 'Cinder Brown', 179: 'Volcano Brown', 180: 'Ashen Brown', 181: 'Bright Coral',
     182: 'Saffron Sunset', 183: 'Cloud Pink', 184: 'Serpent Shadow', 185: 'Reptilian Green', 186: 'Scaly Highlight',
     187: 'Ultramarine Shadow', 188: 'Ultramarine Blue', 189: 'Ultramarine Highlight', 190: 'Sand Brown', 191: 'Sandy Tan',
     192: 'Sandy Yellow', 193: 'Stormy Sea', 194: 'Cloud Sea', 195: 'Seafoam Blue', 196: 'Aged Pewter', 197: 'Old Bronze',

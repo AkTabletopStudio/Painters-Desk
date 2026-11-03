@@ -4236,7 +4236,7 @@ True Blue|09017|#006ea9
 Sky Blue|09018|#228fc1
 Midnight Blue|09019|#1d2329
 Twilight Blue|09020|#36485d
-Snowshadow Blue|09021|#687f98
+Snow Shadow|09021|#687f98
 Nightshade Purple|09022|#2c2433
 Imperial Purple|09023|#58466a
 Amethyst Purple|09024|#856e9d
@@ -4248,22 +4248,22 @@ Earth Brown|09029|#6b513c
 Leather Brown|09030|#8f6a4e
 Tanned Leather|09031|#a27348
 Amber Gold|09032|#b78e5c
-Golden Blond|09033|#e7d886
+Golden Blonde|09033|#e7d886
 Muddy Olive|09034|#3d6634
 Olive Green|09035|#628756
 Pale Olive|09036|#88a184
 Pure Black|09037|#191919
 Rainy Grey|09038|#828282
 Pure White|09039|#fafafa
-Dark Skin Shadow|09040|#33251d
+Dark Shadow|09040|#33251d
 Dark Skin|09041|#452929
-Dark Skin Highlight|09042|#593932
+Dark Highlights|09042|#593932
 Tanned Shadow|09043|#91695b
 Tanned Skin|09044|#a57b69
 Tanned Highlight|09045|#ba8f77
 Fair Shadow|09046|#d7a983
 Fair Skin|09047|#e5c1a2
-Fair Highlight|09048|#e9d9be
+Fair Highlights|09048|#e9d9be
 Breonne Blue|09055|#002d3d
 Templar Blue|09056|#2e4655
 Ashen Blue|09057|#476e80
@@ -4309,7 +4309,7 @@ Burnt Orange|09111|#ce7b48
 Shadow Red|09112|#56172b
 Shadow Green|09113|#012818
 Shadow Violet|09114|#41153d
-Ritter Blue|09115|#00324f
+Ritterlich Blue|09115|#00324f
 Brilliant Blue|09116|#004c79
 Cyan Blue|09117|#0071b7
 Dusky Grape|09118|#452242
@@ -4367,7 +4367,7 @@ Swamp Green|09175|#2a2719
 Military Green|09176|#3d4925
 Camouflage Green|09177|#788226
 Cinder Brown|09178|#412c2f
-Volcanic Brown|09179|#654246
+Volcano Brown|09179|#654246
 Ashen Brown|09180|#775a5a
 Bright Coral|09181|#db402d
 Saffron Sunset|09182|#e89019
@@ -4399,11 +4399,11 @@ Honed Steel|09053|#5a5a5a
 Polished Silver|09054|#838688
 Pearl White|09100|#fdfdfd
 Ruby Red|09101|#c4674a
-Copper Orange|09102|#9c715f
+Coppery Orange|09102|#9c715f
 Emerald Green|09103|#31a9b6
-Sparkle Blue|09104|#6891b0
+Sparkling Blue|09104|#6891b0
 Sparkling Amethyst|09105|#9599bb
-Adamantium|09124|#8a8a8c
+Adamantium Black|09124|#8a8a8c
 Scorched Metal|09125|#6d4a38
 Gunmetal Blue|09126|#264d5e
 Aged Pewter|09196|#757261
