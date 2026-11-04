@@ -2382,6 +2382,16 @@ const FEEDBACK_KINDS = { bug: 'Bug', suggestion: 'Suggestion', other: 'Other' },
 // visitors per day as a salted hash (see migrations/0012_traffic.sql). The app's own views (#/recipes etc.)
 // are reported by the page itself through /api/hit; the paint pages and guides are counted here as they're served.
 const BOT_UA = /bot|crawl|spider|slurp|preview|fetch|monitor|headless|lighthouse|curl|wget|python|axios|node-fetch/i;
+// Crawlers that pretend to be a browser are counted as '[crawler]' instead of as people. Tell-tales: a cloud or
+// hosting network (people browse from home and mobile networks), or, for the paint pages and guides, a page load
+// without the headers every current browser sends when someone opens a page.
+const CLOUD_ASN = new Set([16509, 14618, 8987, 396982, 15169, 19527, 8075, 14061, 24940, 213230, 16276, 35540, 63949,
+  45102, 37963, 132203, 45090, 31898, 136907, 55990, 51167, 20473, 60781, 12876, 9009, 212238, 62240, 40021, 36352, 46606]);
+function isCrawler(request, server) {
+  if (CLOUD_ASN.has(request.cf?.asn)) return true;
+  const h = request.headers;
+  return server && (!h.get('Accept-Language') || h.get('Sec-Fetch-Mode') !== 'navigate');
+}
 
 async function hit(request, env, url) {
   const b = await body(request);
@@ -2396,8 +2406,9 @@ async function countVisit(request, env, path, referrer, url) {
   try {
     const ua = request.headers.get('User-Agent') || '';
     const t = now(), iso = new Date(t).toISOString(), hour = iso.slice(0, 13), day = iso.slice(0, 10);
-    if (!ua || BOT_UA.test(ua)) {
-      await env.DB.prepare("INSERT INTO page_views (hour, path, views) VALUES (?, '[bots]', 1) ON CONFLICT (hour, path) DO UPDATE SET views = views + 1").bind(hour).run();
+    const bot = !ua || BOT_UA.test(ua) ? '[bots]' : isCrawler(request, !path.startsWith('#')) ? '[crawler]' : null;
+    if (bot) {
+      await env.DB.prepare('INSERT INTO page_views (hour, path, views) VALUES (?, ?, 1) ON CONFLICT (hour, path) DO UPDATE SET views = views + 1').bind(hour, bot).run();
       return;
     }
     if (SALT?.day !== day) {
