@@ -2635,11 +2635,12 @@ async function chatUser(request, env) {
 }
 
 // Why the viewer can't write in chat right now ('' when they can).
-async function chatBlocker(env, u, room) {
+// mute is the viewer's mute row when the caller already looked it up (null for none).
+async function chatBlocker(env, u, room, mute) {
   if (u.blocked) return 'This account has been blocked from posting.';
   if (u.email && !u.email_verified) return 'Please confirm your email before chatting. You can send the confirmation email from your account page.';
   if (room?.archived) return 'This room is archived, so it takes no new messages.';
-  const m = await env.DB.prepare('SELECT until FROM chat_mutes WHERE user_id = ? AND until > ?').bind(u.id, now()).first();
+  const m = mute !== undefined ? mute : await env.DB.prepare('SELECT until FROM chat_mutes WHERE user_id = ? AND until > ?').bind(u.id, now()).first();
   if (m) return `You're muted in chat until ${new Date(m.until).toISOString().slice(0, 16).replace('T', ' ')} UTC.`;
   return '';
 }
@@ -2710,20 +2711,27 @@ async function chatHome(request, env) {
 // GET /api/chat/rooms/:id/messages?before=&after=: CHAT_PAGE messages, oldest first. before (a time) pages back through
 // older ones; after catches up on what arrived since. Also the pinned messages and why the viewer can't write, if so.
 async function chatMessages(request, env, url, id) {
-  const u = await chatUser(request, env), room = await loadRoom(env, id);
+  // The viewer and the room together, then the messages, pins and mute check in one trip to the database: opening a
+  // room used to wait on each query in turn, which made switching rooms slow.
+  const [u, room] = await Promise.all([chatUser(request, env), loadRoom(env, id)]);
   if (room.archived && !u.admin) throw new HttpError(404, 'Room not found');
   const before = parseInt(url.searchParams.get('before'), 10) || 0, after = parseInt(url.searchParams.get('after'), 10) || 0;
-  const shown = u.admin ? '1 = 1' : CHAT_SHOWN;
-  let rows;
-  if (after) rows = (await env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND ${shown} AND m.created_at >= ? ORDER BY m.created_at LIMIT 200`).bind(id, after).all()).results;
-  else rows = (await env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND ${shown}${before ? ' AND m.created_at < ?' : ''} ORDER BY m.created_at DESC LIMIT ${CHAT_PAGE + 1}`)
-    .bind(...(before ? [id, before] : [id])).all()).results.reverse();
+  const shown = u.admin ? '1 = 1' : CHAT_SHOWN, full = !before && !after;
+  const q = [after
+    ? env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND ${shown} AND m.created_at >= ? ORDER BY m.created_at LIMIT 200`).bind(id, after)
+    : env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND ${shown}${before ? ' AND m.created_at < ?' : ''} ORDER BY m.created_at DESC LIMIT ${CHAT_PAGE + 1}`).bind(...(before ? [id, before] : [id]))];
+  if (full) q.push(
+    env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND m.pinned = 1 AND ${CHAT_SHOWN} ORDER BY m.created_at DESC LIMIT ${CHAT_PINS}`).bind(id),
+    env.DB.prepare('SELECT until FROM chat_mutes WHERE user_id = ? AND until > ?').bind(u.id, now()));
+  const res = (await env.DB.batch(q)).map(r => r.results);
+  let rows = after ? res[0] : res[0].reverse();
   const more = !after && rows.length > CHAT_PAGE;
   if (more) rows = rows.slice(1);
-  const out = { room: roomOut(room), messages: await chatOut(env, rows), more };
-  if (!before && !after) {
-    out.pins = await chatOut(env, (await env.DB.prepare(`${CHAT_SELECT} WHERE m.room_id = ? AND m.pinned = 1 AND ${CHAT_SHOWN} ORDER BY m.created_at DESC LIMIT ${CHAT_PINS}`).bind(id).all()).results);
-    out.why = await chatBlocker(env, u, room);
+  const pins = full ? res[1] : [], all = await chatOut(env, [...rows, ...pins]);
+  const out = { room: roomOut(room), messages: all.slice(0, rows.length), more };
+  if (full) {
+    out.pins = all.slice(rows.length);
+    out.why = await chatBlocker(env, u, room, res[2][0] || null);
   }
   return json(out);
 }
