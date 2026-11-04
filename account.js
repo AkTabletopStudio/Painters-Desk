@@ -819,14 +819,14 @@ const convWho=c=>c.other?.team?{name:c.other.name,avatar:c.other.avatar}:c.other
 async function renderInbox(id,sub){
  const el=$('v-inbox');
  if(id==='u')return inboxWith(sub);
- if(id&&id!=='team')return inboxConv(id);
+ if(id&&id!=='team')return inboxConv(id,sub==='team');
  const team=id==='team';
  if(team&&!ME?.admin){el.innerHTML='<h1>Feedback</h1><p class="s">Admins only.</p>';return}
  el.innerHTML=`<h1>${team?'Feedback':'Messages'}</h1><p class="s">Loading…</p>`;
  let d;try{d=await api('/inbox'+(team?'?team=1':''))}catch(e){el.innerHTML=`<h1>Messages</h1><p class="err">${esc(e.message)}</p>`;return}
  const tabs=ME?.admin?`<div class="row"><a class="btn${team?'':' pri'}" href="#/inbox">My messages${UNREAD?` (${UNREAD} new)`:''}</a><a class="btn${team?' pri':''}" href="#/inbox?team">Site feedback${TEAMN?` (${TEAMN} new)`:''}</a></div>`:'';
  const tags=c=>c.kind==='feedback'?`<span class="tag">${esc(c.feedback.kind)}</span>${team?(c.status==='done'?'<span class="tag">dealt with</span>':'<span class="tag warn">open</span>'):''}`:'';
- const row=c=>{const w=convWho(c);return `<a class="conv${c.unread?' new':''}" href="#/inbox/${esc(c.id)}">${avHTML(w)}<span class="cv"><b>${esc(team?w.name:c.kind==='feedback'?'Your feedback':w.name)}</b> ${tags(c)}${c.unread?'<span class="tag dang">new</span>':''}
+ const row=c=>{const w=convWho(c);return `<a class="conv${c.unread?' new':''}" href="#/inbox/${esc(c.id)}${team?'/team':''}">${avHTML(w)}<span class="cv"><b>${esc(team?w.name:c.kind==='feedback'?'Your feedback':w.name)}</b> ${tags(c)}${c.unread?'<span class="tag dang">new</span>':''}
   <span class="s">${c.last?(c.last.mine?'You: ':'')+esc(c.last.body):''}</span></span><span class="s cvt">${ago(c.updated_at)}</span></a>`};
  const intro=team?'Everything sent with the Feedback button, open ones first. Replies show in the sender\'s Messages, and go by email when they gave one.'
   :ME?'Replies to your feedback, and conversations with other painters. To message a painter, <a href="#/people">find them</a> and press Message on their profile.'
@@ -856,9 +856,10 @@ function wireCompose(send){const F=$('mForm');if(!F)return;
  F.onsubmit=async e=>{e.preventDefault();$('mErr').textContent='';$('mSend').disabled=true;
   try{await send($('mText').value)}catch(err){$('mErr').textContent=err.message;$('mSend').disabled=false}};
  $('mText').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))F.requestSubmit()}}
-async function inboxConv(id){
- const el=$('v-inbox');
- let d;try{d=await api('/conversations/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<h1>Messages</h1><p class="err">${esc(e.message)}</p><a href="#/inbox">All messages</a>`;return}
+// asTeam: an admin opened this from the feedback list, so they act as the team (even on feedback they sent).
+async function inboxConv(id,asTeam){
+ const el=$('v-inbox'),q=asTeam?'?team=1':'';
+ let d;try{d=await api('/conversations/'+encodeURIComponent(id)+q)}catch(e){el.innerHTML=`<h1>Messages</h1><p class="err">${esc(e.message)}</p><a href="#/inbox">All messages</a>`;return}
  const c=d.conversation,w=convWho(c),team=c.kind==='feedback'&&d.side==='b',fb=c.kind==='feedback',direct=c.kind==='direct';
  const back=team?'#/inbox?team':'#/inbox';
  const title=fb&&!team?'Your feedback':w.name;
@@ -874,10 +875,10 @@ async function inboxConv(id){
  ${team?'':'<button class="btn" type="button" id="mHide">Delete conversation</button>'}<span class="s" id="mAct"></span></div>`;
  const L=$('mList');L.lastElementChild?.scrollIntoView({block:'nearest'});
  unread();
- wireCompose(async text=>{await api('/conversations/'+encodeURIComponent(id),{method:'POST',body:{message:text,website:$('mWeb').value}});inboxConv(id)});
+ wireCompose(async text=>{await api('/conversations/'+encodeURIComponent(id)+q,{method:'POST',body:{message:text,website:$('mWeb').value}});inboxConv(id,asTeam)});
  L.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>openReport('message',b.dataset.rep,w.name));
  const act=async(fn,after)=>{try{await fn();after()}catch(e){$('mAct').className='err';$('mAct').textContent=e.message}};
- if($('mDone'))$('mDone').onclick=()=>act(()=>api('/conversations/'+id,{method:'PUT',body:{status:c.status==='done'?'open':'done'}}),()=>c.status==='done'?inboxConv(id):(location.hash='#/inbox?team'));
+ if($('mDone'))$('mDone').onclick=()=>act(()=>api('/conversations/'+id+q,{method:'PUT',body:{status:c.status==='done'?'open':'done'}}),()=>c.status==='done'?inboxConv(id,asTeam):(location.hash='#/inbox?team'));
  if($('mBlock'))$('mBlock').onclick=e=>{const b=e.target;
   if(!d.blockedByMe&&!b.dataset.c){b.dataset.c=1;b.textContent=`Click again to block ${w.name}`;$('mAct').className='s';$('mAct').textContent="They won't be able to message you, and won't be told.";return}
   act(()=>api('/blocks/'+w.id,{method:'PUT',body:{blocked:!d.blockedByMe}}),()=>inboxConv(id))};

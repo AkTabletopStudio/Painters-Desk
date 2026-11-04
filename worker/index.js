@@ -135,9 +135,9 @@ async function route(request, env, url) {
     if (m === 'POST') return messageUser(request, env, url, r[1]);
   }
   if ((r = p.match(/^\/api\/conversations\/([\w-]+)$/))) {
-    if (m === 'GET') return getConversation(request, env, r[1]);
+    if (m === 'GET') return getConversation(request, env, url, r[1]);
     if (m === 'POST') return replyConversation(request, env, url, r[1]);
-    if (m === 'PUT') return updateConversation(request, env, r[1]);
+    if (m === 'PUT') return updateConversation(request, env, url, r[1]);
   }
   if (p === '/api/blocks' && m === 'GET') return listBlocks(request, env);
   if ((r = p.match(/^\/api\/blocks\/([\w-]+)$/)) && m === 'PUT') return setBlock(request, env, r[1]);
@@ -1589,7 +1589,10 @@ async function anonToken(request) {
 }
 
 // Which side of a conversation the viewer is on ('a', 'b' or null). Admins are side b of every feedback conversation.
-function sideOf(c, u, token) {
+// `team` is set when an admin opens feedback from the team view (?team=1): they act as the team even on feedback
+// they sent themselves, so they can read, answer and mark it dealt with.
+function sideOf(c, u, token, team) {
+  if (team && c.kind === 'feedback' && u?.admin) return 'b';
   if (u && c.a_id === u.id) return 'a';
   if (!c.a_id && token && c.a_token === token) return 'a';
   if (c.kind === 'direct' && u && c.b_id === u.id) return 'b';
@@ -1697,10 +1700,10 @@ async function replyIssue(env, c, side, u) {
 }
 
 // GET /api/conversations/:id: the messages (newest 300), and marks the conversation read for the viewer.
-async function getConversation(request, env, id) {
+async function getConversation(request, env, url, id) {
   await needMessages(env);
   const u = await currentUser(request, env), token = await anonToken(request);
-  const c = await loadConversation(env, id), side = sideOf(c, u, token);
+  const c = await loadConversation(env, id), side = sideOf(c, u, token, url.searchParams.get('team') === '1');
   if (!side) throw new HttpError(404, 'Conversation not found');
   const rows = (await env.DB.prepare('SELECT id, side, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 300').bind(id).all()).results.reverse();
   await env.DB.prepare(`UPDATE conversations SET ${side}_read = ? WHERE id = ?`).bind(now(), id).run();
@@ -1782,17 +1785,17 @@ async function replyConversation(request, env, url, id) {
   const b = await body(request);
   if (b.website) return json({ ok: true });
   const u = await currentUser(request, env), token = await anonToken(request);
-  const c = await loadConversation(env, id), side = sideOf(c, u, token);
+  const c = await loadConversation(env, id), side = sideOf(c, u, token, url.searchParams.get('team') === '1');
   if (!side) throw new HttpError(404, 'Conversation not found');
   return addMessage(request, env, url, c, side, u, b);
 }
 
 // PUT /api/conversations/:id { hidden: true } deletes it from the viewer's inbox (until a new message comes);
 // { status: 'done' | 'open' } marks feedback as dealt with (team only).
-async function updateConversation(request, env, id) {
+async function updateConversation(request, env, url, id) {
   await needMessages(env);
   const b = await body(request), u = await currentUser(request, env), token = await anonToken(request);
-  const c = await loadConversation(env, id), side = sideOf(c, u, token);
+  const c = await loadConversation(env, id), side = sideOf(c, u, token, url.searchParams.get('team') === '1');
   if (!side) throw new HttpError(404, 'Conversation not found');
   if (b.status !== undefined) {
     if (c.kind !== 'feedback' || side !== 'b') throw new HttpError(403, 'Admins only');
