@@ -162,7 +162,7 @@ function typeOf(app) {
   const ptG = {};
   for (const m of app.match(/const PT_G=\{(.*?)\};/)[1].matchAll(/(?:'([^']*)'|(\w+))\s*:\s*'([^']*)'/g)) ptG[m[1] ?? m[2]] = m[3];
   const isMet = p => metG.has(p.g) || metK.has(p.g + '|' + p.n) || /anodized|^candy /i.test(p.n) || /\bmet(al|allic)?\b/i.test(p.n + ' ' + p.c) ||
-    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8';
+    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë';
   const isPearl = p => /\bpearl\b|iridescent/i.test(p.n) && !/skin/i.test(p.n);
   return p => isPearl(p) ? 'pearl' : isMet(p) ? 'met' : ptG[p.g] || (/speedpaint|contrast/i.test(p.c) ? 'con' : /\bwash$/i.test(p.c) || /\bwash\b|\bshade$/i.test(p.n) || p.g === 'A' && / tone$/i.test(p.n) ? 'wash' :
     /\bink$/i.test(p.n) || / ink$/i.test(p.c) ? 'ink' : /fluo|^neon|effects$/i.test(p.n + '|' + p.c) ? 'fx' :
@@ -641,12 +641,13 @@ const BRAND_INFO = {
   reaper: 'Reaper Miniatures is an American miniatures company. Its Master Series Paints come in triads of a shadow, a midtone and a highlight, with skin, metallic, liner, clear and ink colours.',
   'formula-p3': 'Formula P3 is the paint range Privateer Press made for its Warmachine and Hordes miniatures. Many colours are named after the factions they were made for, and the range includes metallics, inks and washes.',
   'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters.',
+  'golden': 'Golden Artist Colors makes artist-grade acrylics in New York. Its Heavy Body paints are mostly single pigments, so they mix cleanly, and many miniature painters use them for wet blending and glazing alongside hobby paints.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
 const TYPE_NAME = { op: 'opaque base and layer paints', met: 'metallics', pearl: 'pearls', con: 'one-coat contrast-style paints', wash: 'washes and shades', ink: 'inks, glazes and transparents', fx: 'fluorescents and effects', tech: 'technical paints, primers and mediums' };
 const short = br => br.name.replace(' / Warhammer', '');
 // Brands in the order people search for them, used to pick which matches go in a paint page's description.
-const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'reaper', 'formula-p3', 'kimera-kolors', 'scale75', 'tamiya', 'mr-hobby', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
+const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'reaper', 'formula-p3', 'kimera-kolors', 'golden', 'scale75', 'tamiya', 'mr-hobby', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
 const popRank = br => { const k = POP.indexOf(br.slug); return k < 0 ? POP.length : k; };
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0 };
 const pct = (k, n) => n ? Math.round(100 * k / n) + '%' : '0%';
