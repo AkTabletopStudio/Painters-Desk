@@ -7,14 +7,40 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const BYKEY=new Map(P.map(p=>[p.k,p]));
 // Paints renamed after people had already saved them: old key -> current key. Migration 0014 rewrites the stored keys;
 // until it runs, a collection still holding an old key is moved across the first time it loads.
-const RENAMED={'M|S13|Dark Sea Blue':'M|S13|Dark Sea Ben','E|E019|Pthalo Turquoise Light':'E|E019|Phthalo Turquoise Light'};
+const RENAMED={'M|S13|Dark Sea Blue':'M|S13|Dark Sea Ben','E|E019|Pthalo Turquoise Light':'E|E019|Phthalo Turquoise Light','S||Tidal Navy':'S||Tidal Wave'};
 // The owned set only holds keys of paints that exist, so "N paints owned" matches what the wheel can show.
 const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum'];
+const VIEWS=['welcome','changelog','palettes','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum'];
 let ME=null,INFO=null,API=false;
+// Saved mixes (My mix paints): loaded with the collection, handed to the wheel (app.js pdSetMixes). MIXOK is false until migration 0020 is live.
+let MIXES=[],MIXOK=false;window.pdMixOK=()=>MIXOK;
+window.pdAddMix=async m=>{const r=await api('/mixes',{method:'POST',body:m});MIXES.push(r.mix);pdSetMixes(MIXES);if(location.hash==='#/paints')renderMixes()};
+window.pdDelMix=async id=>{await api('/mixes/'+encodeURIComponent(id),{method:'DELETE'});MIXES=MIXES.filter(x=>x.id!==id);pdSetMixes(MIXES);if(location.hash==='#/paints')renderMixes()};
+// Shopping list: paints the painter wants to buy (table wants, migration 0022). WANTOK is false until that is live, which hides every ☆ button.
+let WANT=new Set(),WANTOK=false,wantPend={add:new Set(),remove:new Set()},wantT=0;
+const wantBtn=p=>!WANTOK||!p||p.mix||p.g==='B'||(OWN&&OWN.has(p.k))?'':`<button type="button" class="lnk sgw${WANT.has(p.k)?' on':''}" data-want="${esc(p.k)}" aria-pressed="${WANT.has(p.k)}">${WANT.has(p.k)?'★ On shopping list':'☆ Add to shopping list'}</button>`;
+window.pdWantBtn=wantBtn;
+function setWant(keys,on){keys.forEach(k=>{if(on){WANT.add(k);wantPend.add.add(k);wantPend.remove.delete(k)}else{WANT.delete(k);wantPend.remove.add(k);wantPend.add.delete(k)}});
+ document.querySelectorAll('[data-want]').forEach(b=>{const o=WANT.has(b.dataset.want);b.classList.toggle('on',o);b.setAttribute('aria-pressed',o);b.textContent=o?'★ On shopping list':'☆ Add to shopping list'});
+ renderShop();clearTimeout(wantT);wantT=setTimeout(async()=>{const b={add:[...wantPend.add],remove:[...wantPend.remove]};wantPend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
+  try{const r=await api('/wants',{method:'PUT',body:b});if(!r.unavailable){WANT=new Set(r.paints);renderShop()}}catch(e){const m=$('shopM');if(m)m.textContent=e.message}},500)}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-want]');if(!b||!WANTOK)return;e.preventDefault();setWant([b.dataset.want],!WANT.has(b.dataset.want))});
+function shopText(){const by={};[...WANT].map(k=>BYKEY.get(k)).filter(Boolean).forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
+ return'My Painters Desk shopping list\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')').join('\n')).join('\n')+'\n'}
+function renderShop(){const el=$('shopP');if(!el)return;const wr=$('shopd')||el;if(!WANTOK){wr.hidden=true;return}wr.hidden=false;
+ const ps=[...WANT].map(k=>BYKEY.get(k)).filter(Boolean),by={};ps.forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
+ if($('shopN'))$('shopN').textContent=ps.length?`(${ps.length})`:'';
+ el.innerHTML=(ps.length?`<div class="row shb"><button type="button" class="btn" id="shopCopy">Copy list</button><button type="button" class="btn" id="shopWheel">Show on wheel</button><span class="s" id="shopM"></span></div>`+
+  Object.entries(by).map(([b,l])=>`<h3>${esc(b)}</h3><div class="shl">${l.map(p=>`<div class="shr"><span class="nsw" style="background:${p.h}"></span><div class="nnm"><b>${esc(p.n)}</b><span>${esc(GL[p.g])}${p.c?' · '+esc(p.c):''}</span></div><button type="button" class="btn" data-got="${esc(p.k)}" title="Add ${esc(p.n)} to my collection">Got it</button><button type="button" class="lnk sgx" data-wrm="${esc(p.k)}" aria-label="Remove ${esc(p.n)} from the list">Remove</button></div>`).join('')}</div>`).join('')+
+  '<p class="s">Tap <b>Got it</b> when you buy one: it moves into your collection.</p>'
+  :'<p class="s">Nothing on your list yet. Tap <b>☆ Add to shopping list</b> on a suggested paint below, or on any paint you select on the wheel.</p>');
+ const c=$('shopCopy');if(c)c.onclick=async()=>{try{await navigator.clipboard.writeText(shopText());$('shopM').textContent='Copied.'}catch(e){$('shopM').textContent='Could not copy here.'}};
+ const w=$('shopWheel');if(w)w.onclick=()=>showOnWheel([...WANT]);
+ el.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>setWant([b.dataset.wrm],false));
+ el.querySelectorAll('[data-got]').forEach(b=>b.onclick=()=>{const k=b.dataset.got;setOwned([k],true);setWant([k],false);if(paintsRedraw)paintsRedraw()})}
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
 // Someone who sends feedback without signing in keeps a random token in this browser, so the team's replies can
@@ -44,6 +70,22 @@ const signInLink=(why)=>`<p class="s">${why} <a href="#/account">Sign in</a> to 
 // A small round picture, or the first letter of the name when there isn't one.
 const avHTML=(u,cls='av')=>u.avatar?`<img class="${cls}" src="${esc(u.avatar)}" alt="">`:`<span class="${cls} ini" aria-hidden="true">${esc((u.name||'?').trim().charAt(0).toUpperCase())}</span>`;
 const who=a=>`<a class="plink" href="#/u/${esc(a.id)}">${avHTML(a)}${esc(a.name)}</a>`;
+// Quick look pop-up for one paint (My paints suggestions, recipes, tutorials, profiles, forum and chat chips):
+// the closest paints you own and its matches, with buttons to add it, show it on the wheel (added to what's showing, nothing cleared) or open its paint page.
+function paintLook(p,o={}){const d=$('pqDlg'),ql=x=>x.d<6?'close':x.d<12?'fair':'loose',
+  mine=OWN?P.filter(q=>!q.mix&&q.g!=='B'&&q.k!==p.k&&OWN.has(q.k)).map(q=>({q,d:d76(q.lab,p.lab)})).sort((a,b)=>a.d-b.d).slice(0,3):null;
+ $('pqH').innerHTML=`<div class="pqh"><span class="pqs" style="background:${p.h}"></span><div><h2 id="pqT">${esc(p.n)}</h2><p class="s">${esc(BRANDS[BR_OF[p.g]][0])} · ${esc(GL[p.g])}${p.c?' · '+esc(p.c):''}</p></div></div>`;
+ $('pqB').innerHTML=`${o.top||''}${mine?`<h3>Closest paints you own</h3>${mine.length?`<div class="pqm">${mine.map(x=>`<span class="chip"><i style="background:${x.q.h}"></i>${esc(x.q.n)} <span style="color:var(--mut)">${esc(GL[x.q.g])}</span> <span class="nq ${ql(x)}">ΔE ${x.d.toFixed(0)}</span></span>`).join('')}</div>`:'<p class="s">Nothing yet.</p>'}`:''}
+  ${mtHTML(p).replace('Matches in other ranges</h2>','Matches in other ranges</h2><p class="s pqn">✓ = listed in a conversion chart, ≈ = closest swatch colour.</p>')}<p class="s">Swatch colours are estimates, so check the paint in person.</p>`;
+ const ad=$('pqAdd'),can=!!OWN&&!p.mix&&p.g!=='B',own=can&&OWN.has(p.k);ad.hidden=!can;ad.disabled=own;ad.textContent=own?'In your collection':'Add to my paints';
+ ad.onclick=()=>{setOwned([p.k],true);if(o.onAdd)o.onAdd();d.close()};
+ $('pqWant').innerHTML=wantBtn(p);
+ $('pqW').href='#/?paint='+encodeURIComponent(p.k);$('pqW').onclick=()=>{d.close();if(o.onWheel)o.onWheel()};$('pqP').href='paints/find?k='+encodeURIComponent(p.g+'|'+p.c+'|'+p.n);
+ d.onclose=()=>{$('pqB').innerHTML=''};d.showModal();d.querySelector('.pqx').focus()}
+// Tapping the dimmed page outside a look-only pop-up (quick look, details, Change paints, theme, photo palette) closes it.
+// Only a tap outside the frame counts, not one on its padding. Forms and confirm boxes are left out so typed text isn't lost.
+document.addEventListener('click',e=>{const d=e.target;if(!(d instanceof HTMLDialogElement)||!d.open||!d.matches('.pqd,.pickdlg,.th,.phd'))return;
+ const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close()});
 function showOnWheel(keys){const s=new Set(keys);P.forEach(p=>p.on=s.has(p.k));sync();location.hash='#/'}
 
 /* ---------- session ---------- */
@@ -62,9 +104,12 @@ async function loadMe(){
  try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
  if(ME){try{const ks=(await api('/collection')).paints;OWN=ownSet(ks);const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
  if(ME)await wheelSync();else onSelSave=null;
+ if(ME){try{const r=await api('/mixes');MIXOK=!r.unavailable;MIXES=r.mixes||[]}catch(e){MIXOK=false;MIXES=[]}}else{MIXOK=false;MIXES=[]}
+ if(ME){try{const r=await api('/wants');WANTOK=!r.unavailable;WANT=new Set(r.paints||[])}catch(e){WANTOK=false;WANT=new Set()}}else{WANTOK=false;WANT=new Set()}
+ window.pdSetMixes&&pdSetMixes(MIXES);
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
- $('mine').hidden=!ME;
+ $('mine').hidden=!ME;$('mineBtn').hidden=!ME;
  $('navForum').hidden=!INFO?.forum;
  chatStart();
  $('fbBtn').hidden=!API;
@@ -85,13 +130,14 @@ function route(){
  PREV=location.hash||'#/';
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
- if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'))view='wheel';
+ if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'&&view!=='palettes'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'))));
  {const s=document.querySelector('#nav .secs'),o=s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8}
  if(view==='welcome')renderWelcome();
+ else if(view==='palettes')window.pdPalettes&&pdPalettes(id);
  else if(view==='paints')renderPaints();
  else if(view==='recipes')renderRecipes();
  else if(view==='recipe')renderRecipe(id);
@@ -110,8 +156,10 @@ addEventListener('hashchange',route);
 let REF=document.referrer;
 function countHit(p){if(!API)return;const r=REF;REF='';fetch('/api/hit',{method:'POST',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({p,r})}).catch(()=>{})}
 function renderWelcome(){
- $('wCount').textContent=P.length.toLocaleString('en');
- const b=BRANDS.map(x=>x[0].split(' / ')[0]);$('wBrands').textContent=b.slice(0,-1).join(', ')+' and '+b[b.length-1]}
+ $('wCount').textContent=P.filter(p=>p.g!=='B').length.toLocaleString('en');// basing textures aren't paints
+ const b=BRANDS.map(x=>x[0].split(' / ')[0]);$('wBrands').textContent=b.length+' brands';$('wBrands').title=b.slice(0,-1).join(', ')+' and '+b[b.length-1];
+ $('wLooks').textContent=document.querySelectorAll('#thDlg .tho').length;
+ if(typeof PALETTES!=='undefined')$('wPals').textContent=PALETTES.length}
 $('footMore').onclick=()=>setTimeout(()=>$('foot').scrollIntoView({block:'end'}),50);
 
 /* ---------- account ---------- */
@@ -277,7 +325,7 @@ async function renderProfile(id){
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
  <h2>Public recipes &amp; tutorials</h2>
  <div class="cards">${d.recipes.map(cardHTML).join('')||`<p class="s">${mine?'Nothing public yet. Make a recipe or tutorial public to show it here.':'Nothing shared yet.'}</p>`}</div>`;
- el.querySelectorAll('#fp .chip').forEach(c=>c.onclick=()=>{const q=BYKEY.get(c.dataset.k);if(q){showOnWheel([q.k]);setTimeout(()=>showP(q),0)}});
+ el.querySelectorAll('#fp .chip').forEach(c=>c.onclick=()=>{const q=BYKEY.get(c.dataset.k);if(q)paintLook(q)});
  if($('fWheel'))$('fWheel').onclick=()=>showOnWheel(p.favourites);
  if($('pRep'))$('pRep').onclick=()=>openReport('user',p.id,p.name);
  if($('pFol'))$('pFol').onclick=async()=>{const b=$('pFol');b.disabled=true;
@@ -297,25 +345,91 @@ function undoBar(keys,on=false){if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new 
  clearTimeout(undoTm);undoTm=setTimeout(()=>{$('undoT').hidden=true;undoK=[]},10000)}
 $('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
 let pend={add:new Set(),remove:new Set()},saveT=0;
-function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
+function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);WANT.delete(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
  clearTimeout(saveT);saveT=setTimeout(flush,500)}
 async function flush(){const b={add:[...pend.add],remove:[...pend.remove]};pend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
  try{OWN=ownSet((await api('/collection',{method:'PUT',body:b})).paints);const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
+function renderMixes(){const el=$('mixP');if(!el)return;
+ const wr=$('mixd')||el;if(!MIXOK){wr.hidden=true;return}wr.hidden=false;
+ const ms=P.filter(p=>p.mix);if($('mixN'))$('mixN').textContent=ms.length?`(${ms.length})`:'';
+ el.innerHTML=`<p class="s">${ms.length?'Mixes you saved. They show on the wheel with a dashed outline and work in matches, Ramps and Blends like your other paints. Colours are worked out from the swatch estimates, so they are approximate.':'No mixes yet. Select a paint you don\'t own on the wheel and tap <b>Add to my paints</b> on one of its suggested mixes.'}</p>`+
+ ms.map(p=>`<div class="mxr"><span class="mxsw"><i style="background:${p.h}"></i></span><div class="mxt"><b>${esc(p.n)}</b><span class="s">${p.mix.m.map(([q,k])=>k+' part'+(k>1?'s ':' ')+esc(q.n)+' ('+esc(GL[q.g])+')').join(' + ')}</span></div><button type="button" class="mxsv" data-mxdel="${esc(p.mix.id)}">Remove</button></div>`).join('');
+ el.querySelectorAll('[data-mxdel]').forEach(e=>e.onclick=async()=>{e.disabled=true;try{await pdDelMix(e.dataset.mxdel)}catch(er){e.disabled=false;e.textContent=er.message}})}
+// Plan for a project: pick an Inspiration palette or one of your own / saved tutorials, recipes and palette cards, and each colour
+// is sorted into what you own, what you own that's close (ΔE under 6), what you could mix (ΔE under 6) and what to buy.
+let PLRECS=null;
+const plKind=q=>{const t=paintType(q);return t==='met'?'met':/wash|ink/.test(t)?'wash':t==='con'?'con':'op'};
+function planTargets(v){if(!v)return null;const[s,id]=[v.slice(0,3),v.slice(4)];
+ if(s==='pal'){const x=(typeof PALETTES==='undefined'?[]:PALETTES).find(z=>z.s===id);if(!x)return null;
+  return{title:x.n,link:'#/palettes/'+x.s,items:x.c.map(c=>({label:c.r,sub:c.u,h:c.h,lab:hexLab(c.h),kind:c.m?'met':'op'}))}}
+ const r=PLRECS&&PLRECS.get(id);if(!r)return null;
+ return{title:r.title,link:'#/recipe/'+r.id,items:(r.paints||[]).map(k=>BYKEY.get(k)).filter(p=>p&&!p.mix).map(p=>({label:p.n,sub:GL[p.g]+(p.c?' · '+p.c:''),h:p.h,lab:p.lab,kind:plKind(p),p}))}}
+function planRow(t){const mineP=P.filter(q=>!q.mix&&q.g!=='B'&&OWN.has(q.k)&&plKind(q)===t.kind).map(q=>({q,d:d76(q.lab,t.lab)})).sort((a,b)=>a.d-b.d),best=mineP[0]||null;
+ if(t.p&&OWN.has(t.p.k))return{t,st:'own'};
+ if(best&&best.d<6)return{t,st:'close',best};
+ if(t.kind==='op'){const m=mixFor(t.p||{n:t.label,k:'plan|'+t.h,h:t.h,lab:t.lab}).mixes[0];if(m&&m.d<6)return{t,st:'mix',mix:m,best}}
+ let buy=t.p;if(!buy){const myB=new Set([...OWN].map(k=>BYKEY.get(k)).filter(Boolean).map(p=>BR_OF[p.g])),c=P.filter(q=>!q.mix&&q.g!=='B'&&!OWN.has(q.k)&&plKind(q)===t.kind).map(q=>({q,d:d76(q.lab,t.lab)})).sort((a,b)=>a.d-b.d);
+  const a=c[0],m=c.find(x=>myB.has(BR_OF[x.q.g]));buy=(m&&a&&m.d<=a.d+4?m:a||{}).q||null}
+ return{t,st:'buy',buy,best}}
+function renderPlan(){const box=$('pln');if(!box||!OWN)return;let v='';try{v=localStorage.getItem('pd-plan')||''}catch(e){}
+ const m=location.hash.match(/[?&]plan=([^&]+)/);if(m){try{v=decodeURIComponent(m[1])}catch(e){}history.replaceState(null,'','#/paints');try{localStorage.setItem('pd-plan',v)}catch(e){}$('plnd').open=true}
+ const pals=typeof PALETTES==='undefined'?[]:PALETTES,rs=PLRECS?[...PLRECS.values()]:[],opt=(val,t)=>`<option value="${esc(val)}"${val===v?' selected':''}>${esc(t)}</option>`;
+ const kn={tutorial:'Tutorial',recipe:'Recipe',palette:'Palette'},mine=rs.filter(r=>r.author&&ME&&r.author.id===ME.id),sv=rs.filter(r=>!mine.includes(r));
+ const sel=`<label class="plnl">Project <select id="plnS"><option value="">Pick a palette, tutorial or recipe…</option><optgroup label="Inspiration palettes">${pals.map(x=>opt('pal:'+x.s,x.n)).join('')}</optgroup>`+
+  (mine.length?`<optgroup label="Yours">${mine.map(r=>opt('rec:'+r.id,(kn[r.kind]||'Recipe')+': '+r.title)).join('')}</optgroup>`:'')+(sv.length?`<optgroup label="Saved">${sv.map(r=>opt('rec:'+r.id,(kn[r.kind]||'Recipe')+': '+r.title)).join('')}</optgroup>`:'')+`</select></label>`;
+ const T=planTargets(v);
+ if(!T){box.innerHTML=sel+`<p class="s">Pick something you want to paint. Each colour it uses is checked against your collection: what you already own, what you own that's close enough, what you could mix and what you'd need to buy.${PLRECS?'':' Loading your tutorials and recipes…'}</p>`;wirePlan();return}
+ const R=T.items.map(planRow),n=s=>R.filter(r=>r.st===s).length,buys=[...new Set(R.filter(r=>r.st==='buy'&&r.buy).map(r=>r.buy.k))];
+ const lab={own:['close','You own it'],close:['close','Close enough'],mix:['fair','Mix it'],buy:['loose','Buy']};
+ const pc=(p,x)=>`<span class="plnp"><i style="background:${p.h}"></i><b>${esc(p.n)}</b> <em>${esc(GL[p.g])}${x||''}</em></span>`;
+ const row=r=>`<div class="plnr"><span class="nsw" style="background:${r.t.h}" title="Target colour"></span><div class="nnm"><b>${esc(r.t.label)}</b><span>${esc(r.t.sub)}</span><div class="plnd">${
+  r.st==='own'?'':r.st==='close'?'Use '+pc(r.best.q,' · ΔE '+r.best.d.toFixed(0)):r.st==='mix'?`<span class="sgm">${mixParts(r.mix.m,esc)} (ΔE ${r.mix.d.toFixed(0)})</span>${r.best?`<span class="s">Closest you own: ${esc(r.best.q.n)} (ΔE ${r.best.d.toFixed(0)})</span>`:''}`:
+  r.buy?`${t2(r)}<span class="plnb">${pc(r.buy,r.buy.c?' · '+esc(r.buy.c):'')}<button type="button" class="btn sm" data-sa="${esc(r.buy.k)}">Add</button>${wantBtn(r.buy)}</span>`:'<span class="s">No paint of this kind found.</span>'}</div></div><span class="nq ${lab[r.st][0]}">${lab[r.st][1]}</span></div>`;
+ const t2=r=>r.best?`<span class="s">Closest you own: ${esc(r.best.q.n)} (ΔE ${r.best.d.toFixed(0)}). </span>`:'';
+ box.innerHTML=sel+`<p class="s"><b><a href="${T.link}">${esc(T.title)}</a></b>: ${T.items.length} colour${T.items.length===1?'':'s'}. You own ${n('own')+n('close')}, can mix ${n('mix')} and need ${n('buy')}.</p>
+ <div class="plnl2">${R.map(row).join('')}</div>
+ <div class="row">${buys.length&&WANTOK?`<button type="button" class="btn pri" id="plnWant">Add the ${buys.length} to buy to my shopping list</button>`:''}<button type="button" class="btn" id="plnWheel">Show on the wheel</button></div>
+ <p class="s">Close enough and mixes are within ΔE 6 of the colour. Swatches are estimates, so test mixes and check paints in person.</p>`;
+ wirePlan();
+ const w=$('plnWant');if(w)w.onclick=()=>{setWant(buys.filter(k=>!WANT.has(k)),true);w.textContent='Added to your shopping list';w.disabled=true};
+ $('plnWheel').onclick=()=>showOnWheel([...new Set(R.flatMap(r=>r.st==='own'?[r.t.p.k]:r.st==='close'?[r.best.q.k]:r.st==='mix'?r.mix.m.map(x=>x[0].k):r.buy?[r.buy.k]:[]))])}
+function wirePlan(){const s=$('plnS');if(s)s.onchange=()=>{try{localStorage.setItem('pd-plan',s.value)}catch(e){}renderPlan()};
+ const b=$('pln');if(b&&!b.dataset.w){b.dataset.w=1;b.addEventListener('click',e=>{const a=e.target.closest('[data-sa]');if(!a)return;setOwned([a.dataset.sa],true);if(paintsRedraw)paintsRedraw();renderPlan()})}}
+async function loadPlanRecs(){if(PLRECS)return;const m=new Map();
+ for(const sc of['mine','saved']){try{(await api('/recipes?scope='+sc)).recipes.forEach(r=>{if(!m.has(r.id))m.set(r.id,r)})}catch(e){}}
+ PLRECS=m;renderPlan()}
 function renderPaints(){
  const el=$('v-paints');
  if(!ME){el.innerHTML='<h1>My paints</h1>'+signInLink('Your collection is saved to your account.');return}
- el.innerHTML=`<h1>My paints</h1><p class="s">Tick the paints you own. Changes save automatically. Your paints get a ★ on the wheel and in matches.</p>
- <div class="panel"><div class="row"><button class="btn pri" id="pWheel" type="button">Show my collection on the wheel</button><span class="s" id="pcnt"></span> <span class="s" id="pmsg"></span></div>
+ // Layout like the wheel page: a summary of the collection up top (editing happens in a pop-up), then the tools, most used first.
+ el.innerHTML=`<h1>My paints</h1>
+ <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
+ <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button></div>
+ <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
+ <div class="panel ptip" id="ptip" hidden><b>Start by ticking the paints you own.</b> <span class="s">Open your collection, pick a brand and tick a whole range or single paints. Suggestions, plans and matches then work from them.</span><div class="row"><button class="btn pri" id="pTip" type="button">Tick my paints</button></div></div>
+ <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>
+ <details class="panel" id="plnd"><summary><b>Plan for a project</b> <span class="s">What you have, can mix or need to buy</span></summary><div id="pln"></div></details>
+ <details class="panel" id="shopd" hidden><summary><b>Shopping list</b> <span class="s" id="shopN"></span></summary><div id="shopP"></div></details>
+ <details class="panel" id="mixd" hidden><summary><b>My mixes</b> <span class="s" id="mixN"></span></summary><div id="mixP"></div></details>
+ <dialog class="pd pickdlg" id="colDlg" aria-labelledby="colT"><div class="pkh"><h2 id="colT">My collection</h2><span class="s" id="pcnt2"></span></div>
  <div class="bar"><input id="pq" type="search" placeholder="Search paints (name or code)"><label style="align-self:center"><input type="checkbox" id="pOwned"> Only paints I own</label></div>
- <div id="ptree"></div></div>
- <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>`;
- const tr=$('ptree');
+ <div id="ptree"></div><div class="row pkf"><button class="btn pri" type="button" id="colOk">Done</button></div></dialog>`;
+ // Fold-away sections remember whether they were left open (Suggested paints and Plan keep their own keys).
+ [['shopd','pd-shopd'],['mixd','pd-mixd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
+ const colOpen=bi=>{const d=$('colDlg');d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
+ $('pEdit').onclick=()=>colOpen();$('pTip').onclick=()=>colOpen();$('colOk').onclick=()=>$('colDlg').close();
+ $('pbr').addEventListener('click',e=>{const c=e.target.closest('[data-bi]');if(c)colOpen(+c.dataset.bi)});
+ renderShop();renderMixes();renderPlan();loadPlanRecs();{const d=$('plnd');if(!d.open)try{d.open=localStorage.getItem('pd-plnd')==='1'}catch(e){}d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-plnd',d.open?'1':'0')}catch(e){}})}const tr=$('ptree');
  tr.innerHTML=treeHTML('data-pc','data-pb');
  const q=()=>$('pq').value.trim().toLowerCase(),only=()=>$('pOwned').checked,vis=p=>(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))&&(!only()||OWN.has(p.k));
  const counts=()=>{tr.querySelectorAll('input[data-i]').forEach(e=>e.checked=OWN.has(P[+e.dataset.i].k));
   TREE.forEach(([bn,ss],bi)=>{let bo=0;ss.forEach(x=>bo+=x.ps.filter(i=>OWN.has(P[i].k)).length);tr.querySelector(`[data-pb="${bi}"]`).textContent=bo?'('+bo+' owned)':''});
   Object.entries(SETS).forEach(([id,x])=>{const o=x.ps.filter(i=>OWN.has(P[i].k)).length,n=x.ps.length;const cb=tr.querySelector(`input[data-r="${id}"]`);if(!cb)return;cb.checked=o===n&&o>0;cb.indeterminate=o>0&&o<n;tr.querySelector(`[data-pc="${id}"]`).textContent=o+'/'+n});
-  $('pcnt').textContent=OWN.size+' paints owned.'};
+  $('pcnt').textContent=OWN.size?`You own ${OWN.size} paint${OWN.size===1?'':'s'}`:'Your collection is empty';$('pcnt2').textContent=OWN.size+' owned';
+  const by={};[...OWN].forEach(k=>{const p=BYKEY.get(k);if(p&&!p.mix)by[BR_OF[p.g]]=(by[BR_OF[p.g]]||0)+1});
+  const bs=Object.entries(by).sort((a,b)=>b[1]-a[1]);$('pcnt').textContent+=bs.length?` from ${bs.length} brand${bs.length===1?'':'s'}`:'';
+  $('pbr').innerHTML=bs.map(([i,n])=>`<button type="button" class="chip" data-bi="${i}" title="Edit your ${esc(BRANDS[i][0])} paints">${esc(BRANDS[i][0].split(' / ')[0])} <span class="s">${n}</span></button>`).join('');
+  $('ptip').hidden=OWN.size>0};
  const filt=()=>{const f=!!q()||only();tr.querySelectorAll('label.pi').forEach(l=>l.hidden=!vis(P[+l.dataset.i]));
   tr.querySelectorAll('.sub').forEach(d=>d.hidden=f&&!d.querySelector('label.pi:not([hidden])'));
   tr.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=f&&!v;if(f)d.open=v});
@@ -331,25 +445,79 @@ function renderPaints(){
  paintsRedraw=()=>{if(!$('ptree'))return;$('pmsg').textContent='Saving…';counts();filt();sugLater()};
  // Suggested paints: worked out in app.js (suggestPaints), redrawn shortly after the collection changes.
  {const d=$('sugd');try{d.open=localStorage.getItem('pd-sug')!=='0'}catch(e){d.open=true}d.ontoggle=()=>{try{localStorage.setItem('pd-sug',d.open?'1':'0')}catch(e){}}}
- const sugGo=()=>{const box=$('sug');if(!box)return;const r=suggestPaints(OWN);
+ // Panel settings (how many, which brand) and paints marked Not interested stay on this device.
+ const sgGet=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},sgSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+ const sugGo=()=>{const box=$('sug');if(!box)return;const so=sgGet('pd-sugo',{n:10,b:''}),hide=new Set(sgGet('pd-sugx',[])),bi=so.b===''||so.b==null||!BRANDS[+so.b]?null:+so.b;
+  const r=sugLast=suggestPaints(OWN,{n:+so.n||10,brand:bi,hide});
   if(!r){box.innerHTML='<p class="s">Tick the paints you own below and suggestions for filling the gaps in your collection show up here.</p>';$('sugN').textContent='';return}
   const fl=f=>`<span class="sgt">${esc(f.g)}: ${esc(f.r.join(', ').toLowerCase())}</span>`;
-  const row=o=>`<div class="sgr"><span class="nsw" style="background:${o.p.h}"></span><div class="nnm"><b>${esc(o.p.n)}</b><span>${esc(GL[o.p.g])}${o.p.c?' · '+esc(o.p.c):''}</span><div class="sgf">${o.fills.map(fl).join('')}</div>${o.alt.length?`<div class="sgo">Or: ${o.alt.map(a=>`<button type="button" class="lnk" data-sa="${esc(a.k)}" title="Add ${esc(a.n)} instead"><i style="background:${a.h}"></i>${esc(a.n)} <em>${esc(GL[a.g])}</em></button>`).join(' ')}</div>`:''}</div><button class="btn" type="button" data-sa="${esc(o.p.k)}" aria-label="Add ${esc(o.p.n)} to my collection">Add</button></div>`;
+  const ess=r.ess.filter(x=>!x.have.length&&x.p).map(x=>({p:x.p,alt:x.alt,fills:[{g:'Essential',r:[x.name]}],ess:1}));
+  sugRows=[...r.mine,...r.other,...ess];
+  const mixL=o=>o.mix?`<div class="sgm">Or mix it from your paints (ΔE ${o.mix.d.toFixed(0)}): ${mixParts(o.mix.m,esc)}${MIXOK?` <button type="button" class="lnk" data-smx>Save as my mix</button>`:''}</div>`:'';
+  const row=sugRow=o=>`<div class="sgr${o.mix?' sgmx':''}" data-ri="${sugRows.indexOf(o)}"><span class="nsw" data-pq style="background:${o.p.h}"></span><div class="nnm"><button type="button" class="lnk sgnm" data-pq title="More about ${esc(o.p.n)}"><b>${esc(o.p.n)}</b></button><span>${esc(GL[o.p.g])}${o.p.c?' · '+esc(o.p.c):''}</span><div class="sgf">${(o.fills.length>5?o.fills.slice(0,4):o.fills).map(fl).join('')}${o.fills.length>5?`<button type="button" class="lnk sgt sgmore" data-pq>+${o.fills.length-4} more</button>`:''}</div>${mixL(o)}${o.alt.length?`<div class="sgo">Or: ${o.alt.map((a,j)=>`<button type="button" class="lnk" data-sw="${j}" title="Show ${esc(a.n)} here instead"><i style="background:${a.h}"></i>${esc(a.n)} <em>${esc(GL[a.g])}</em></button>`).join(' ')}</div>`:''}</div><div class="sga"><button class="btn" type="button" data-sa="${esc(o.p.k)}" aria-label="Add ${esc(o.p.n)} to my collection">Add</button>${wantBtn(o.p)}<button type="button" class="lnk sgx" data-sx title="Not interested: hide ${esc(o.p.n)}" aria-label="Not interested in ${esc(o.p.n)}">Not interested</button></div></div>`;
   const gq={good:['close','Good'],fair:['fair','Fair'],weak:['loose','Weak']};
-  const tq=x=>`<div class="sgq"><span class="sgn"><b>${esc(x.tech.name)}</b> ${esc(x.n)}</span><span class="sgs">${x.R.map(st=>`<i style="background:${st.p?st.p.h:'transparent'}" title="${esc(st.r)}: ${st.p?esc(st.p.n)+' (ΔE '+st.d.toFixed(0)+')':'nothing close'}">${st.d>=12?`<u style="background:${labHex(st.t)}"></u>`:''}</i>`).join('')}</span><span class="nq ${gq[x.grade][0]}">${gq[x.grade][1]}</span></div>`;
-  const cl=c=>{const x=r.cells[c];if(!x||!x.ok)return'<i class="sgc none"></i>';return x.best?`<i class="sgc" style="background:${x.best.h}" title="${esc(x.name)}: ${x.own.length} owned, e.g. ${esc(x.best.n)}"></i>`:`<i class="sgc gap" style="--t:${labHex(x.t)}" title="${esc(x.name)}: nothing in your collection"></i>`};
-  const cs=Object.values(r.cells).filter(c=>c.ok),cov=cs.filter(c=>c.own.length).length,good=r.ramps.filter(x=>x.grade==='good').length,n=r.mine.length+r.other.length;
+  const tq=x=>`<div class="sgq" role="button" tabindex="0" data-rq="${r.ramps.indexOf(x)}" title="Details and suggestions"><span class="sgn"><b>${esc(x.tech.name)}</b> ${esc(x.n)}</span><span class="sgs">${x.R.map(st=>`<i style="background:${st.p?st.p.h:'transparent'}" title="${esc(st.r)}: ${st.p?esc(st.p.n)+' (ΔE '+st.d.toFixed(0)+')':'nothing close'}">${st.d>=12?`<u style="background:${labHex(st.t)}"></u>`:''}</i>`).join('')}</span><span class="nq ${gq[x.grade][0]}">${gq[x.grade][1]}</span></div>`;
+  // Ramps grouped: the fixed metal/glow/gem/skin ramps, then one group per technique run on your own paints.
+  const grp=[['Metals, glows, gems and skin',r.ramps.filter(x=>!x.own)],...['zen','edge','glaze','dry','under'].map(q=>[TQ[q].full||TQ[q].name,r.ramps.filter(x=>x.own&&x.q===q)])].filter(g=>g[1].length);
+  const tg=([t,l],i)=>{const g=l.filter(x=>x.grade==='good').length;return`<details class="sgtd"${i?'':' open'}><summary><b>${esc(t)}</b> <span class="s">${g} of ${l.length} good</span></summary><div class="sgqs">${l.map(tq).join('')}</div></details>`};
+  const cl=c=>{const x=r.cells[c];if(!x||!x.ok)return'<i class="sgc none"></i>';return x.best?`<i class="sgc" role="button" tabindex="0" data-cell="${c}" style="background:${x.best.h}" title="${esc(x.name)}: ${x.own.length} owned, e.g. ${esc(x.best.n)}"></i>`:`<i class="sgc gap" role="button" tabindex="0" data-cell="${c}" style="--t:${labHex(x.t)}" title="${esc(x.name)}: nothing in your collection"></i>`};
+  const cs=Object.values(r.cells).filter(c=>c.ok),cov=cs.filter(c=>c.own.length).length,good=r.ramps.filter(x=>x.grade==='good').length,n=sugRows.length,eh=r.ess.filter(x=>x.have.length).length;
+  const opt=(v,t,c)=>`<option value="${v}"${String(c)===String(v)?' selected':''}>${esc(t)}</option>`;
   $('sugN').textContent=n?`(${n} idea${n===1?'':'s'})`:'';
-  box.innerHTML=`<p class="s">Paints that would fill gaps in your collection, from ${esc(r.brands.join(' and '))} first. Each one lists the ramps (as built in Ramps mode on the wheel) and the colour areas it helps with.</p>
+  box.innerHTML=`<div class="sgbar"><label>Show <select id="sgNn">${[5,10,20,30].map(v=>opt(v,v,+so.n||10)).join('')}</select></label><label>From <select id="sgBr">${opt('','My brands first',bi==null?'':bi)}${BRANDS.map((b,i)=>opt(i,b[0],bi==null?'':bi)).join('')}</select></label></div>
+  <p class="s">Paints that would fill gaps in your collection, ${r.one?'from '+esc(r.brands[0])+' only':'from '+esc(r.brands.join(' and '))+' first'}. Each one lists the ramps (as built in Ramps mode on the wheel) and the colour areas it helps with. Ones you could mix from your own paints instead are at the end of each list.</p>
   ${r.mine.length?`<div class="sgl">${r.mine.map(row).join('')}</div>`:`<p class="s">Nothing more from ${esc(r.brands.join(' or '))} would close a gap.</p>`}
   ${r.other.length?`<h3>From other brands</h3><p class="s">For gaps your brands don't cover.</p><div class="sgl">${r.other.map(row).join('')}</div>`:''}
-  <h3>Techniques your paints can build</h3><p class="s">${good} of ${r.ramps.length} ramps are a good fit. Each square is one step from your paints; a dashed dot marks a step with nothing close (ΔE 12+), shown in the colour it needs. Zenithal and edge highlights are checked on your most saturated mid or dark paint of each hue.</p>
-  <div class="sgqs">${r.ramps.map(tq).join('')}</div>
+  <h3>Essentials</h3><p class="s">Basics the colour check can't see. You have ${eh} of ${r.ess.length}.</p>
+  <div class="sge">${r.ess.map(x=>x.have.length?`<span class="sgk"><i style="background:${x.have[0].h}"></i><b>✓ ${esc(x.name)}</b> ${esc(x.have[0].n)}${x.have.length>1?` +${x.have.length-1}`:''}</span>`:x.by?`<span class="sgk sgk0"><i style="background:${x.by.h}"></i><b>${esc(x.name)}</b> ${esc(x.by.n)} (suggested above)</span>`:'').join('')}</div>
+  ${ess.length?`<div class="sgl">${ess.map(row).join('')}</div>`:''}
+  ${hide.size?`<p class="s">${hide.size} paint${hide.size===1?'':'s'} hidden as Not interested. <button type="button" class="lnk" data-sxr>Show them again</button></p>`:''}
+  <h3>Techniques your paints can build</h3><p class="s">${good} of ${r.ramps.length} ramps are a good fit. Each square is one step from your paints; a dashed dot marks a step with nothing close (ΔE 12+), shown in the colour it needs. The technique groups are checked on your most saturated mid or dark paint of each hue.</p>
+  ${grp.map(tg).join('')}
   <h3>Colour coverage</h3><p class="s">You have paints in ${cov} of ${cs.length} colour areas. Columns go round the wheel from red to pink; rows are light, mid and dark, then greys from black to white. Striped squares are areas with nothing in your collection.</p>
   <div class="sgg">${[2,1,0].map(b=>SG_HUE.map((_,h)=>cl('c'+h+'_'+b)).join('')).join('')}</div><div class="sgg sg5">${[0,1,2,3,4].map(i=>cl('n'+i)).join('')}</div>
   <p class="s">Suggestions compare swatch colours, which are estimates, so treat them as a starting point and check paints in person.</p>`};
- let sugT=0;const sugLater=()=>{clearTimeout(sugT);sugT=setTimeout(sugGo,600)};
- $('sug').addEventListener('click',e=>{const b=e.target.closest('[data-sa]');if(!b)return;setOwned([b.dataset.sa],true);$('pmsg').textContent='Saving…';counts();filt();sugGo()});
+ let sugT=0,sugRows=[],sugRow=null,sugLast=null;const sugLater=()=>{clearTimeout(sugT);if($('colDlg')&&$('colDlg').open){sugDirty=true;return}sugT=setTimeout(sugGo,600)};let sugDirty=false;
+ // While the collection pop-up is open the suggestions are hidden behind it, so they are worked out once when it closes instead of after every tick.
+ $('colDlg').addEventListener('close',()=>{if(sugDirty){sugDirty=false;sugLater()}});
+ // Tapping an alternative only swaps it into the row (the old pick becomes an alternative); only the Add button adds a paint.
+ // Tapping a suggestion's name or swatch opens a quick look at the paint (what it fills, what you own that's close, matches) without leaving the page.
+ const pq=o=>paintLook(o.p,{top:`<h3>Why it's suggested</h3><ul class="pqf">${o.fills.map(f=>`<li><b>${esc(f.g)}</b>: ${esc(f.r.join(', ').toLowerCase())}</li>`).join('')}</ul>
+  ${o.mix?`<h3>Or mix it from your paints</h3><p class="s sgm">${mixParts(o.mix.m,esc)} (ΔE ${o.mix.d.toFixed(0)})</p>`:''}`,onAdd:()=>{$('pmsg').textContent='Saving…';counts();filt();sugGo()}});
+ $('sug').addEventListener('change',e=>{const so=sgGet('pd-sugo',{n:10,b:''});if(e.target.id==='sgNn')so.n=+e.target.value;else if(e.target.id==='sgBr')so.b=e.target.value;else return;
+  sgSet('pd-sugo',so);$('sug').style.opacity=.6;setTimeout(()=>{sugGo();$('sug').style.opacity='';const f=$(e.target.id);if(f)f.focus()},20)});
+ // Tapping a ramp row or a colour square opens the details: each step or the area's paints, and what would fill the gaps.
+ const sgPick=(t,kind,n,beat=99)=>{const myB=new Set([...OWN].map(k=>BYKEY.get(k)).filter(Boolean).map(p=>BR_OF[p.g])),hide=new Set(sgGet('pd-sugx',[]));
+  const c=P.filter(q=>sgOK(q)&&!OWN.has(q.k)&&!hide.has(q.k)&&(!kind||kind(q))).map(q=>({q,d:d76(q.lab,t)})).sort((a,b)=>a.d-b.d),seen=new Set(),u=x=>{const k=x.q.n.trim().toLowerCase();return!seen.has(k)&&seen.add(k)};
+  // Only paints that land close (ΔE under 12) and clearly beat what you already have; failing that, the single nearest paint.
+  const ok=c.filter(x=>x.d<12&&x.d<beat-3),mine=ok.filter(x=>myB.has(BR_OF[x.q.g])).filter(u).slice(0,n),oth=ok.filter(x=>!myB.has(BR_OF[x.q.g])).filter(u).slice(0,1);
+  const out=[...mine,...oth.filter(x=>!mine.length||x.d<mine[0].d-2)];return out.length?out:c.slice(0,1)};
+ const sgP=(x,extra)=>`<div class="sgdp"><span class="nsw" style="background:${x.q.h}"></span><div class="nnm"><b>${esc(x.q.n)}</b><span>${esc(BRANDS[BR_OF[x.q.g]][0].split(' / ')[0])} · ${esc(GL[x.q.g])} · ΔE ${x.d.toFixed(0)}</span>${extra||''}</div><div class="sga"><button type="button" class="btn sm" data-sga="${esc(x.q.k)}">Add</button>${wantBtn(x.q)}</div></div>`;
+ const sgMix=t=>{const m=mixFor({n:'target',k:'sg|'+labHex(t),h:labHex(t),lab:t}).mixes[0];return m&&m.d<8?`<p class="s sgm">Or mix it: ${mixParts(m.m,esc)} (ΔE ${m.d.toFixed(0)})</p>`:''};
+ const sgOpen=(title,html)=>{const d=$('sgDlg');$('sgDT').textContent=title;$('sgDB').innerHTML=html;d.showModal();d.querySelector('.pqx').focus()};
+ const rampD=x=>{const gq={good:'Good fit',fair:'Fair fit',weak:'Weak fit'},lk=`#/?ramp=${x.q}${x.own?'&base='+encodeURIComponent(x.b.k):''}`;
+  sgOpen(x.tech.name+' · '+x.n,`<p class="s">${gq[x.grade]}: each step is the colour the ${esc(x.tech.full||x.tech.name)} ramp needs, next to your closest paint. Steps with nothing close (ΔE 12+) list paints that would fill them.</p>`+
+  x.R.map(st=>{const ok=st.d<12,cls=st.d<6?'close':st.d<12?'fair':'loose';return`<div class="sgds"><span class="sgdt" style="background:${labHex(st.t)}" title="Colour this step needs"></span><div class="nnm"><b>${esc(st.r)}</b>${st.p?`<span>Yours: <i class="sgdi" style="background:${st.p.h}"></i>${esc(st.p.n)} <em>${esc(GL[st.p.g])}</em> <span class="nq ${cls}">ΔE ${st.d.toFixed(0)}</span></span>`:'<span>Nothing in your collection</span>'}</div></div>`+
+   (ok?'':`<div class="sgdg">${sgPick(st.t,null,2,st.d).map(m=>sgP(m)).join('')||'<p class="s">No paint in the list gets close.</p>'}${sgMix(st.t)}</div>`)}).join('')+
+  `<div class="row"><a class="btn pri" href="${lk}">Open in Ramps on the wheel</a>${TQ_GUIDE[x.q]?`<a class="btn" href="guides/${TQ_GUIDE[x.q]}">How to paint it</a>`:''}</div>`)};
+ const cellD=c=>{const x=sugLast&&sugLast.cells[c];if(!x)return;const own=x.own.slice().sort((a,b)=>d76(a.lab,x.t)-d76(b.lab,x.t));
+  const pk=sgPick(x.t,q=>sgCell(q)===c,own.length?2:4);
+  sgOpen(x.name[0].toUpperCase()+x.name.slice(1),`<p class="s"><span class="sgdi big" style="background:${labHex(x.t)}"></span>A typical ${esc(x.name)}. ${x.ps.length} paints on the site fall in this area${own.length?`, and you own ${own.length}`:', and you own none of them'}.</p>`+
+  (own.length?`<h3>Yours</h3><div class="pqm">${own.slice(0,12).map(p=>`<span class="chip"><i style="background:${p.h}"></i>${esc(p.n)} <span style="color:var(--mut)">${esc(GL[p.g])}</span></span>`).join('')}${own.length>12?`<span class="s">+${own.length-12} more</span>`:''}</div>`:'')+
+  `<h3>${own.length?'More in this area':'Paints that would fill it'}</h3>${pk.map(m=>sgP(m)).join('')||'<p class="s">Nothing else to suggest here.</p>'}${own.length?'':sgMix(x.t)}`)};
+ {const d=$('sgDlg');d.addEventListener('click',e=>{const a=e.target.closest('[data-sga]');if(a){setOwned([a.dataset.sga],true);a.textContent='Added';a.disabled=true;$('pmsg').textContent='Saving…';counts();filt();sugLater();return}
+  if(e.target.closest('a[href^="#/"]'))d.close()})}
+ $('sug').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-rq],[data-cell]')){e.preventDefault();e.target.click()}});
+ $('sug').addEventListener('click',e=>{if(e.target.closest('[data-sxr]')){sgSet('pd-sugx',[]);sugGo();return}
+  const rq=e.target.closest('[data-rq]');if(rq&&sugLast){const x=sugLast.ramps[+rq.dataset.rq];if(x)rampD(x);return}
+  const ce=e.target.closest('[data-cell]');if(ce){cellD(ce.dataset.cell);return}
+  const x=e.target.closest('[data-sx]');if(x){const o=sugRows[+x.closest('.sgr').dataset.ri];if(o){const h=sgGet('pd-sugx',[]);h.push(o.p.k);sgSet('pd-sugx',h.slice(-300));sugGo()}return}
+  const sm=e.target.closest('[data-smx]');if(sm){const o=sugRows[+sm.closest('.sgr').dataset.ri];if(!o||!o.mix)return;sm.disabled=true;sm.textContent='Saving…';
+   pdAddMix({name:o.p.n.trim()+' mix',parts:o.mix.m.map(([q,k])=>({k:q.k,parts:k})),hex:kmHex(o.mix.m)}).then(()=>{sm.textContent='Saved to My mixes'}).catch(er=>{sm.disabled=false;sm.textContent=er.message||'Could not save'});return}
+  const q=e.target.closest('[data-pq]');if(q){const o=sugRows[+q.closest('.sgr').dataset.ri];if(o)pq(o);return}
+  const w=e.target.closest('[data-sw]');if(w){const el=w.closest('.sgr'),o=sugRows[+el.dataset.ri],j=+w.dataset.sw;
+  if(o&&o.alt[j]){const p=o.p;o.p=o.alt[j];o.alt[j]=p;el.outerHTML=sugRow(o);const n=$('sug').querySelector(`.sgr[data-ri="${sugRows.indexOf(o)}"] [data-sa]`);if(n)n.focus()}return}
+  const b=e.target.closest('[data-sa]');if(!b)return;setOwned([b.dataset.sa],true);$('pmsg').textContent='Saving…';counts();filt();sugGo()});
  tr.addEventListener('change',sugLater);
  setTimeout(sugGo,0);
  $('pq').oninput=filt;$('pOwned').onchange=filt;
@@ -358,8 +526,9 @@ function renderPaints(){
 
 // Wheel page buttons for signed-in users.
 $('useMine').onclick=()=>{if(OWN)showOnWheel([...OWN])};
+$('mineBtn').onclick=()=>{if(OWN)showOnWheel([...OWN])};
 const addLbl=t=>{$('addMine').textContent=t;setTimeout(()=>$('addMine').textContent='Add ticked paints to my collection',2500)};
-$('addMine').onclick=()=>{if(!OWN)return;const ks=P.filter(p=>p.on).map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));if(!ks.length)return;if(!nw.length)return addLbl('Already in your collection ✓');
+$('addMine').onclick=()=>{if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix).map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));if(!ks.length)return;if(!nw.length)return addLbl('Already in your collection ✓');
  const d=$('addDlg'),n=nw.length,had=ks.length-n;$('addDlgM').textContent=`This adds ${n} paint${n===1?'':'s'} to your collection`+(had?` (${had} ticked already in it).`:'.');d.returnValue='';
  d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(nw,true);addLbl(`Added ${n} paint${n===1?'':'s'} ✓`);renderNeu();draw()};d.showModal();$('addNo').focus()};
 $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
@@ -424,7 +593,7 @@ function paintSearch(box,exclude,onPick,water){
  box.innerHTML=`<input class="inp" type="search" placeholder="Add a paint (search name or code)">${OWN.size?'<label class="s"><input type="checkbox"> my paints only</label>':''}<div class="res" hidden></div>`;
  const q=box.querySelector('input[type=search]'),mine=box.querySelector('input[type=checkbox]'),R=box.querySelector('.res');
  const go=()=>{const t=q.value.trim().toLowerCase();if(!t){R.hidden=true;return}const ex=exclude();
-  const hits=P.filter(p=>(p.n+' '+p.c).toLowerCase().includes(t)&&!ex.includes(p.k)&&(!mine?.checked||OWN.has(p.k))).slice(0,30);
+  const hits=P.filter(p=>!p.mix&&(p.n+' '+p.c).toLowerCase().includes(t)&&!ex.includes(p.k)&&(!mine?.checked||OWN.has(p.k))).slice(0,30);
   if(water&&!ex.includes(WATER.k)&&/^(wa(t(er?)?)?|thin|dilut)/.test(t))hits.unshift(WATER);
   R.hidden=false;R.innerHTML=hits.map(p=>p===WATER?`<div class="pi" data-k="${WATER.k}"><i style="background:${WATER.h}"></i><span>💧 Water <em>for thinning, washes and glazes</em></span></div>`:`<div class="pi" data-k="${esc(p.k)}"><i style="background:${p.h}"></i>${star(p)}<span>${esc(p.n)} <em>${esc(p.c)} · ${esc(GL[p.g])}</em></span></div>`).join('')||'<div class="s" style="padding:6px">No matches.</div>';
   R.querySelectorAll('[data-k]').forEach(d=>d.onclick=()=>onPick(d.dataset.k))};
@@ -467,7 +636,7 @@ async function renderRecipe(id){
  ${r.summary?`<p>${esc(r.summary)}</p>`:''}
  ${r.link?videoEmbed(r.link):''}
  ${rec&&r.steps.length?`<div class="panel"><h2>${pal?'Colours':'Layers'}</h2>${layersHTML(r.steps,'',pal?'Colour':'Layer')}</div>`:''}
- ${rec&&r.steps.length&&r.paints.every(k=>r.steps.some(s=>s.mix.some(m=>m.k===k)))?(r.paints.length?'<div class="row"><button class="btn" id="rWheel" type="button">Show these paints on the wheel</button></div>':'')
+ ${rec&&r.steps.length&&r.paints.every(k=>r.steps.some(s=>s.mix.some(m=>m.k===k)))?(r.paints.length?'<div class="row"><button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>'+(ME?`<a class="btn" href="#/paints?plan=rec:${esc(r.id)}">Plan it with my paints</a>`:'')+'</div>':'')
   :`<div class="panel"><h2>${rec&&r.steps.length?'Other paints':'Paints used'}</h2><div class="chips" id="rp">${r.paints.map(k=>pchip(k)).join('')||'<span class="s">No paints listed.</span>'}</div>
  ${r.paints.length?'<button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>':''}</div>`}
  ${rec?'':r.steps.map((s,i)=>`<div class="panel step"><h2>Step ${i+1}${s.title?' · '+esc(s.title):''}</h2>
@@ -480,7 +649,7 @@ async function renderRecipe(id){
  ${r.visibility==='public'?`<div class="panel"><h2>Discussion</h2><div id="cms">${d.comments.map(c=>cmHTML(c,canMod(c))).join('')||'<p class="s" id="nocm">No comments yet.</p>'}</div>
   ${ME?`<label class="f"><span>Add a comment</span><textarea id="cBody" maxlength="2000" style="min-height:70px" class="inp"></textarea></label><div class="row"><button class="btn pri" id="cGo" type="button">Post comment</button><span class="err" id="cErr"></span></div>`:signInLink('Registered painters can join the discussion.')}</div>`
   :(mine?'<p class="s">This is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
- el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p){showOnWheel([p.k]);setTimeout(()=>showP(p),0)}});
+ el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p)paintLook(p)});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
  if($('rRep'))$('rRep').onclick=()=>openReport('recipe',r.id,r.title);
  countView(r);
@@ -510,7 +679,7 @@ async function renderEdit(id,kind){
  if(!ME){el.innerHTML='<h1>New '+kind+'</h1>'+signInLink(KIND[kind].t+'s are saved to your account.');return}
  let r={kind,title:'',summary:'',body:'',link:'',paints:[],steps:[],cover:'',meta:{},visibility:'private'},REC={};
  if(id){try{const d=await api('/recipes/'+encodeURIComponent(id));r=d.recipe;Object.values(d.linked||{}).forEach(l=>REC[l.id]=recPick(l))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p>`;return}}
- else if(NMM_DRAFT){r={...r,...NMM_DRAFT};NMM_DRAFT=null} // a ramp or recipe started from the wheel
+ else if(NMM_DRAFT){r={...r,...NMM_DRAFT,steps:(NMM_DRAFT.steps||[]).map(x=>({...x,mix:pdExpandMix(x.mix||[])}))};NMM_DRAFT=null} // a ramp or recipe started from the wheel
  r.meta={level:'',time:'',model:'',...(r.meta||{})};
  const steps=r.steps.length?r.steps.map(s=>({recipe:'',...s,mix:s.mix.map(m=>({...m}))})):[{title:'',text:'',image:'',mix:[],recipe:''}];
  let cover=r.cover,busy=0;
@@ -1081,7 +1250,7 @@ async function forumThread(id){
  // The buttons on each post.
  $('fPosts').querySelectorAll('[data-p]').forEach(P=>{const pid=P.dataset.p,p=d.posts.find(x=>x.id===pid),q=s=>P.querySelector(s),err=t=>{const e=q('[data-er]');if(e)e.textContent=t};
   if(q('[data-sh]'))q('[data-sh]').onclick=e=>{e.target.parentElement.hidden=true;q('[data-bc]').hidden=false};
-  P.querySelectorAll('.fpp .chip').forEach(c=>c.onclick=()=>{const k=BYKEY.get(c.dataset.k);if(k){showOnWheel([k.k]);setTimeout(()=>showP(k),0)}});
+  P.querySelectorAll('.fpp .chip').forEach(c=>c.onclick=()=>{const k=BYKEY.get(c.dataset.k);if(k)paintLook(k)});
   if(q('[data-vt]'))q('[data-vt]').onclick=async e=>{const b=e.currentTarget;b.disabled=true;
    try{const v=await api(`/forum/posts/${pid}/vote`,{method:'PUT',body:{on:!p.voted}});p.voted=v.voted;p.votes=v.votes;b.classList.toggle('on',p.voted);b.setAttribute('aria-pressed',p.voted);b.querySelector('span').textContent=`${p.voted?'Upvoted':'Upvote'} · ${p.votes}`}
    catch(x){err(x.message)}b.disabled=false};
@@ -1199,7 +1368,7 @@ setInterval(chatState,20000);
 // After sign-in (or sign-out): the rooms and the 💬 badge, the live connection, and the popup if it was left open.
 async function chatStart(){
  chatDisconnect();CT.ready=false;CT.cache.clear();CT.boxFor=null;CT.pre=false;
- $('chatN').hidden=!(INFO&&INFO.chat&&API);
+ $('chatN').hidden=!(INFO&&INFO.chat&&API);$('wChat').hidden=$('chatN').hidden;
  if(!ME||!INFO?.chat){CT.rooms=[];chatBadge();if(CT.open||CT.pending)chatShell();return}
  try{const d=await api('/chat');if(d.unavailable)return;Object.assign(CT,{rooms:d.rooms,emoji:d.emoji,live:d.live,why:d.why});
   if(INFO.messages)CT.blocks=new Set((await api('/blocks')).blocks.map(b=>b.id))}catch(e){return}
@@ -1336,7 +1505,7 @@ async function chatClick(e){
  const fail=x=>{E.className='err';E.textContent=x.message};
  if(t.closest('[data-sh]')){t.closest('p').hidden=true;M.querySelector('[data-bc]').hidden=false;return}
  const big=t.closest('[data-big]');if(big){e.preventDefault();$('chImgI').src=imgURL(big.dataset.big);$('chImg').showModal();return}
- const ch=t.closest('.cpp .chip');if(ch){const p=BYKEY.get(ch.dataset.k);if(p){if(innerWidth<=700)chatHide();showOnWheel([p.k]);setTimeout(()=>showP(p),0)}return}
+ const ch=t.closest('.cpp .chip');if(ch){const p=BYKEY.get(ch.dataset.k);if(p)paintLook(p,{onWheel:()=>{if(innerWidth<=700)chatHide()}});return}
  const react=async em=>{const on=!(m.reactions[em]||[]).includes(ME.id);try{const r=await api(`/chat/messages/${id}/react`,{method:'PUT',body:{emoji:em,on}});m.reactions=r.reactions;chatDraw()}catch(x){fail(x)}};
  const rx=t.closest('[data-rx]');if(rx){if(!CT.why)react(rx.dataset.rx);return}
  const pk=t.closest('[data-pk]');if(pk){react(pk.dataset.pk);return}
@@ -1383,6 +1552,18 @@ function chatManage(){const P=$('chMan');if(!P.hidden){P.hidden=true;return}P.hi
    const where=d.conversation?` Our reply will show in <a href="#/inbox/${esc(d.conversation)}">Messages</a>${ME?'':' on this browser'}${$('fbEmail').value.trim()?', and by email':''}.`:'';
    $('fbT').insertAdjacentHTML('afterend',`<p class="ok" id="fbDone">Thanks! Your feedback has been sent.${where}</p>`);D.querySelector('#fbDone a')?.addEventListener('click',()=>D.close());unread();$('fbNo').focus()}
   catch(err){$('fbErr').textContent=err.message;$('fbSend').disabled=false}}}
+
+// What's new: within each day, group entries by the area they touch (li data-a). Untagged lines go under "Other".
+(function clGroup(){
+ const AREAS=[['wheel','Colour wheel'],['mypaints','My paints'],['paints','Paints & swatches'],['recipes','Tutorials, recipes & palettes'],['guides','Guides & paint pages'],['community','Painters & chat'],['themes','Themes'],['account','Account & emails'],['site','Pop-ups & site-wide'],['','Other']];
+ document.querySelectorAll('#v-changelog .cl > ul').forEach(ul=>{
+  const lis=[...ul.children].filter(e=>e.tagName==='LI');if(lis.length<2)return;
+  const by={};lis.forEach(li=>{const a=AREAS.some(x=>x[0]===li.dataset.a)?li.dataset.a:'';(by[a]=by[a]||[]).push(li)});
+  const frag=document.createDocumentFragment();
+  AREAS.forEach(([k,n])=>{const g=by[k];if(!g)return;const h=document.createElement('h3');h.className='cla';h.textContent=n+(g.length>1?' ('+g.length+')':'');const u=document.createElement('ul');g.forEach(li=>u.appendChild(li));frag.append(h,u)});
+  ul.replaceWith(frag);
+ });
+})();
 
 if(FIRST)route();
 loadMe().then(route);
