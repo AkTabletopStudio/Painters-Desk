@@ -6,20 +6,23 @@ if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
 const S=d?d/(1-Math.abs(2*L-1)):0;
 P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n,i:P.length})});
 // Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
-let OWN=null,ONLY_MINE=false;const own=p=>!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
+let OWN=null,ONLY_MINE=false;const own=p=>!!p.mix||!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
 let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
+// Empty details panel on the wheel (Colours mode, nothing selected): what to do first.
+const SEL0='<b>Nothing selected yet</b><ol class="wtips"><li><span>Tap a paint on the wheel. Its <b>complements</b> sit opposite and its <b>neighbours</b> either side.</span></li><li><span><b>Matches</b> from other brands, and mixes from your own paints, show up here.</span></li><li><span>Switch to <b>Ramps</b> or <b>Blends</b> to build a shadow-to-highlight ramp or your own blend.</span></li></ol><p class="s" style="margin-top:10px">Rim = lighter, centre = darker. Dashed outline = wash, glowing outline = fluorescent. Greys and whites are under <b>Neutrals</b>. <a href="guides/colour-theory">How to read the wheel</a></p>';
 // Metallics: the metallic ranges (incl. Vallejo TMM, Turbo Dork, AK 3rd Gen), anything labelled Met./Metallic, and metal names
 // in other ranges unless the name is a pigment colour (Chrome Oxide Green, Steel Legion Drab, Bronze Green...).
-const MET_G=new Set(['D','I','Q','X','u','m','L','q','%','+','}','Ø']),MET_RX=/metal|\bgold\b|silver|bronze|brass|copper|steel|\biron\b|chrome|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|pewter|platinum|nickel/i;
+const MET_G=new Set(['D','I','Q','Ş','X','u','m','L','q','%','+','}','Ø','Ö']),MET_RX=/metal|\bgold\b|silver|bronze|brass|copper|steel|\biron\b|chrome|leadbelcher|retributor|balthasar|warplock|screaming bell|stormhost|liberator|auric|gehenna|sycorax|necron|runefang|ironbreaker|canoptek|fulgurite|hashut|skullcrusher|aluminium|aluminum|pewter|platinum|nickel/i;
 // Metallics whose names don't say so: they sit in each range's metallic block (Citadel Grey Knights Steel, Army Painter coloured metallics).
-const MET_K=new Set(['b|Grey Knights Steel','a|Grey Knights Steel','A|Mithril','A|Dark Emerald','A|Glittering Green','A|Gemstone Red','R|Fairy Dust','R|Night Scales','R|Elven Armour','R|Azure Magic','R|Glittering Green','R|Zephyr Pink','R|Gemstone Red','R|Royal Purple','S|Glittering Loot','S|Golden Armour','_|Aotake Green','_|Aotake Blue','?|Super Italian Red']);
-const isMet=p=>MET_G.has(p.g)||MET_K.has(p.g+'|'+p.n)||/anodized|^candy /i.test(p.n)||/\bmet(al|allic)?\b/i.test(p.n+' '+p.c)||/gunmetal/i.test(p.n)||p.c==='70.877'||MET_RX.test(p.n)&&!/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n)&&p.g!=='8';
+const MET_K=new Set(['Ï|Steel','Ï|Silver','Ï|Copper','Ï|Bronze','Ï|Gold','Ï|Brass','b|Grey Knights Steel','a|Grey Knights Steel','A|Mithril','A|Dark Emerald','A|Glittering Green','A|Gemstone Red','R|Fairy Dust','R|Night Scales','R|Elven Armour','R|Azure Magic','R|Glittering Green','R|Zephyr Pink','R|Gemstone Red','R|Royal Purple','S|Glittering Loot','S|Golden Armour','_|Aotake Green','_|Aotake Blue','?|Super Italian Red']);
+const isMet=p=>MET_G.has(p.g)||MET_K.has(p.g+'|'+p.n)||/anodized|^candy /i.test(p.n)&&p.g!=='Û'||/\bmet(al|allic)?\b/i.test(p.n+' '+p.c)||/gunmetal/i.test(p.n)||p.c==='70.877'||MET_RX.test(p.n)&&!/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n)&&p.g!=='8'&&p.g!=='Ë'&&p.g!=='Ê'&&p.g!=='Ü'&&p.g!=='Ï';
 // Paint types: everything that isn't an opaque base/layer/air paint. The ranges say most of it; mixed ranges are sorted by name or code
-// (Warpaints Fanatic washes are named '... Tone').
-const PT_G={'*':'ink','@':'fx',c:'con',S:'con',x:'con','1':'con','9':'con',W:'wash',s:'wash',w:'wash',z:'wash',n:'ink',i:'ink',T:'ink',r:'ink',F:'fx',f:'fx','!':'fx','^':'con','=':'ink',t:'tech',P:'tech',G:'tech',B:'tech','[':'ink'};
+// (Warpaints Fanatic and Historical washes are named '... Tone').
+const PT_G={'*':'ink','@':'fx',c:'con',S:'con',x:'con','1':'con','9':'con',W:'wash',s:'wash',w:'wash',z:'wash',n:'ink',i:'ink',T:'ink',r:'ink',F:'fx',f:'fx','!':'fx','^':'con','=':'ink',t:'tech',P:'tech',G:'tech',B:'tech','[':'ink','Ê':'ink','Ô':'ink','Û':'ink'};
 // Pearls: pearlescent and iridescent paints (Tamiya Pearl sprays, AK Pearl), their own type so they can be hidden apart from metal.
-const isPearl=p=>/\bpearl\b|iridescent/i.test(p.n)&&!/skin/i.test(p.n);
-const paintType=p=>p.pt||(p.pt=isPearl(p)?'pearl':isMet(p)?'met':PT_G[p.g]||(/speedpaint|contrast/i.test(p.c)?'con':/\bwash$/i.test(p.c)||/\bwash\b|\bshade$/i.test(p.n)||p.g==='A'&&/ tone$/i.test(p.n)?'wash':/\bink$/i.test(p.n)||/ ink$/i.test(p.c)?'ink':/fluo|^neon|effects$/i.test(p.n+'|'+p.c)?'fx':/^matt .*primer$|varnish$|^(shading|blending|chipping) medium$/i.test(p.n)?'tech':'op'));
+const isPearl=p=>/\bpearl\b|iridescent|^interference /i.test(p.n)&&!/skin/i.test(p.n)&&p.g!=='Ï'&&p.g!=='Ş';
+const legacyOf=p=>{const l=p.g==='Ŵ'&&(MT[p.i]||[]).find(m=>m[1]==='L');return l?P[l[0]]:null};
+const paintType=p=>p.pt||(p.pt=legacyOf(p)?paintType(legacyOf(p)):isPearl(p)?'pearl':isMet(p)?'met':p.g==='Ê'&&/^fluorescent /i.test(p.n)?'fx':PT_G[p.g]||(/speedpaint|contrast/i.test(p.c)?'con':/\bwash$/i.test(p.c)||/\bwash\b|\bshade$/i.test(p.n)||(p.g==='A'||p.g==='Ħ')&&/ tone$/i.test(p.n)?'wash':/\bink$/i.test(p.n)||/ ink$/i.test(p.c)?'ink':/fluo|^neon|effects$/i.test(p.n+'|'+p.c)?'fx':/^matt .*primer$|varnish$|^(shading|blending|chipping) medium$/i.test(p.n)?'tech':'op'));
 const PTYPES=[['met','Metallics','Metal paints, shifts and metallic effects'],['pearl','Pearls','Pearlescent and iridescent paints'],['con','Contrast & speedpaints','Contrast, Speedpaint, Xpress, 1-Step and Instant Colors one-coat paints'],['wash','Washes & shades','Recess shades, they only show over a basecoat'],['ink','Inks, glazes & transparents','Tint whatever is under them'],['fx','Fluorescents & special FX','Fluoro, blood, rust, corrosion and other effects'],['tech','Technical, primers & mediums','Texture, technical, primers, pigments, varnish and mediums']];
 // Hidden types live in pd-types; first visit hides the types that rarely help colour theory (metallics follow the old Hide metallics setting).
 let HIDE_T=new Set(['wash','ink','fx','tech','pearl']);try{const s=localStorage.getItem('pd-types');if(s!==null)HIDE_T=new Set(JSON.parse(s));else if(localStorage.getItem('pd-met')==='1')HIDE_T.add('met')}catch(e){}
@@ -395,7 +398,7 @@ if(sel&&!R&&!MX&&!HS){const ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=
 s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${discStops(sel,comp,ana).map(([h,o])=>`<stop offset="${o.toFixed(4)}" stop-color="${h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
 const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,kk=R0/26;
 CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):HS?HIN.has(p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
-const st=(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'||p.g==='!'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
+const st=p.mix?'stroke="#1b1b1b" stroke-dasharray="7 4"':(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'||p.g==='!'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
 const sw=p===sel?5:comp.includes(p)?4:2;
 s+=`<g class="dot" data-i="${p.i}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))||(HPK.has(p)&&p!==sel)?' stroke="#fff" stroke-width="4"':''}/>`+
 (show?`<g transform="translate(${p.x} ${p.y}) scale(${kk}) translate(${-p.x} ${-p.y})">`+ls.map((t,i)=>`<text x="${p.x}" y="${p.y-(ls.length*8-4)/1+i*8.5-2+4}" font-size="7.5" fill="${tc}">${t}</text>`).join('')+`<text x="${p.x}" y="${p.y+20-(ls.length>1?1:-3)-(ls.length>1?0:0)}" font-size="6.5" fill="${tc}" opacity=".8">${p.c}</text></g>`:'')+`<title>${p.n} (${p.c})</title></g>`});
@@ -411,7 +414,7 @@ if(MX){blendPanel();return}
 if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>'+TQN().hint+'</b>';return}
 if(HS){document.getElementById('sel').innerHTML=hPanel(HS,sel)+matchHTML(sel);wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel);return}
 if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to start a blend. It starts with the wheel\'s own complements and neighbours, then you swap in your own.</b>';return}
-document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):'<b>Tap a paint on the wheel or in the neutrals list.</b>';if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
+document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):SEL0;if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
 function pick(p){if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
@@ -427,8 +430,8 @@ document.getElementById('hTy').onclick=()=>d.showModal();
 d.addEventListener('change',e=>{const k=e.target.dataset.ty;if(!k)return;e.target.checked?HIDE_T.delete(k):HIDE_T.add(k);try{localStorage.setItem('pd-types',JSON.stringify([...HIDE_T]))}catch(e){}tyUI();
  if(sel&&!shown(sel))sel=null;if(NB&&!shown(NB))NB=null;layout();renderNeu();draw()})})();tyUI();
 {const d=document.getElementById('neud');try{d.open=localStorage.getItem('pd-neu')==='1'}catch(e){}d.ontoggle=()=>{try{localStorage.setItem('pd-neu',d.open?'1':'0')}catch(e){}}}
-const GL={A:'Warpaints Fanatic',C:'John Blanche Vol. 1-4',R:'Warpaints Air',S:'Speedpaint 2.0',b:'Colour: Base',s:'Colour: Shade',l:'Colour: Layer',c:'Colour: Contrast',t:'Colour: Technical',a:'Colour: Air',d:'Colour: Dry',p:'Tone Pro',M:'Standard / Signature / AMP',W:'Washes',F:'Fluorescents',T:'Transparents',X:'Metallics','1':'1-Step',E:'Expert Acrylics',P:'Primers',G:'Weathering pigments',B:'Basing textures (list only)',K:'AK Quick Gen',e:'3rd Gen Standard',g:'3rd Gen Intense',j:'3rd Gen Pastel',m:'3rd Gen Metallic',n:'3rd Gen Ink',o:'3rd Gen AFV Series',v:'3rd Gen Figure Series',y:'3rd Gen Air Series',V:'Game Color',u:'Game Color Metallic',i:'Game Color Ink',f:'Game Color Special FX / Fluo',x:'Xpress Color',w:'Game Color Wash',L:'True Metallic Metal',Y:'Model Air',Z:'Model Color',H:'Triads: highlights',N:'Triads: midtones',O:'Triads: shadows',J:'Brights',q:'Metallics',z:'Washes',r:'Glazes',D:'Metallic',I:'TurboShift',Q:'ZeniShift',U:'XF Flat Acrylic',h:'X Gloss Acrylic','2':'AS Spray (aircraft)','3':'PS Spray (polycarbonate)','4':'TS Spray','7':'Scalecolor','8':'Fantasy & Games','9':'Instant Colors','0':'Scalecolor Artist','%':"Metal n' Alchemy",'*':'Inktensity','@':'FX Fluor','5':'Acrylic Colors','6':'Opaque Colors','!':'Fluor Paints','+':'Metallic & Colorshift','~':'Washes & Intensity Inks','^':'Dipping Inks','=':'Acrylic Inks','_':'ATOM','?':'Mr. Color',':':'Aqueous Hobby Color',';':'Acrysion','{':'Master Series Paints','}':'MSP Metallics','[':'MSP Clears & Inks','Å':'Formula P3','Ø':'P3 Metallics','Æ':'P3 Inks & Washes','Ç':'Pure Pigments','Ð':'Signature Series'};
-const BRANDS=[['Army Painter',['A','C','R','S']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z','L']],['AK Interactive',['K','e','g','j','m','n','o','v','y']],['Two Thin Coats',['H','N','O','J','q','z','r']],['Turbo Dork',['D','I','Q']],['Tamiya',['U','h','2','3','4']],['Scale75',['7','8','9','0','%','*','@']],['Green Stuff World',['5','6','!','+','~','^','=']],['AMMO by Mig',['_']],['Mr. Hobby',['?',':',';']],['Reaper',['{','}','[']],['Formula P3',['Å','Ø','Æ']],['Kimera Kolors',['Ç','Ð']]];
+const GL={'µ':'My mix',A:'Warpaints Fanatic',C:'John Blanche Vol. 1-4',R:'Warpaints Air',S:'Speedpaint 2.0','Ħ':'Warpaints Historical','Ŵ':'Warpaints Legacy','Ŧ':'Glow Precision Fluor','Ť':'Color Punch',b:'Colour: Base',s:'Colour: Shade',l:'Colour: Layer',c:'Colour: Contrast',t:'Colour: Technical',a:'Colour: Air',d:'Colour: Dry',p:'Tone Pro',M:'Standard / Signature / AMP',W:'Washes',F:'Fluorescents',T:'Transparents',X:'Metallics','1':'1-Step',E:'Expert Acrylics',P:'Primers',G:'Weathering pigments',B:'Basing textures (list only)',K:'AK Quick Gen',e:'3rd Gen Standard',g:'3rd Gen Intense',j:'3rd Gen Pastel',m:'3rd Gen Metallic',n:'3rd Gen Ink',o:'3rd Gen AFV Series',v:'3rd Gen Figure Series',y:'3rd Gen Air Series',V:'Game Color',u:'Game Color Metallic',i:'Game Color Ink',f:'Game Color Special FX / Fluo',x:'Xpress Color',w:'Game Color Wash',L:'True Metallic Metal',Y:'Model Air',Z:'Model Color',H:'Triads: highlights',N:'Triads: midtones',O:'Triads: shadows',J:'Brights',q:'Metallics',z:'Washes',r:'Glazes',D:'Metallic',I:'TurboShift',Q:'ZeniShift',U:'XF Flat Acrylic',h:'X Gloss Acrylic','2':'AS Spray (aircraft)','3':'PS Spray (polycarbonate)','4':'TS Spray','7':'Scalecolor','8':'Fantasy & Games','9':'Instant Colors','0':'Scalecolor Artist','%':"Metal n' Alchemy",'*':'Inktensity','@':'FX Fluor','Ş':'Prism Effect','5':'Acrylic Colors','6':'Opaque Colors','!':'Fluor Paints','+':'Metallic & Colorshift','~':'Washes & Intensity Inks','^':'Dipping Inks','=':'Acrylic Inks','_':'ATOM','?':'Mr. Color',':':'Aqueous Hobby Color',';':'Acrysion','{':'Master Series Paints','}':'MSP Metallics','[':'MSP Clears & Inks','Å':'Formula P3','Ø':'P3 Metallics','Æ':'P3 Inks & Washes','Ç':'Pure Pigments','Ð':'Signature Series','Ë':'Heavy Body Acrylics','Ê':'High Flow','Ñ':'N-Paint Basic','Ö':'N-Paint Metal','Ô':'N-Paint Ink','Õ':'Fantasy-Pro','Ü':'Bear Cavalry Paints','Ï':'IONIC Smart Colors','Ò':'Acrylic Colors for Figures','Ó':'Oilbrusher','Ú':'Dio Drybrush','Û':'Shaders'};
+const BRANDS=[['Army Painter',['A','C','R','S','Ħ','Ŵ']],['Citadel / Warhammer',['b','s','l','c','t','a','d','p']],['Pro Acryl',['M','W','F','T','X','1','E','P','G','B']],['Vallejo',['V','u','i','f','x','w','Y','Z','L','Õ']],['AK Interactive',['K','e','g','j','m','n','o','v','y','Ŧ','Ť']],['Two Thin Coats',['H','N','O','J','q','z','r']],['Turbo Dork',['D','I','Q']],['Tamiya',['U','h','2','3','4']],['Scale75',['7','8','9','0','%','*','@','Ş']],['Green Stuff World',['5','6','!','+','~','^','=']],['AMMO by Mig',['_','Ï','Ò','Ó','Ú','Û']],['Mr. Hobby',['?',':',';']],['Reaper',['{','}','[']],['Formula P3',['Å','Ø','Æ']],['Kimera Kolors',['Ç','Ð']],['Golden',['Ë','Ê']],['Nocturna Models',['Ñ','Ö','Ô']],['Bear Cavalry',['Ü']]];
 
 const BR_OF={};BRANDS.forEach(([bn,gs],bi)=>gs.forEach(g=>BR_OF[g]=bi));
 // Paint tree sections (wheel and My paints). A brand whose metallics or pearls are spread over mixed ranges gets one Metallics and one
@@ -451,40 +454,126 @@ let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.119
 return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
 P.forEach(p=>p.lab=hexLab(p.h));
 const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
-const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart'};
+const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart',w:'Army Painter Historical to Fanatic chart',L:'Army Painter Warpaints Fanatic conversion chart'};
 // Metallic and pearl paints only match each other, and other paints only match other paints: a gold is never a yellow's match.
 // The other finish is listed apart (Metallic matches / Non-metallic colours), one nearest per brand plus any chart pairs.
 const isMetT=p=>{const t=paintType(p);return t==='met'||t==='pearl'};
-function matchData(p){const i=p.i,mt=isMetT(p),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
-BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;const b=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d),ch=b.filter(m=>isMetT(m.p)===mt),xch=b.filter(m=>isMetT(m.p)!==mt);
-const have=new Set(b.map(m=>m.p)),pool=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d);
-const near=pool.filter(m=>isMetT(m.p)===mt).slice(0,ch.length?2:3),xnear=pool.filter(m=>isMetT(m.p)!==mt).slice(0,xch.length?0:1);
+// Matches in other ranges. Short list (default): per brand, chart ✓ matches within ΔE 25 of our swatch, else the 1 nearest paint of the
+// same type within ΔE 12; same-named paints in one brand shown once. MATCH_ALL (Show all button) brings back the full list: every chart
+// match plus the 2-3 nearest per brand, no limit. Same split by finish either way (xch/xnear = metallic vs non-metallic section).
+let MATCH_ALL=false;const M_TICK=25,M_NEAR=12,tyG=t=>t==='ink'?'wash':t;
+const dedupe=a=>{const s=new Set();return a.filter(m=>{const k=m.p.n.trim().toLowerCase();if(s.has(k))return false;s.add(k);return true})};
+function matchData(p,all=MATCH_ALL){const i=p.i,mt=isMetT(p),ty=tyG(paintType(p)),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
+BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;let b=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d);const have=new Set(b.map(m=>m.p));if(!all)b=b.filter(m=>m.d<=M_TICK);
+let ch=b.filter(m=>isMetT(m.p)===mt),xch=b.filter(m=>isMetT(m.p)!==mt);
+const pool=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d);
+let near,xnear;if(all){near=pool.filter(m=>isMetT(m.p)===mt).slice(0,ch.length?2:3);xnear=pool.filter(m=>isMetT(m.p)!==mt).slice(0,xch.length?0:1)}
+else{ch=dedupe(ch);xch=dedupe(xch);const ok=m=>m.d<=M_NEAR&&!ch.concat(xch).some(c=>c.p.n.trim().toLowerCase()===m.p.n.trim().toLowerCase());
+ near=ch.length?[]:pool.filter(m=>isMetT(m.p)===mt&&(mt||tyG(paintType(m.p))===ty)&&ok(m)).slice(0,1);xnear=xch.length?[]:pool.filter(m=>isMetT(m.p)!==mt&&ok(m)).slice(0,1)}
 out.push({bn,ch,near,xch,xnear})});return out}
+const mCount=md=>md.reduce((a,o)=>a+o.ch.length+o.near.length+o.xch.length+o.xnear.length,0);
 // Links from a selected paint to its own paint page (the Worker's /paints/find looks up the page by paint key) and to a conversion chart for its brand.
 const CONV_G={'Citadel / Warhammer':['guides','Conversion charts'],'Army Painter':['guides/army-painter-to-citadel','Army Painter to Citadel chart'],'Vallejo':['guides/vallejo-to-citadel','Vallejo to Citadel chart'],
  'Pro Acryl':['guides/pro-acryl-to-citadel','Pro Acryl to Citadel chart'],'AK Interactive':['guides/citadel-to-ak-interactive','Citadel to AK chart'],'Scale75':['guides/citadel-to-scale75','Citadel to Scale75 chart']};
-function guideLinks(p){if(p.g==='B')return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]];
- return`<p class="s glinks"><a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
-function matchHTML(p){const md=matchData(p);let h=guideLinks(p)+'<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>';
+function guideLinks(p){if(p.g==='B'||p.mix)return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]],w=window.pdWantBtn?pdWantBtn(p):'';
+ return`<p class="s glinks">${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
+function matchHTML(p){return guideLinks(p)+mixHTML(p)+mtHTML(p)}
+function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: chart ✓ matches within ΔE '+M_TICK+', otherwise the nearest paint of the same type within ΔE '+M_NEAR+'.</p>');
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
 const rows=(a,b)=>md.map(o=>!o[a].length&&!o[b].length?'':`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o[a].map(m=>c(m,1)).join('')}${o[b].map(m=>c(m,0)).join('')}</div></div>`).join('');
+// Warpaints Historical paints that the Historical to Fanatic chart says are the same paint under another name (MT source 'w').
+const same=(MT[p.i]||[]).filter(([j,s])=>s==='w').map(([j,s])=>({p:P[j],s,d:dE(p,P[j])}));if(same.length)h+=`<div class="br2"><div class="bl">Same paint as</div><div class="chips">${same.map(m=>c(m,1)).join('')}</div></div>`;
+// Old Warpaints names and the Warpaints Fanatic paint that replaced them, from Army Painter's Fanatic conversion chart (MT source 'L').
+const leg=(MT[p.i]||[]).filter(([j,s])=>s==='L').map(([j,s])=>({p:P[j],s,d:dE(p,P[j])}));if(leg.length)h+=`<div class="br2"><div class="bl">${p.g==='Ŵ'?'Replaced by':'Old Warpaints name'}</div><div class="chips">${leg.map(m=>c(m,1)).join('')}</div></div>`;
 const mt=isMetT(p),x=rows('xch','xnear');h+=(mt?'<p class="s"><b>Metallic matches</b> (metallic and pearl paints only)</p>':'')+rows('ch','near');
-if(x)h+=`<h3 class="mx">${mt?'Non-metallic colours':'Metallic matches'}</h3><p class="s">${mt?'The nearest non-metallic paint in each brand, for non-metallic metal (NMM) or a matt alternative. A different finish, so not a straight swap.':'The nearest metallic paint in each brand. A different finish, so not a straight swap.'}</p>`+x;
-if(ONLY_MINE&&!md.some(o=>o.ch.length||o.near.length||o.xch.length||o.xnear.length))h+='<p class="s">None of your paints from other ranges match this one.</p>';return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button></div>'}
+if(x)h+=`<details class="mxd"${MATCH_ALL?' open':''}><summary><h3 class="mx">${mt?'Non-metallic colours':'Metallic matches'}</h3></summary><p class="s">${mt?'The nearest non-metallic paint in each brand, for non-metallic metal (NMM) or a matt alternative. A different finish, so not a straight swap.':'The nearest metallic paint in each brand. A different finish, so not a straight swap.'}</p>`+x+'</details>';
+if(!mCount(md))h+=ONLY_MINE?'<p class="s">None of your paints from other ranges match this one closely.</p>':'<p class="s">No close matches in other ranges.</p>';const full=MATCH_ALL?0:mCount(matchData(p,true));return h+'<button type="button" id="mAddDoc">Add all ✓ chart matches to wheel</button><button type="button" id="mAddAll">Add all matches shown</button>'+(MATCH_ALL?'<button type="button" id="mMore">Show best matches only</button>':full>mCount(md)?`<button type="button" id="mMore">Show all ${full} matches</button>`:'')+'</div>'}
+// Mix it from your paints: when the selected paint isn't in the painter's collection, look for 2- and 3-paint mixes of opaque paints
+// they own that come close. Mixing is pigment-style (one-constant Kubelka-Munk per RGB channel, so blue + yellow heads toward green,
+// not grey) on the swatch estimates, so every mix is a starting point. Metallics, pearls, washes, inks, contrast, glazes, fluo and
+// technical paints are left out of the pool (nmmOK), and only opaque target paints get suggestions.
+const KSv=h=>[1,3,5].map(o=>{let v=parseInt(h.slice(o,o+2),16)/255;v=v>.04045?((v+.055)/1.055)**2.4:v/12.92;v=Math.min(.998,Math.max(.002,v));return(1-v)**2/(2*v)});
+const ksLab=ks=>rgbLab(...ks.map(k=>{let v=1+k-Math.sqrt(k*k+2*k);v=v>.0031308?1.055*v**(1/2.4)-.055:12.92*v;return Math.max(0,Math.min(1,v))*255}));
+const gcd=(a,b)=>b?gcd(b,a%b):a,MX2=[],MX3=[];
+for(let a=1;a<=5;a++)for(let b=1;b<=5;b++)if(a+b<=6&&gcd(a,b)===1)MX2.push([a,b]);
+for(let a=1;a<=4;a++)for(let b=1;b<=4;b++)for(let c=1;c<=4;c++)if(a+b+c<=7&&gcd(gcd(a,b),c)===1)MX3.push([a,b,c]);
+const mixRate=d=>d<6?'Close':d<12?'Fair':'Loose';
+let MIXC=null;
+function mixFor(p){if(MIXC&&MIXC.p===p&&MIXC.o===OWN)return MIXC.r;
+const t=p.lab,pool=P.filter(q=>own(q)&&!q.mix&&q!==p&&q.g!=='B'&&nmmOK(q));pool.forEach(q=>{if(!q.ks)q.ks=KSv(q.h)});
+const T=KSv(p.h),W=T.map(k=>1/(k+.08)**2),dl=l=>Math.hypot(l[0]-t[0],l[1]-t[1],l[2]-t[2]),n=pool.length;
+const near=pool.map(q=>({q,d:dE(p,q)})).sort((a,b)=>a.d-b.d),one=near[0]||null;
+// Quick pass: for every pair, the best straight-line fit in K/S space (where pigment mixing is linear), weighted toward the target.
+const cand=[];for(let i=0;i<n;i++){const A=pool[i].ks;for(let j=i+1;j<n;j++){const B=pool[j].ks;let num=0,den=0,r=0;
+ for(let k=0;k<3;k++){const u=B[k]-A[k];num+=W[k]*u*(T[k]-A[k]);den+=W[k]*u*u}const f=den?Math.min(.9,Math.max(.1,num/den)):.5;
+ for(let k=0;k<3;k++){const e=A[k]+f*(B[k]-A[k])-T[k];r+=W[k]*e*e}cand.push([r,i,j])}}
+cand.sort((a,b)=>a[0]-b[0]);
+const two=cand.slice(0,400).map(([,i,j])=>{const A=pool[i].ks,B=pool[j].ks;let best=null;
+ for(const[a,b]of MX2){const d=dl(ksLab([0,1,2].map(k=>(a*A[k]+b*B[k])/(a+b))));if(!best||d<best.d)best={m:[[pool[i],a],[pool[j],b]],d}}return best}).sort((a,b)=>a.d-b.d);
+// Three paints: the paints that turn up in the best pairs plus the nearest singles, every trio of them, small whole-number parts.
+const top=[...new Set([...two.slice(0,30).flatMap(x=>x.m.map(y=>y[0])),...near.slice(0,8).map(x=>x.q)])].slice(0,22),three=[];
+for(let i=0;i<top.length;i++)for(let j=i+1;j<top.length;j++)for(let k=j+1;k<top.length;k++){const q=[top[i],top[j],top[k]];let best=null;
+ for(const w of MX3){const s=w[0]+w[1]+w[2],d=dl(ksLab([0,1,2].map(c=>(w[0]*q[0].ks[c]+w[1]*q[1].ks[c]+w[2]*q[2].ks[c])/s)));if(!best||d<best.d)best={m:q.map((x,z)=>[x,w[z]]),d}}three.push(best)}
+three.sort((a,b)=>a.d-b.d);
+// Keep mixes that beat the closest paint they already own, no pair twice, the larger share first. A 3-paint mix has to earn its place.
+const out=[],seen=new Set(),lim=one?one.d-1:99;
+for(const x of two){if(out.length>=3)break;const key=x.m.map(y=>y[0].n.trim().toLowerCase()).sort().join('|');if(x.d>=lim||x.d>25||seen.has(key))continue;seen.add(key);out.push(x)}
+const b3=three[0];if(b3&&b3.d<lim&&b3.d<25&&(!out.length||b3.d<out[0].d-1.5))out.push(b3);
+out.forEach(x=>x.m.sort((a,b)=>b[1]-a[1]));out.sort((a,b)=>a.d-b.d);
+const r={n,one,mixes:out};MIXC={p,o:OWN,r};return r}
+function kmHex(m){const s=m.reduce((a,x)=>a+x[1],0);return labHex(ksLab([0,1,2].map(c=>m.reduce((a,x)=>a+x[1]*x[0].ks[c],0)/s)))}
+function mixHTML(p){const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+if(p.mix)return`<div class="mixs"><h2>Your mix</h2><div class="mxr"><span class="mxsw"><i style="background:${p.h}"></i></span><div class="mxt"><b>${mixParts(p.mix.m,esc)}</b><span class="s">Saved in your paints. The colour is worked out from the swatch estimates, so it's approximate.</span></div><button type="button" class="mxsv" data-mxdel="${esc(p.mix.id)}">Remove mix</button></div></div>`;
+if(p.g==='B'||paintType(p)!=='op')return'';
+const box=b=>`<div class="mixs"><h2>Mix it from your paints</h2>${b}</div>`;
+if(!OWN)return window.pdApi&&pdApi()?box('<p class="s">Missing this paint? Sign in and tick the paints you own on My paints, and this shows how to mix it from them.</p>'):'';
+if(own(p))return'';const r=mixFor(p);
+if(r.n<2)return box('<p class="s">Add a few opaque paints to your collection on My paints to see mixes for paints you don\'t have.</p>');
+const one=r.one?`<p class="s">Closest paint you own: <span class="chip"><i style="background:${r.one.q.h}"></i>${esc(r.one.q.n)} <em>${esc(GL[r.one.q.g])} · ΔE ${r.one.d.toFixed(0)}</em></span></p>`:'';
+if(!r.mixes.length)return box(`<p class="s">${r.one&&r.one.d<4?'You don\'t own this paint, but you have one that is already very close.':'You don\'t own this paint, and no mix of your opaque paints beats the closest one you have.'}</p>`+one);
+return box(`<p class="s">You don't own this paint. These mixes of opaque paints in your collection come closest (metallics, washes, inks and contrast paints are left out). Swatches are estimates and real paints mix less predictably, so mix a little, let it dry and compare first.</p>`+
+r.mixes.map((x,z)=>`<div class="mxr"><span class="mxsw" title="Left: ${esc(p.n)}. Right: the mix."><i style="background:${p.h}"></i><i style="background:${kmHex(x.m)}"></i></span><div class="mxt"><b>${mixParts(x.m,esc)}</b><span class="s">ΔE ${x.d.toFixed(1)} · ${mixRate(x.d)}</span></div><span class="mxb">${window.pdMixOK&&pdMixOK()?(mixHave(x.m)?'<span class="s">In your paints ✓</span>':`<button type="button" class="mxsv" data-mxa="${z}">Add to my paints</button>`):''}${window.pdApi&&pdApi()?`<button type="button" class="mxsv" data-mxs="${z}">Save as recipe</button>`:''}</span></div>`).join('')+one)}
+function wireMix(p){
+document.querySelectorAll('#sel [data-mxa]').forEach(e=>e.onclick=async()=>{const x=mixFor(p).mixes[+e.dataset.mxa];if(!x)return;e.disabled=true;e.textContent='Adding…';
+ try{await pdAddMix({name:p.n.trim()+' mix',parts:x.m.map(([q,k])=>({k:q.k,parts:k})),hex:kmHex(x.m)})}catch(er){e.disabled=false;e.textContent=er.message||'Could not add'}});
+document.querySelectorAll('#sel [data-mxdel]').forEach(e=>e.onclick=async()=>{e.disabled=true;try{await pdDelMix(e.dataset.mxdel)}catch(er){e.disabled=false;e.textContent=er.message||'Could not remove'}});
+document.querySelectorAll('#sel [data-mxs]').forEach(e=>e.onclick=()=>{const x=mixFor(p).mixes[+e.dataset.mxs];if(!x)return;
+ NMM_DRAFT={kind:'recipe',title:'Mix for '+p.n.trim(),summary:`A mix to stand in for ${p.n.trim()} (${GL[p.g]}) from paints I own. Worked out on the Painters Desk wheel from swatch estimates (ΔE ${x.d.toFixed(1)}), so test it first.`,
+ steps:[{title:'Mix',text:'Mix the parts together well on the palette, then thin as usual.',image:'',mix:x.m.map(([q,k])=>({k:q.k,parts:k}))}]};location.hash='#/new/recipe'})}
+// Saved mixes ('My mix', group µ): account.js hands over the user's mixes and they join P as extra paints at the end, always on the wheel,
+// always 'owned', never in the paint tree, matches lists, suggestions or other mixes. Colour = the same pigment-style mix of the parts.
+const mixParts=(m,esc)=>m.map(([q,k])=>`<span class="mxp"><i style="background:${q.h}"></i>${k} part${k>1?'s':''} ${esc(q.n)} <em>${esc(GL[q.g])}</em></span>`).join('');
+const mixSig=m=>m.map(([q,k])=>q.k+'*'+k).sort().join('|'),mixHave=m=>{const g=mixSig(m);return P.some(q=>q.mix&&mixSig(q.mix.m)===g)};
+const P0=P.length,KEY={};P.forEach(p=>{if(!KEY[p.k])KEY[p.k]=p});
+window.pdSetMixes=list=>{P.length=P0;
+ (list||[]).forEach(x=>{const m=(x.parts||[]).map(y=>[KEY[y.k],y.parts]).filter(y=>y[0]);if(m.length<2)return;m.forEach(([q])=>{if(!q.ks)q.ks=KSv(q.h)});
+  const h=m.length===x.parts.length?kmHex(m):x.hex,r=parseInt(h.slice(1,3),16)/255,gg=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255,mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;
+  let H=0;if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
+  const p={n:x.name,c:'My mix',h,g:'µ',H,S:d?d/(1-Math.abs(2*L-1)):0,L,lum:.299*r+.587*gg+.114*b,k:'µ|'+x.id+'|'+x.name,i:P.length,lab:hexLab(h),mix:{id:x.id,m}};
+  Object.defineProperty(p,'on',{get:()=>true,set(){},enumerable:true});P.push(p)});
+ const gone=q=>q&&q.mix&&!P.includes(q);if(gone(sel))sel=null;if(gone(NB))NB=null;if(BL&&(gone(BL.b)||BL.s.some(x=>gone(x.p))))BL=null;
+ MIXC=null;layout();renderNeu();draw()};
+// Recipes are shared, so a step that uses a saved mix is written out as the mix's own paints (parts multiplied through).
+window.pdExpandMix=mix=>{const out=[];mix.forEach(it=>{const q=typeof it.k==='string'&&it.k[0]==='µ'&&P.find(z=>z.k===it.k);
+ (q&&q.mix?q.mix.m.map(([z,k])=>({k:z.k,parts:k*(it.parts||1)})):[it]).forEach(y=>{const o=out.find(z=>z.k===y.k);if(o)o.parts+=y.parts;else out.push({...y})})});return out};
 function addOn(list,p){list.forEach(q=>q.on=true);layout();renderNeu();boxes();showP(p);remember()}
 function showP(p){if(MODE==='nmm'){NB=p;sel=CH.includes(p)?p:null;draw()}else if(CH.includes(p)){sel=p;draw()}else{sel=null;draw();neutralShow(p)}}
-function wireMatch(p){const el=document.getElementById('sel');
+function wireMatch(p){wireMix(p);wireMt(p)}
+function wireMt(p){const el=document.getElementById('sel');
 el.querySelectorAll('.mt .chip').forEach(e=>e.onclick=()=>{const q=P[+e.dataset.mi];addOn([q],q)});
 const md=matchData(p),a=document.getElementById('mAddDoc'),b=document.getElementById('mAddAll');
-if(a)a.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.xch].map(m=>m.p)),p);if(b)b.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.near,...o.xch,...o.xnear].map(m=>m.p)),p)}
+if(a)a.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.xch].map(m=>m.p)),p);if(b)b.onclick=()=>addOn(md.flatMap(o=>[...o.ch,...o.near,...o.xch,...o.xnear].map(m=>m.p)),p);
+const mo=document.getElementById('mMore');if(mo)mo.onclick=()=>{MATCH_ALL=!MATCH_ALL;const t=el.querySelector('.mt');if(t){t.outerHTML=mtHTML(p);wireMt(p)}}}
 function neutralShow(p){if(MODE==='mix'&&blendFill(p))return;if(MODE==='nmm'||MODE==='mix'){sel=null;NB=p;nmmSkip=[];draw();return}document.getElementById('sel').innerHTML=`<b>Selected:</b> <div class="chips"><span class="chip"><i style="background:${p.h}"></i>${p.n} <span style="color:var(--mut)">${p.c}</span></span></div><p class="s">Neutral paint: it sits outside the hue wheel. Use it to dull a neighboring color or set value in an underpainting; warm greys pair with oranges and flesh, cool greys with blues.</p>`+matchHTML(p);wireMatch(p);window.pdRecipesFor&&pdRecipesFor(p)}
 // Last wheel selection: {t,g:[fully ticked ranges],k:[other ticked paint keys]}, kept in this browser and (via account.js) on the account.
 const WK='pd-wheel',GS=[...new Set(P.map(p=>p.g))];
-function selNow(){const g=GS.filter(x=>P.every(p=>p.g!==x||p.on));return{t:Date.now(),g,k:P.filter(p=>p.on&&!g.includes(p.g)).map(p=>p.k)}}
+function selNow(){const g=GS.filter(x=>P.every(p=>p.g!==x||p.on));return{t:Date.now(),g,k:P.filter(p=>p.on&&!p.mix&&!g.includes(p.g)).map(p=>p.k)}}
 function selLocal(){try{const w=JSON.parse(localStorage.getItem(WK));return w&&w.t?w:null}catch(e){return null}}
 // The 42 Two Thin Coats triad paints that were range 'k' until 22 Oct 2026 keep a selection saved under their old keys.
 const K0=P.findIndex(p=>p.n==='Doom Death Black'),wasK=p=>p.i>=K0&&p.i<K0+42;
-function selApply(w){const g=new Set(w.g||[]),k=new Set(w.k||[]);P.forEach(p=>p.on=g.has(p.g)||k.has(p.k)||wasK(p)&&(g.has('k')||k.has('k'+p.k.slice(1))))}
+// Paints renamed after people saved a selection: new key -> old key.
+const WAS={'S||Tidal Wave':'S||Tidal Navy'};
+function selApply(w){const g=new Set(w.g||[]),k=new Set(w.k||[]);P.forEach(p=>p.on=g.has(p.g)||k.has(p.k)||k.has(WAS[p.k])||wasK(p)&&(g.has('k')||k.has('k'+p.k.slice(1))))}
 let onSelSave=null;
 function remember(){const w=selNow();try{localStorage.setItem(WK,JSON.stringify(w))}catch(e){}if(onSelSave)onSelSave(w)}
 const W0=selLocal();if(W0)selApply(W0);else P.forEach(p=>p.on=!!on[p.g]);
@@ -497,8 +586,38 @@ function boxes(){
  let tot=0;
  TREE.forEach(([bn,ss],bi)=>{let bo=0;ss.forEach(x=>bo+=x.ps.filter(i=>P[i].on).length);tree.querySelector(`[data-bc="${bi}"]`).textContent=bo?'('+bo+' selected)':'';tot+=bo});
  Object.entries(SETS).forEach(([id,x])=>{const m=x.ps.map(i=>P[i]),o=m.filter(p=>p.on).length,mm=q?m.filter(p=>match(p,q)):m,mo=mm.filter(p=>p.on).length;const cb=tree.querySelector(`input[data-r="${id}"]`);cb.checked=mm.length>0&&mo===mm.length;cb.indeterminate=mo>0&&mo<mm.length;tree.querySelector(`[data-gc="${id}"]`).textContent=o+'/'+m.length});
- document.getElementById('cnt').textContent=tot+' selected'}
+ document.getElementById('cnt').textContent=tot+' selected';wChips(tot)}
 function sync(){boxes();refresh();remember()}
+/* "Showing:" bar above the wheel: one chip per fully ticked range, one per brand for loose paints, ✕ unticks them.
+   Change paints opens the paint list (#pickd) as a pop-up; the wheel updates behind it as you tick. */
+const WCH_MAX=5,wEsc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let WCH=[];
+function wChips(tot){
+ WCH=[];
+ TREE.forEach(([bn,ss])=>{const b=bn.split(' / ')[0],all=ss.flatMap(x=>x.ps);
+  if(all.every(i=>P[i].on)){WCH.push({l:b+' (all)',ps:all});return}
+  let loose=[];ss.forEach(x=>{const on=x.ps.filter(i=>P[i].on);if(!on.length)return;if(on.length===x.ps.length)WCH.push({l:b+' '+x.l,ps:x.ps});else loose=loose.concat(on)});
+  if(loose.length)WCH.push({l:b+' · '+loose.length+(loose.length>1?' paints':' paint'),ps:loose})});
+ const el=document.getElementById('wchips');
+ el.innerHTML=WCH.length?WCH.slice(0,WCH_MAX).map((c,j)=>`<span class="wchip">${wEsc(c.l)}<button type="button" data-wc="${j}" aria-label="Take ${wEsc(c.l)} off the wheel" title="Take off the wheel">✕</button></span>`).join('')+(WCH.length>WCH_MAX?`<button type="button" class="wchip more" id="wMore">+${WCH.length-WCH_MAX} more</button>`:''):'<span class="s">no paints yet. Tap Change paints to pick some.</span>';
+ document.getElementById('cnt2').textContent=tot?tot+(tot>1?' paints':' paint'):'';
+ const m=document.getElementById('wMore');if(m)m.onclick=openPick}
+document.getElementById('wchips').addEventListener('click',e=>{const b=e.target.closest('[data-wc]');if(!b)return;WCH[+b.dataset.wc].ps.forEach(i=>P[i].on=false);sync()});
+const pickDlg=document.getElementById('pickDlg');
+function openPick(){pickDlg.showModal();document.getElementById('q').focus()}
+document.getElementById('pickBtn').onclick=openPick;
+document.getElementById('pickOk').onclick=()=>pickDlg.close();
+
+// More tools menu: closes after a tool is used, or on a tap outside it.
+const mTools=document.getElementById('mTools');
+mTools.addEventListener('click',e=>{if(e.target.closest('.mtpop button'))mTools.open=false});
+document.addEventListener('click',e=>{if(mTools.open&&!mTools.contains(e.target))mTools.open=false});
+// One-time tip pointing at the wheel, until the first paint is tapped or the tip is closed.
+(()=>{let seen=false;try{seen=!!localStorage.getItem('pd-tip')}catch(e){}if(seen)return;
+ const st=document.querySelector('#v-wheel .stage'),t=document.createElement('div');t.className='wtip';t.setAttribute('role','note');
+ t.innerHTML='👆 Tap any paint on the wheel to see what goes with it<button type="button" aria-label="Close tip">✕</button>';st.appendChild(t);
+ const done=()=>{t.remove();try{localStorage.setItem('pd-tip','1')}catch(e){}};
+ t.querySelector('button').onclick=done;document.getElementById('w').addEventListener('click',e=>{if(e.target.closest('.dot'))done()})})();
 tree.addEventListener('change',e=>{const t=e.target;
  if(t.dataset.r){const q=qv();SETS[t.dataset.r].ps.forEach(i=>{const p=P[i];if(!q||match(p,q))p.on=t.checked})}
  else if(t.dataset.i!==undefined)P[+t.dataset.i].on=t.checked;
@@ -519,7 +638,7 @@ const SG_FIX=[['nmm','Gold','#b08a3a'],['nmm','Steel','#8c9196'],['osl','Green g
 // Wheel hues split where paint names change (HSL degrees), so 'blue' means what painters call blue.
 const SG_HUE=['red','orange','yellow','lime','green','teal','sky blue','blue','violet','purple','pink'],SG_CUT=[15,40,70,95,150,185,215,250,285,320,345],SG_BAND=['dark','mid','light'],SG_GREY=['black','dark grey','mid grey','light grey','white'];
 const SG_NAME={c1_0:'brown',c1_2:'peach',c2_0:'olive',c2_1:'ochre'},sgHue=H=>{const i=SG_CUT.findIndex(c=>H<c);return i<0?0:i};
-const d76=(a,c)=>Math.hypot(a[0]-c[0],a[1]-c[1],a[2]-c[2]),sgOK=p=>nmmOK(p)&&p.g!=='B'&&!/\bclear\b/i.test(p.n);
+const d76=(a,c)=>Math.hypot(a[0]-c[0],a[1]-c[1],a[2]-c[2]),sgOK=p=>!p.mix&&nmmOK(p)&&p.g!=='B'&&!/\bclear\b/i.test(p.n);
 // Colour area a paint falls in: 11 wheel hues × dark/mid/light, or one of five greys for low-saturation paints.
 function sgCell(p){const L=p.lab[0];if(p.S>=.14&&Math.hypot(p.lab[1],p.lab[2])>=10)return'c'+sgHue(p.H)+'_'+(L<38?0:L<62?1:2);return'n'+(L<20?0:L<40?1:L<60?2:L<85?3:4)}
 const sgCellName=c=>SG_NAME[c]||(c[0]==='n'?SG_GREY[+c[1]]:SG_BAND[+c.split('_')[1]]+' '+SG_HUE[+c.slice(1).split('_')[0]]);
@@ -527,11 +646,24 @@ const sgCellName=c=>SG_NAME[c]||(c[0]==='n'?SG_GREY[+c[1]]:SG_BAND[+c.split('_')
 function sgFit(T,own){const used=new Set(),w=(a,c)=>Math.hypot(1.6*(a[0]-c[0]),a[1]-c[1],a[2]-c[2]);
 return T.map(x=>{let m=null,md=1e9;own.forEach(q=>{if(used.has(q))return;const d=w(q.lab,x.t);if(d<md){md=d;m=q}});if(m)used.add(m);return{...x,p:m,d:m?d76(m.lab,x.t):99}})}
 function sgTargets(q,b){const o={...NMO};NMO.n=7;NMO.t=false;try{return TQ[q].targets(b)}finally{NMO.n=o.n;NMO.t=o.t}}
-function suggestPaints(ownSet){const all=P.filter(sgOK),own=all.filter(p=>ownSet.has(p.k));if(!own.length)return null;
+// Essentials the colour grid can't see (washes, metals, contrast) plus a true black and white. Each has a test for paints that count
+// and a typical colour, so the suggestion is the nearest paint of the right kind.
+const SG_ESS=[['bwash','Brown wash','#4a3524',p=>/wash|ink/.test(paintType(p))&&p.lab[2]>6&&p.lab[1]>0&&p.lab[0]<55],
+['kwash','Black or dark wash','#2a2a2c',p=>/wash|ink/.test(paintType(p))&&p.lab[0]<32&&Math.hypot(p.lab[1],p.lab[2])<12],
+['silver','Silver metallic','#a8acb0',p=>paintType(p)==='met'&&Math.hypot(p.lab[1],p.lab[2])<10&&p.lab[0]>50],
+['gold','Gold metallic','#c09a45',p=>{if(paintType(p)!=='met')return false;const[,C,h]=lch(p);return C>18&&h>55&&h<100}],
+['con','Contrast or speedpaint','#7a5030',p=>paintType(p)==='con'],
+['black','Pure black','#111111',p=>paintType(p)==='op'&&p.lab[0]<15&&Math.hypot(p.lab[1],p.lab[2])<8],
+['white','Pure white','#f6f6f4',p=>paintType(p)==='op'&&p.lab[0]>90&&Math.hypot(p.lab[1],p.lab[2])<8]];
+function sgEss(ownSet,pref,hide){const pool=P.filter(p=>!p.mix&&p.g!=='B');
+ return SG_ESS.map(([id,name,h,ok])=>{const t=hexLab(h),have=pool.filter(p=>ownSet.has(p.k)&&ok(p));if(have.length)return{id,name,have};
+  const c=pool.filter(p=>!ownSet.has(p.k)&&!hide.has(p.k)&&ok(p)).sort((a,b)=>(pref(b)-pref(a))||d76(a.lab,t)-d76(b.lab,t));return{id,name,have,p:c[0]||null,alt:c.slice(1,3).filter(q=>pref(q)===pref(c[0]))}})}
+// opt: n = how many suggestions, brand = only shop from this brand (index into BRANDS), hide = paint keys marked Not interested.
+function suggestPaints(ownSet,opt={}){const all=P.filter(sgOK),own=all.filter(p=>ownSet.has(p.k)),hide=opt.hide||new Set(),N=opt.n||10;if(!own.length)return null;
 // Ramps: fixed bases for NMM, OSL, gems and skin; zenithal and edge highlights on the most saturated owned mid/dark paint of each hue.
 const bases=SG_FIX.map(([q,n,h])=>({q,n,b:{lab:hexLab(h),h}})),pk={};
 own.forEach(p=>{const[L,C]=lch(p);if(L<25||L>62||C<20||p.S<.14)return;const s=Math.round(p.H/45)%8;if(!pk[s]||C>lch(pk[s])[1])pk[s]=p});
-Object.values(pk).forEach(p=>{bases.push({q:'zen',n:p.n,b:p,own:1});bases.push({q:'edge',n:p.n,b:p,own:1})});
+Object.values(pk).forEach(p=>['zen','edge','glaze','dry','under'].forEach(q=>bases.push({q,n:p.n,b:p,own:1})));
 // Grade: weak with 3+ loose steps (ΔE 12+), fair with one or two, otherwise good. Only loose steps count as gaps.
 const ramps=bases.map(x=>{const R=sgFit(sgTargets(x.q,x.b),own),loose=R.filter(s=>s.d>=12).length,fair=R.filter(s=>s.d>=6&&s.d<12).length;
  return{...x,tech:TQ[x.q],R,loose,fair,grade:loose>=3?'weak':loose?'fair':'good'}});
@@ -552,15 +684,21 @@ function pick(gs,cands,n){const out=[];for(let r=0;r<n;r++){let best=null,bs=0,b
  const an=new Set(),alt=cands.filter(p=>!taken.has(p.n.trim().toLowerCase())).map(p=>{const c=sgCell(p);return{p,s:bf.reduce((a,x)=>a+gain(p,x,c),0)}}).filter(a=>a.s>=bs*.6).sort((a,b)=>b.s-a.s).filter(a=>{const k=a.p.n.trim().toLowerCase();return!an.has(k)&&an.add(k)}).slice(0,2).map(a=>a.p);
  const by={};bf.forEach(x=>(by[x.g]=by[x.g]||[]).push(x.role));out.push({p:best,fills:Object.entries(by).map(([g,r])=>({g,r:[...new Set(r)]})),alt})}
  return out}
-const myB=new Set(own.map(p=>BR_OF[p.g])),cand=all.filter(p=>!ownSet.has(p.k));
-const mine=pick(gaps,cand.filter(p=>myB.has(BR_OF[p.g])),10),other=pick(gaps,cand.filter(p=>!myB.has(BR_OF[p.g])),5);
-return{ramps,cells,mine,other,left:gaps.filter(x=>!x.done).length,brands:[...myB].map(i=>BRANDS[i][0])}}
+const myB=new Set(own.map(p=>BR_OF[p.g])),hn=new Set(P.filter(p=>hide.has(p.k)).map(p=>p.n.trim().toLowerCase())),cand=all.filter(p=>!ownSet.has(p.k)&&!hide.has(p.k)&&!hn.has(p.n.trim().toLowerCase())),one=opt.brand!=null&&BRANDS[opt.brand];
+const mine=pick(gaps,cand.filter(p=>one?BR_OF[p.g]===opt.brand:myB.has(BR_OF[p.g])),N),other=one?[]:pick(gaps,cand.filter(p=>!myB.has(BR_OF[p.g])),Math.ceil(N/2));
+// A suggestion you can already mix closely (ΔE under 8) from your own paints says so and moves to the end of its list.
+const mx=l=>{l.forEach(o=>{const m=mixFor(o.p).mixes[0];if(m&&m.d<8)o.mix=m});return[...l.filter(o=>!o.mix),...l.filter(o=>o.mix)]};
+const pref=p=>one?(BR_OF[p.g]===opt.brand?2:0):(myG.has(p.g)?2:myB.has(BR_OF[p.g])?1:0);
+// An essential that one of the suggestions already covers is tagged on that suggestion instead of getting its own row.
+const ess=sgEss(ownSet,pref,new Set([...hide,...P.filter(p=>taken.has(p.n.trim().toLowerCase())).map(p=>p.k)]));
+ess.forEach(x=>{if(x.have.length)return;const ok=SG_ESS.find(e=>e[0]===x.id)[3],o=[...mine,...other].find(o=>ok(o.p));if(o){o.fills.push({g:'Essential',r:[x.name]});x.by=o.p;x.p=null}});
+return{ramps,cells,mine:mx(mine),other:mx(other),ess,left:gaps.filter(x=>!x.done).length,brands:one?[one[0]]:[...myB].map(i=>BRANDS[i][0]),one:!!one}}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 // Site theme picker. The choice lives in localStorage pd-look; an inline script in index.html applies it before first paint.
 // Neon 1984 (cyber) is the default for anyone who hasn't picked; Paint Pot is stored as ''.
 // On a first visit the same dialog opens as a picker: choices only preview until Confirm saves one.
-{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311',abyss:'#041416',arcane:'#3b2616',frost:'#10273f',infernal:'#0b0605',bench:'#1d6650',ink:'#f1e9d6',desert:'#8a4a24',lab:'#eef5f4'},DEF='cyber',dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
+{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311',abyss:'#041416',arcane:'#3b2616',frost:'#10273f',infernal:'#0b0605',bench:'#1d6650',ink:'#f2ebdb',desert:'#8a4a24',lab:'#eef5f4',steam:'#1a110b',egypt:'#1c0d06',void:'#05070f'},DEF='cyber',dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
 const ttl=document.getElementById('thT'),txt=document.getElementById('thP'),ok=document.getElementById('thOk'),T0=[ttl.textContent,txt.textContent,ok.textContent];
 const metas=[...document.querySelectorAll('meta[name="theme-color"]')],orig=metas.map(m=>m.content);
 const apply=l=>{if(!(l in LOOKS))l='';if(l)document.documentElement.dataset.look=l;else delete document.documentElement.dataset.look;
@@ -569,10 +707,10 @@ const saved=()=>{try{const s=localStorage.getItem('pd-look');if(s!==null)return 
 let FV=false;apply(saved());
 const open=()=>{dlg.showModal();(dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).focus()};
 document.getElementById('thBtn').onclick=open;
+{const w=document.getElementById('wTheme');if(w)w.onclick=open}
 opts.forEach(o=>o.onclick=()=>{apply(o.dataset.look);if(!FV)save(o.dataset.look)});
 ok.onclick=()=>{if(FV)save((dlg.querySelector('.tho[aria-checked="true"]')||opts[0]).dataset.look);dlg.close()};
 dlg.onclose=()=>{if(!FV)return;FV=false;[ttl.textContent,txt.textContent,ok.textContent]=T0;apply(saved())};
-dlg.onclick=e=>{if(e.target===dlg)dlg.close()};
 window.pdThemeFirst=()=>{FV=true;ttl.textContent='Pick a look';txt.textContent='Tap a theme to preview it, then confirm. Paint colours stay the same, and you can change it any time with the Theme button at the top.';ok.textContent='Confirm';open()}}
 
 /* ---------- Palette from a photo ----------
@@ -597,7 +735,7 @@ function kmeans(k){let sd=7;const rnd=()=>(sd=(sd*16807)%2147483647)/2147483647,
   const S=C.map(()=>[0,0,0,0]);PX.forEach((p,i)=>{const s=S[A[i]];s[0]+=p[3][0];s[1]+=p[3][1];s[2]+=p[3][2];s[3]++});S.forEach((s,j)=>{if(s[3])C[j]=[s[0]/s[3],s[1]/s[3],s[2]/s[3]]});if(!ch&&it)break}
  const R=C.map(c=>({lab:c,rgb:[0,0,0],n:0}));PX.forEach((p,i)=>{const r=R[A[i]];r.rgb[0]+=p[0];r.rgb[1]+=p[1];r.rgb[2]+=p[2];r.n++});
  return R.filter(r=>r.n).map(r=>({lab:r.lab,h:hx(...r.rgb.map(v=>v/r.n)),w:r.n/n})).sort((a,b)=>b.w-a.w)}
-const cands=()=>P.filter(p=>p.g!=='B'&&shown(p)&&!isMetT(p)&&(!$('phMine').checked||own(p)));
+const cands=()=>P.filter(p=>!p.mix&&p.g!=='B'&&shown(p)&&!isMetT(p)&&(!$('phMine').checked||own(p)));
 function match(){const C=cands(),used=new Set();COLS.forEach(c=>{c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const f=c.m.find(m=>!used.has(m.p))||c.m[0];c.pick=f?f.p:null;if(c.pick)used.add(c.pick)});render()}
 function run(){if(!PX)return;COLS=kmeans(+$('phK').value);match()}
 function render(){const R=$('phRes');if(!COLS.length){R.innerHTML='';$('phGo').disabled=true;return}
@@ -613,22 +751,69 @@ cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.
 $('phFile').onchange=e=>load(e.target.files[0]);
 $('phK').onchange=run;$('phMine').onchange=match;
 $('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=!(window.pdApi&&pdApi());if(!OWN)$('phMine').checked=false;dlg.showModal()};
-$('phNo').onclick=()=>dlg.close();dlg.onclick=e=>{if(e.target===dlg)dlg.close()};
+$('phNo').onclick=()=>dlg.close();
 const bar=$('phUndo');
 // Save as palette card: opens the palette editor (account.js) filled with one colour per chosen paint. The photo is only uploaded if the painter adds it there.
 $('phSave').onclick=()=>{const cs=COLS.filter(c=>c.pick);if(!cs.length)return;
  NMM_DRAFT={kind:'palette',title:'',steps:cs.map(c=>({title:'',text:'',image:'',recipe:'',mix:[{k:c.pick.k,parts:1}]}))};dlg.close();location.hash='#/new/palette'};
-$('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))];if(!ps.length)return;prev=P.filter(p=>p.on).map(p=>p.i);
- P.forEach(p=>p.on=false);ps.forEach(p=>p.on=true);dlg.close();if(MODE!=='col')setMode('col');sync()
- $('phUndoM').textContent=`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`;bar.hidden=false;clearTimeout(tm);tm=setTimeout(()=>bar.hidden=true,15000);
+// Shows just these paints on the wheel (Colours mode) with an Undo bar; also used by the Palettes page.
+window.pdShowSet=(ps,msg)=>{prev=P.filter(p=>p.on).map(p=>p.i);P.forEach(p=>p.on=false);ps.forEach(p=>p.on=true);if(MODE!=='col')setMode('col');sync();
+ $('phUndoM').textContent=msg;bar.hidden=false;clearTimeout(tm);tm=setTimeout(()=>bar.hidden=true,15000);
  document.getElementById('w').scrollIntoView({behavior:'smooth',block:'start'})};
+$('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))];if(!ps.length)return;dlg.close();
+ pdShowSet(ps,`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`)};
 $('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const s=new Set(prev);P.forEach(p=>p.on=s.has(p.i));prev=null;sync()}}
+/* ---------- Inspiration palettes (#/palettes) ----------
+   Original themed palettes from palettes.js. Each colour is a target swatch with a job (main, accent, metal...), matched to the
+   nearest opaque paints (metallic paints for a metal colour) by ΔE, from one brand or all, or only the painter's own paints.
+   Picks can be changed per colour, shown on the wheel, opened in Blends or saved as a palette card. Swatches are estimates. */
+{const $=id=>document.getElementById(id),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PL=typeof PALETTES==='undefined'?[]:PALETTES,TAGS=[...new Set(PL.flatMap(x=>x.t))];
+PL.forEach(x=>x.c.forEach(c=>c.lab=hexLab(c.h)));
+let ST={b:'',mine:0,t:''},PK={},CUR=null;try{Object.assign(ST,JSON.parse(localStorage.getItem('pd-pal')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('pd-pal',JSON.stringify(ST))}catch(e){}};
+const mine=()=>!!ST.mine&&!!OWN&&OWN.size>0;
+const pool=c=>P.filter(p=>!p.mix&&p.g!=='B'&&(c.m?paintType(p)==='met':paintType(p)==='op')&&(ST.b===''||BR_OF[p.g]===+ST.b));
+// Up to 4 nearest paints per colour; with "Use my paints" the owned paints come first, then the nearest others if fewer than 2 are owned.
+function near(c){const seen=new Set(),all=pool(c).map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).filter(m=>{const k=BR_OF[m.p.g]+'|'+m.p.n.trim().toLowerCase();return!seen.has(k)&&seen.add(k)});if(!mine())return all.slice(0,4);
+ const o=all.filter(m=>own(m.p)).slice(0,4);return o.length>=2?o:[...o,...all.filter(m=>!own(m.p)).slice(0,4-o.length)]}
+function matchAll(x){const used=new Set();return x.c.map((c,ci)=>{const m=near(c),k=(PK[x.s]||{})[ci];let pick=m.find(q=>q.p.k===k)||m.find(q=>!used.has(q.p))||m[0]||null;
+ if(pick)used.add(pick.p);return{c,m:pick&&!m.includes(pick)?[pick,...m]:m,pick}})}
+const strip=x=>`<div class="phpal">${x.c.map(c=>`<i style="background:${c.h};flex:1" title="${esc(c.r+': '+c.u)}"></i>`).join('')}</div>`;
+function bar(){const o=BRANDS.map(([n],i)=>`<option value="${i}"${ST.b===String(i)?' selected':''}>${esc(n.split(' / ')[0])}</option>`).join('');
+ return`<div class="row plbar"><label>Paints from <select id="plB" class="nsel"><option value="">All brands</option>${o}</select></label>`+
+  (OWN&&OWN.size?`<label><input type="checkbox" id="plMine"${ST.mine?' checked':''}> Use my paints</label>`:'')+`</div>`}
+function gallery(el){const xs=PL.filter(x=>!ST.t||x.t.includes(ST.t));
+ el.innerHTML=`<h1>Palettes</h1><p class="lead">Colour schemes to get you started. Pick one and every colour is matched to the nearest paints, from the brands you like or the paints you already own. Show it on the wheel, build blends from it or save it as a palette card.</p>
+<p class="s">These palettes are our own ideas, made for The Painters Desk. Paint matches come from swatch estimates, so check the real paints before you start. Want a palette from a picture instead? Use <a href="#/">From a photo</a> on the wheel.</p>`+
+ `<div class="chips pltags" role="group" aria-label="Filter by theme">${['',...TAGS].map(t=>`<button type="button" class="chip${ST.t===t?' on':''}" data-t="${esc(t)}" aria-pressed="${ST.t===t}">${t?esc(t):'All'}</button>`).join('')}</div>`+
+ `<div class="plg">${xs.map(x=>`<a class="plc panel" href="#/palettes/${x.s}">${strip(x)}<h3>${esc(x.n)}</h3><p>${esc(x.b)}</p><span class="s">${x.t.map(esc).join(' · ')}</span></a>`).join('')}</div>`;
+ el.querySelector('.pltags').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;ST.t=b.dataset.t;save();gallery(el)}}
+function detail(el,x){const R=matchAll(x),api=!!(window.pdApi&&pdApi()),hv=R.filter(r=>r.pick&&own(r.pick.p)).length;CUR={x,R};
+ el.innerHTML=`<p><a href="#/palettes">← All palettes</a></p><h1>${esc(x.n)}</h1>${strip(x)}<p class="lead">${esc(x.b)}</p><p><b>Tip:</b> ${esc(x.tip)}</p>`+bar()+
+ `<div class="panel plrows">`+R.map((r,ci)=>`<div class="phr"><span class="phs" style="background:${r.c.h}" title="Target colour"></span><div class="plcol"><b>${esc(r.c.r)}</b> <span class="s">${esc(r.c.u)}${r.c.m?' (metallic)':''}</span><div class="chips">`+
+  (r.m.length?r.m.map(m=>`<button type="button" class="chip${r.pick&&m.p===r.pick.p?' on':''}" data-c="${ci}" data-i="${m.p.i}" aria-pressed="${!!(r.pick&&m.p===r.pick.p)}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0].split(' / ')[0])} · ${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints of this kind here. Try All brands.</span>')+
+  `</div></div>${r.pick&&!r.c.m?`<button type="button" class="btn sm" data-bl="${ci}" title="Open a shadow, mid and highlight for this colour in Blends">Blend</button>`:''}</div>`).join('')+
+ `<p class="s">${OWN&&OWN.size?`You own ${hv} of the ${R.length} paints picked. `:''}Tap a paint to use it instead. ΔE is how far the paint is from the target colour: under about 6 is close. Swatches are estimates.</p></div>`+
+ `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button>${api?'<button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Recipes">Save as palette card</button>':''}<a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
+ const B=$('plB');if(B)B.onchange=()=>{ST.b=B.value;save();detail(el,x)};const M=$('plMine');if(M)M.onchange=()=>{ST.mine=M.checked?1:0;save();detail(el,x)};
+ el.querySelector('.plrows').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.bl!==undefined){const m=R[+b.dataset.bl].pick.p,band=pool({}).filter(p=>hd(p.H,m.H)<=20),bl=hBlend(m,band,p=>!mine()||own(p));
+   bl.forEach(p=>{if(p)p.on=true});sync();location.hash='#/';setTimeout(()=>hOpenBlend(bl),60);return}
+  if(b.dataset.c===undefined)return;(PK[x.s]=PK[x.s]||{})[+b.dataset.c]=P[+b.dataset.i].k;detail(el,x)};
+ $('plShow').onclick=()=>{const ps=[...new Set(R.filter(r=>r.pick).map(r=>r.pick.p))],hid=ps.filter(p=>!shown(p)).length;location.hash='#/';
+  setTimeout(()=>pdShowSet(ps,`Showing the ${x.n} palette (${ps.length} paints).`+(hid?` ${hid} hidden by Paint types.`:'')),60)};
+ const S=$('plSave');if(S)S.onclick=()=>{NMM_DRAFT={kind:'palette',title:x.n,summary:x.b,steps:R.filter(r=>r.pick).map(r=>({title:r.c.r+': '+r.c.u,text:'',image:'',recipe:'',mix:[{k:r.pick.p.k,parts:1}]}))};location.hash='#/new/palette'}}
+window.pdPalettes=id=>{const el=$('v-palettes');if(!el)return;const x=id&&PL.find(p=>p.s===id);if(x)detail(el,x);else gallery(el)}}
 // Links from the paint pages (/paints/...) open the wheel at #/?paint=<paint key>: show that paint and select it.
 function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)return;let k='';try{k=decodeURIComponent(m[1])}catch(e){}
  history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
  if(CH.includes(p)){if(sel!==p)pick(p)}else neutralShow(p);document.getElementById('w').scrollIntoView({block:'start'})}
 paintLink();addEventListener('hashchange',paintLink);
 // Links from the technique guides (/guides/...) open the wheel at #/?ramp=<technique>: Ramps mode on that technique.
-function rampLink(){const m=location.hash.match(/[?&]ramp=(\w+)/);if(!m)return;history.replaceState(null,'','#/');if(!TQ[m[1]])return;
- NMO.q=m[1];nmmSkip=[];if(MODE!=='nmm')setMode('nmm');else{nmmSave();nmmUI();draw()}document.getElementById('w').scrollIntoView({block:'start'})}
+function rampLink(){const m=location.hash.match(/[?&]ramp=(\w+)/);if(!m)return;const bm=location.hash.match(/[?&]base=([^&]+)/);history.replaceState(null,'','#/');if(!TQ[m[1]])return;
+ NMO.q=m[1];nmmSkip=[];if(MODE!=='nmm')setMode('nmm');else{nmmSave();nmmUI();draw()}
+ // &base=<paint key> (from Suggested paints) builds the ramp on that paint straight away.
+ if(bm){let k='';try{k=decodeURIComponent(bm[1])}catch(e){}const p=P.find(q=>q.k===k);if(p){if(!p.on){p.on=true;sync()}showP(p)}}
+ document.getElementById('w').scrollIntoView({block:'start'})}
 rampLink();addEventListener('hashchange',rampLink);

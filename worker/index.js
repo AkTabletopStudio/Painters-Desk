@@ -1,6 +1,6 @@
 // The Painters Desk API: accounts (OAuth sign-in), paint collections, recipes/tutorials and comments.
 // Static files are served from the assets binding; only /api/* and the paint pages and guides (/paints, /guides, /sitemap.xml, see seo.js) run through this Worker.
-import { isSeoPath, seo } from './seo.js';
+import { isSeoPath, seo, pageNotFound } from './seo.js';
 
 const SESSION_COOKIE = 'pd_session';
 const OAUTH_COOKIE = 'pd_oauth';
@@ -49,41 +49,71 @@ const PROVIDERS = {
   },
 };
 
+// Security headers on every response (pages, files, API, redirects). The CSP is report-only for now: the page has inline
+// scripts and handlers, so it allows those and only reports anything else in the browser console until it is switched on.
+const SECURITY = {
+  'Strict-Transport-Security': 'max-age=31536000',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()',
+  'Content-Security-Policy-Report-Only': [
+    "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:", "font-src 'self' data:", "connect-src 'self'", "media-src 'self' blob:",
+    'frame-src https://www.youtube-nocookie.com https://player.vimeo.com', "worker-src 'self'", "manifest-src 'self'",
+    "object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'",
+  ].join('; '),
+};
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    // One address for the whole site, so sign-in redirect URLs and the session cookie always match.
-    if (url.hostname.startsWith('www.')) {
-      url.hostname = url.hostname.slice(4);
-      // Browsers that saved the site offline on www keep serving their cached copy and never see the redirect,
-      // and they refuse a redirected service worker update. Give them a worker that clears that copy and
-      // sends open tabs to the bare domain.
-      if (url.pathname === '/sw.js') return new Response(wwwRetireWorker(url.origin), {
-        headers: { 'content-type': 'text/javascript', 'cache-control': 'no-store' },
-      });
-      return Response.redirect(url.toString(), 301);
-    }
-    if (isSeoPath(url.pathname)) {
-      const r = await seo(request, env, url);
-      if (r.status === 200 && request.method === 'GET' && url.pathname !== '/sitemap.xml') ctx?.waitUntil(countVisit(request, env, url.pathname, request.headers.get('Referer'), url));
-      return r;
-    }
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    try {
-      // Writes must come from this site's own pages (blocks cross-site form posts using the session cookie).
-      // The unsubscribe link is the exception: mail apps post to it directly, and its token is the proof.
-      if (request.method !== 'GET' && request.method !== 'HEAD' && url.pathname !== '/api/unsubscribe') {
-        const origin = request.headers.get('Origin');
-        if (origin !== url.origin) return json({ error: 'Bad origin' }, 403);
-      }
-      return await route(request, env, url);
-    } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status);
-      console.error(e);
-      return json({ error: 'Server error' }, 500);
-    }
+    const r = await handle(request, env, ctx);
+    // A chat WebSocket upgrade must go back untouched.
+    if (r.status === 101 || r.webSocket) return r;
+    const out = new Response(r.body, r);
+    for (const [k, v] of Object.entries(SECURITY)) if (!out.headers.has(k)) out.headers.set(k, v);
+    return out;
   },
 };
+
+async function handle(request, env, ctx) {
+  const url = new URL(request.url);
+  // One address for the whole site, so sign-in redirect URLs and the session cookie always match.
+  if (url.hostname.startsWith('www.')) {
+    url.hostname = url.hostname.slice(4);
+    // Browsers that saved the site offline on www keep serving their cached copy and never see the redirect,
+    // and they refuse a redirected service worker update. Give them a worker that clears that copy and
+    // sends open tabs to the bare domain.
+    if (url.pathname === '/sw.js') return new Response(wwwRetireWorker(url.origin), {
+      headers: { 'content-type': 'text/javascript', 'cache-control': 'no-store' },
+    });
+    return Response.redirect(url.toString(), 301);
+  }
+  if (isSeoPath(url.pathname)) {
+    const r = await seo(request, env, url);
+    if (r.status === 200 && request.method === 'GET' && url.pathname !== '/sitemap.xml') ctx?.waitUntil(countVisit(request, env, url.pathname, request.headers.get('Referer'), url));
+    return r;
+  }
+  if (!url.pathname.startsWith('/api/')) {
+    const a = await env.ASSETS.fetch(request);
+    // A missing page or file gets the site's own "page not found" page (still a 404) instead of an empty body.
+    if (a.status === 404 && (request.method === 'GET' || request.method === 'HEAD')) return pageNotFound(request, env, url);
+    return a;
+  }
+  try {
+    // Writes must come from this site's own pages (blocks cross-site form posts using the session cookie).
+    // The unsubscribe link is the exception: mail apps post to it directly, and its token is the proof.
+    if (request.method !== 'GET' && request.method !== 'HEAD' && url.pathname !== '/api/unsubscribe') {
+      const origin = request.headers.get('Origin');
+      if (origin !== url.origin) return json({ error: 'Bad origin' }, 403);
+    }
+    return await route(request, env, url);
+  } catch (e) {
+    if (e instanceof HttpError) return json({ error: e.message }, e.status);
+    console.error(e);
+    return json({ error: 'Server error' }, 500);
+  }
+}
 
 async function route(request, env, url) {
   const m = request.method, p = url.pathname;
@@ -114,6 +144,11 @@ async function route(request, env, url) {
   if (p === '/api/me/wheel' && m === 'PUT') return putWheel(request, env);
   if (p === '/api/collection' && m === 'GET') return getCollection(request, env);
   if (p === '/api/collection' && m === 'PUT') return putCollection(request, env);
+  if (p === '/api/wants' && m === 'GET') return getWants(request, env);
+  if (p === '/api/wants' && m === 'PUT') return putWants(request, env);
+  if (p === '/api/mixes' && m === 'GET') return getMixes(request, env);
+  if (p === '/api/mixes' && m === 'POST') return addMix(request, env);
+  if ((r = p.match(/^\/api\/mixes\/([\w-]+)$/)) && m === 'DELETE') return deleteMix(request, env, r[1]);
   if (p === '/api/recipes' && m === 'GET') return listRecipes(request, env, url);
   if (p === '/api/recipes' && m === 'POST') return saveRecipe(request, env, null);
   if ((r = p.match(/^\/api\/recipes\/([\w-]+)$/))) {
@@ -724,6 +759,7 @@ async function deleteAccount(request, env) {
   const u = await requireUser(request, env);
   const imgs = (await env.DB.prepare('SELECT id FROM images WHERE user_id = ?').bind(u.id).all()).results.map(i => i.id);
   await deleteImages(env, imgs);
+  try { await env.DB.prepare('DELETE FROM wants WHERE user_id = ?').bind(u.id).run(); } catch (e) { if (!noWants(e)) throw e; }
   // Child rows go first so this works whether or not D1 enforces the foreign keys.
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comments WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
@@ -792,7 +828,85 @@ async function putCollection(request, env) {
     ...remove.map(k => env.DB.prepare('DELETE FROM collection WHERE user_id = ? AND paint_key = ?').bind(u.id, k)),
   ];
   for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
+  // Paints just added to the collection come off the shopping list (skipped until migration 0022 adds the table).
+  if (add.length) try { for (let i = 0; i < add.length; i += 100) await env.DB.batch(add.slice(i, i + 100).map(k => env.DB.prepare('DELETE FROM wants WHERE user_id = ? AND paint_key = ?').bind(u.id, k))); } catch (e) { if (!noWants(e)) throw e; }
   return getCollection(request, env);
+}
+
+/* ---------- shopping list ---------- */
+
+// Until migration 0022 is applied the table is missing; the site then hides the shopping list.
+const noWants = e => /no such table: wants/i.test(String(e && e.message));
+
+async function getWants(request, env) {
+  const u = await requireUser(request, env);
+  try {
+    const rows = (await env.DB.prepare('SELECT paint_key FROM wants WHERE user_id = ? ORDER BY added_at').bind(u.id).all()).results;
+    return json({ paints: rows.map(r => r.paint_key) });
+  } catch (e) {
+    if (noWants(e)) return json({ paints: [], unavailable: true });
+    throw e;
+  }
+}
+
+async function putWants(request, env) {
+  const u = await requireUser(request, env);
+  const b = await body(request);
+  const add = paintKeys(b.add, 500), remove = paintKeys(b.remove, 500), t = now();
+  try {
+    if (add.length) {
+      const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM wants WHERE user_id = ?').bind(u.id).first();
+      if (n && n.n + add.length > 500) throw new HttpError(400, 'Your shopping list can hold up to 500 paints');
+    }
+    const stmts = [
+      ...add.map(k => env.DB.prepare('INSERT OR IGNORE INTO wants (user_id, paint_key, added_at) VALUES (?, ?, ?)').bind(u.id, k, t)),
+      ...remove.map(k => env.DB.prepare('DELETE FROM wants WHERE user_id = ? AND paint_key = ?').bind(u.id, k)),
+    ];
+    for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
+  } catch (e) {
+    if (noWants(e)) return json({ paints: [], unavailable: true });
+    throw e;
+  }
+  return getWants(request, env);
+}
+
+/* ---------- saved mixes ---------- */
+
+// Until migration 0020 is applied the table is missing; the site then hides the mix buttons.
+const noMixes = e => /no such table: mixes/i.test(String(e && e.message));
+
+async function getMixes(request, env) {
+  const u = await requireUser(request, env);
+  try {
+    const rows = (await env.DB.prepare('SELECT id, name, parts, hex, created_at FROM mixes WHERE user_id = ? ORDER BY created_at').bind(u.id).all()).results;
+    return json({ mixes: rows.map(r => { let parts = []; try { parts = JSON.parse(r.parts); } catch {} return { id: r.id, name: r.name, parts, hex: r.hex, created_at: r.created_at }; }) });
+  } catch (e) {
+    if (noMixes(e)) return json({ mixes: [], unavailable: true });
+    throw e;
+  }
+}
+
+async function addMix(request, env) {
+  const u = await requireUser(request, env);
+  const b = await body(request);
+  const name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const hex = String(b.hex || '').toLowerCase();
+  if (!name) throw new HttpError(400, 'Give the mix a name');
+  if (!/^#[0-9a-f]{6}$/.test(hex)) throw new HttpError(400, 'Bad colour');
+  if (!Array.isArray(b.parts) || b.parts.length < 2 || b.parts.length > 4) throw new HttpError(400, 'A mix needs 2 to 4 paints');
+  const parts = b.parts.map(x => ({ k: x && x.k, parts: Math.round(Number(x && x.parts)) }));
+  if (parts.some(x => typeof x.k !== 'string' || !x.k || x.k.length > 120 || !(x.parts >= 1 && x.parts <= 20))) throw new HttpError(400, 'Bad mix parts');
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM mixes WHERE user_id = ?').bind(u.id).first();
+  if (n && n.n >= 200) throw new HttpError(400, 'You can save up to 200 mixes');
+  const id = crypto.randomUUID(), t = now();
+  await env.DB.prepare('INSERT INTO mixes (id, user_id, name, parts, hex, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, u.id, name, JSON.stringify(parts), hex, t).run();
+  return json({ mix: { id, name, parts, hex, created_at: t } });
+}
+
+async function deleteMix(request, env, id) {
+  const u = await requireUser(request, env);
+  await env.DB.prepare('DELETE FROM mixes WHERE id = ? AND user_id = ?').bind(id, u.id).run();
+  return json({ ok: true });
 }
 
 /* ---------- last wheel selection ---------- */

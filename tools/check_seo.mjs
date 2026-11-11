@@ -1,7 +1,7 @@
 // Checks that worker/seo.js can read data.js and app.js, gives every paint a unique page address and can build every guide.
 // Run: node tools/check_seo.mjs
 import { readFileSync } from 'node:fs';
-import { parse, matches, renderGuides, theme, TECH } from '../worker/seo.js';
+import { parse, matches, renderGuides, theme, TECH, parsePalettes, renderPalettes } from '../worker/seo.js';
 import { TECH_TEXT } from '../worker/tech-guides.js';
 const D = parse(readFileSync(new URL('../data.js', import.meta.url), 'utf8'), readFileSync(new URL('../app.js', import.meta.url), 'utf8'));
 const urls = D.P.filter(p => p.url).map(p => p.url), gl = Object.keys(D.GL).length;
@@ -41,3 +41,6 @@ D.brands.forEach(b => console.log(' ', b.slug, b.paints.length));
   const { renderExtra } = await import('../worker/seo.js');
   console.log(renderExtra(D));
 }
+
+// Palette guide pages (/guides/palettes): every palette must parse and build.
+console.log(renderPalettes(D, parsePalettes(readFileSync(new URL('../palettes.js', import.meta.url), 'utf8'))) + ' palettes');

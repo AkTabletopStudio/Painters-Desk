@@ -10,8 +10,13 @@ import { CRAFT, CRAFT_DATE } from './craft-guides.js';
 
 const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
+// Renamed paints, [old 'brand/paint' slug, new one]. Only paths under /paints/ reach this.
+const MOVED = [['army-painter/tidal-navy', 'army-painter/tidal-wave']];
+const movedRe = a => new RegExp('/' + a + '(/|$)');
 
 let DATA = null;
+// Inspiration palettes from /palettes.js (the same file the Palettes page in the app uses).
+let PALS = [];
 // The site themes (Neon 1984, Grimdark, Forest, Dwarven and the eight added in Nov 2026) come from index.html, so these pages follow the look a visitor
 // picked on the colour wheel. The look is applied in the browser from localStorage, so every visitor and search engine
 // gets the same HTML.
@@ -43,6 +48,11 @@ export async function seo(request, env, url) {
     return Response.redirect(url.origin + (paint && paint.url ? paint.url : '/paints'), 302);
   }
   else if (p === '/guides') r = send(guidesPage(D));
+  else if (p === '/guides/palettes') r = send(palettesPage(D));
+  else if (p.startsWith('/guides/palettes/')) {
+    const x = PALS.find(x => '/guides/palettes/' + x.s === p);
+    r = x ? send(palettePage(D, x)) : send(notFound(), 'text/html; charset=utf-8', 404);
+  }
   else if (p.startsWith('/guides/')) {
     const g = GUIDES.find(x => '/guides/' + x.slug === p);
     r = g ? send(guideHTML(D, g)) : send(notFound(), 'text/html; charset=utf-8', 404);
@@ -50,6 +60,9 @@ export async function seo(request, env, url) {
   else if (p.startsWith('/paints/colour-standards/')) {
     const st = standards(D).find(x => '/paints/colour-standards/' + x.slug === p);
     r = st ? send(standardPage(D, st)) : send(notFound(), 'text/html; charset=utf-8', 404);
+  } else if (MOVED.some(([a]) => movedRe(a).test(p))) {
+    // Renamed paints: old paint and compare-page addresses move to the new name for good.
+    return Response.redirect(url.origin + MOVED.reduce((q, [a, b]) => q.replace(movedRe(a), '/' + b + '$1'), p), 301);
   } else {
     const [, b, s, vs, b2, s2, extra] = p.split('/').slice(1);
     const br = D.brands.find(x => x.slug === b);
@@ -79,7 +92,8 @@ function send(body, type = 'text/html; charset=utf-8', status = 200) {
 async function load(env, url) {
   if (DATA) return DATA;
   const get = f => env.ASSETS.fetch(new Request(new URL(f, url.origin))).then(r => r.text());
-  const [data, app, index] = await Promise.all([get('/data.js'), get('/app.js'), get('/')]);
+  const [data, app, index, pals] = await Promise.all([get('/data.js'), get('/app.js'), get('/'), get('/palettes.js')]);
+  try { PALS = parsePalettes(pals) } catch (e) { console.error(e); PALS = [] }
   DATA = parse(data, app);
   THEME = theme(index);
   return DATA;
@@ -137,6 +151,11 @@ export function parse(data, app) {
     p.ramp = p.t === 'op' && !nmmRx.test(p.n) && !nmmRx.test(p.c);
     P.push(p);
   });
+  // Warpaints Legacy (old Warpaints names) take the paint type of the Fanatic paint that replaced them (MT source 'L').
+  P.forEach(p => {
+    const l = p.g === 'Ŵ' && (MT[p.i] || []).find(m => m[1] === 'L');
+    if (l) { p.t = P[l[0]].t; p.ramp = P[l[0]].ramp; p.now = P[l[0]] }
+  });
   // Paint slugs: the name, or name + code (then range) when a brand has two paints with the same name.
   // data.js only ever grows at the end, so the first paint with a name keeps the plain address.
   P.forEach(p => {
@@ -161,10 +180,10 @@ function typeOf(app) {
   const metRx = new RegExp(app.match(/MET_RX=\/(.*?)\/i;/)[1], 'i');
   const ptG = {};
   for (const m of app.match(/const PT_G=\{(.*?)\};/)[1].matchAll(/(?:'([^']*)'|(\w+))\s*:\s*'([^']*)'/g)) ptG[m[1] ?? m[2]] = m[3];
-  const isMet = p => metG.has(p.g) || metK.has(p.g + '|' + p.n) || /anodized|^candy /i.test(p.n) || /\bmet(al|allic)?\b/i.test(p.n + ' ' + p.c) ||
-    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8';
-  const isPearl = p => /\bpearl\b|iridescent/i.test(p.n) && !/skin/i.test(p.n);
-  return p => isPearl(p) ? 'pearl' : isMet(p) ? 'met' : ptG[p.g] || (/speedpaint|contrast/i.test(p.c) ? 'con' : /\bwash$/i.test(p.c) || /\bwash\b|\bshade$/i.test(p.n) || p.g === 'A' && / tone$/i.test(p.n) ? 'wash' :
+  const isMet = p => metG.has(p.g) || metK.has(p.g + '|' + p.n) || /anodized|^candy /i.test(p.n) && p.g !== 'Û' || /\bmet(al|allic)?\b/i.test(p.n + ' ' + p.c) ||
+    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï';
+  const isPearl = p => /\bpearl\b|iridescent|^interference /i.test(p.n) && !/skin/i.test(p.n) && p.g !== 'Ï' && p.g !== 'Ş';
+  return p => isPearl(p) ? 'pearl' : isMet(p) ? 'met' : p.g === 'Ê' && /^fluorescent /i.test(p.n) ? 'fx' : ptG[p.g] || (/speedpaint|contrast/i.test(p.c) ? 'con' : /\bwash$/i.test(p.c) || /\bwash\b|\bshade$/i.test(p.n) || (p.g === 'A' || p.g === 'Ħ') && / tone$/i.test(p.n) ? 'wash' :
     /\bink$/i.test(p.n) || / ink$/i.test(p.c) ? 'ink' : /fluo|^neon|effects$/i.test(p.n + '|' + p.c) ? 'fx' :
     /^matt .*primer$|varnish$|^(shading|blending|chipping) medium$/i.test(p.n) ? 'tech' : 'op');
 }
@@ -181,20 +200,32 @@ function hexLab(h) {
 }
 const dE = (a, b) => Math.hypot(a.lab[0] - b.lab[0], a.lab[1] - b.lab[1], a.lab[2] - b.lab[2]);
 
-// Same rule as matchData() in app.js: per other brand, the chart-listed equivalents (closest first), then the 2-3 nearest swatches,
-// of the same finish only (metallic and pearl paints match each other, other paints match other paints). xch/xnear: the other
-// finish, listed apart on the page (chart pairs across finishes, else the one nearest swatch).
-const isMetT = p => p.t === 'met' || p.t === 'pearl';
-export function matches(D, p) {
-  const mt = isMetT(p), doc = (D.MT[p.i] || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug);
+// Same rule as matchData() in app.js. Short list (default): per other brand, chart-listed equivalents within ΔE 25 of the swatch,
+// else the 1 nearest paint of the same type within ΔE 12; a name shown once per brand. all=true: every chart match plus the 2-3
+// nearest swatches, no limit (shown folded under "Show all matches"). Same finish only in ch/near (metallic and pearl paints match
+// each other); xch/xnear: the other finish, listed apart on the page.
+const isMetT = p => p.t === 'met' || p.t === 'pearl', M_TICK = 25, M_NEAR = 12, tyG = t => t === 'ink' ? 'wash' : t;
+const nk = p => p.n.trim().toLowerCase(), dedupe = a => { const s = new Set(); return a.filter(m => !s.has(nk(m.p)) && s.add(nk(m.p))) };
+export function matches(D, p, all = false) {
+  const mt = isMetT(p), ty = tyG(p.t), doc = (D.MT[p.i] || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug);
   return D.brands.map((br, bi) => {
     if (bi === p.b) return null;
-    const b = doc.filter(m => m.p.b === bi).sort((a, b) => a.d - b.d), ch = b.filter(m => isMetT(m.p) === mt), xch = b.filter(m => isMetT(m.p) !== mt);
+    let b = doc.filter(m => m.p.b === bi).sort((a, b) => a.d - b.d);
     const have = new Set(b.map(m => m.p)), pool = br.paints.filter(q => !have.has(q)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d);
-    const near = pool.filter(m => isMetT(m.p) === mt).slice(0, ch.length ? 2 : 3), xnear = pool.filter(m => isMetT(m.p) !== mt).slice(0, xch.length ? 0 : 1);
+    if (all) {
+      const ch = b.filter(m => isMetT(m.p) === mt), xch = b.filter(m => isMetT(m.p) !== mt);
+      const near = pool.filter(m => isMetT(m.p) === mt).slice(0, ch.length ? 2 : 3), xnear = pool.filter(m => isMetT(m.p) !== mt).slice(0, xch.length ? 0 : 1);
+      return { br, ch, near, xch, xnear };
+    }
+    b = b.filter(m => m.d <= M_TICK);
+    const ch = dedupe(b.filter(m => isMetT(m.p) === mt)), xch = dedupe(b.filter(m => isMetT(m.p) !== mt)), taken = new Set([...ch, ...xch].map(m => nk(m.p)));
+    const ok = m => m.d <= M_NEAR && !taken.has(nk(m.p));
+    const near = ch.length ? [] : pool.filter(m => isMetT(m.p) === mt && (mt || tyG(m.p.t) === ty) && ok(m)).slice(0, 1);
+    const xnear = xch.length ? [] : pool.filter(m => isMetT(m.p) !== mt && ok(m)).slice(0, 1);
     return { br, ch, near, xch, xnear };
   }).filter(Boolean);
 }
+const mCount = md => md.reduce((a, o) => a + o.ch.length + o.near.length + o.xch.length + o.xnear.length, 0);
 
 /* ---------- pages ---------- */
 
@@ -203,7 +234,7 @@ const paintUrl = p => p.url;
 const label = p => p.n + (p.c ? ' (' + p.c + ')' : '');
 const closeness = d => d < 6 ? 'very close' : d < 10 ? 'close' : d < 15 ? 'fair' : 'loose';
 
-const OG_IMAGE = SITE + '/icons/og-image.png';
+const OG_IMAGE = SITE + '/icons/og-image-2026-11.jpg';
 const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painters Desk', url: SITE + '/', publisher: { '@id': SITE + '/#org' } };
 const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png' };
 
@@ -264,6 +295,7 @@ p.s{color:var(--mut);font-size:14px;margin:0 0 12px}
 .big{width:96px;height:96px;border-radius:50%;border:3px solid var(--ink);flex:none}
 dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0}dt{color:var(--mut)}dd{margin:0}
 .sec{margin:22px 0 4px}
+.allm{margin:18px 0}.allm summary{cursor:pointer;font-weight:700}.allm .grid{margin-top:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .br h3{margin:0 0 6px;font-size:17px}
 ul.m{list-style:none;margin:0;padding:0}
@@ -299,7 +331,7 @@ svg.wheel{width:100%;max-width:340px;height:auto;color:var(--ink);flex:none}
 figure{margin:0;flex:0 1 320px;text-align:center}svg.pic{width:100%;max-width:320px;height:auto;color:var(--ink);display:block;margin:0 auto 6px}svg.chart{width:100%;max-width:520px;height:auto;color:var(--fg);flex:none}
 ol.steps li{padding:8px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ol.steps li:first-child{border-top:0}ol.steps em{font-size:15px;color:var(--fg);margin-top:2px}ol.steps .sw{width:30px;height:30px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
 ${THEME.css}</style></head>
-<body><div class="wrap navw">${THEME.nav.replace(`data-v="${path.startsWith('/guides') ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
+<body><div class="wrap navw">${path === '/' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
 ${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
@@ -353,9 +385,9 @@ function usedInHTML(p, rs) {
 }
 
 function paintPage(D, p, rs) {
-  const br = D.brands[p.b], range = D.GL[p.g] || '', md = matches(D, p);
+  const br = D.brands[p.b], range = D.GL[p.g] || '', md = matches(D, p), mdAll = matches(D, p, true);
   const best = md.map(o => ({ br: o.br, m: [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0] })).filter(o => o.m);
-  const mt = isMetT(p), grid = (a, b) => { const g = md.filter(o => o[a].length || o[b].length); return g.length ? `<div class="grid">${g.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o[a].map(m => item(m, 1)).join('')}${o[b].map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>` : '' };
+  const mt = isMetT(p), grid = (a, b, md0 = md) => { const g = md0.filter(o => o[a].length || o[b].length); return g.length ? `<div class="grid">${g.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o[a].map(m => item(m, 1)).join('')}${o[b].map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>` : '' };
   const brandName = br.name.replace(' / Warhammer', '');
   // Titles use the words people search with ("<paint> equivalent", "<paint> alternative"); the description leads with the
   // closest matches in the most-searched brands first.
@@ -363,15 +395,17 @@ function paintPage(D, p, rs) {
   const pick = [...best].sort((a, b) => popRank(a.br) - popRank(b.br)).slice(0, 4);
   const desc = `The closest matches to ${brandName} ${p.n}${p.c ? ' (' + p.c + ')' : ''}: ` +
     pick.map(o => `${short(o.br)} ${o.m.p.n}`).join(', ') +
-    `, plus matches in ${D.brands.length - 1 - pick.length} more brands. Swatch colours are estimates.`;
+    (best.length > pick.length ? `, plus matches in ${best.length - pick.length} more brands` : '') + '. Swatch colours are estimates.';
   const item = (m, k) => `<li><i class="sw" style="background:${m.p.h}"></i><span>${k ? `<span class="ck" title="${esc(D.msrc[m.s] || 'Conversion chart')}">✓</span> ` : '≈ '}<a href="${paintUrl(m.p)}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${k ? ' · listed in ' + esc(D.msrc[m.s] || 'a conversion chart') : ''}</em></span></li>`;
   const xgrid = grid('xch', 'xnear');
+  const nAll = mCount(mdAll), allHTML = nAll > mCount(md) ? `<details class="allm"><summary>Show all ${nAll} matches, including loose ones</summary><p class="s">Every paint a conversion chart lists, however far its swatch is from ${esc(p.n)}'s, plus the 2 or 3 nearest swatches in every brand.</p>${grid('ch', 'near', mdAll)}${grid('xch', 'xnear', mdAll) ? `<h3>${mt ? 'Non-metallic colours' : 'Metallic matches'}</h3>${grid('xch', 'xnear', mdAll)}` : ''}</details>` : '';
   const body = `<h1>${esc(p.n)} equivalent and alternatives</h1>
 <div class="panel hero"><div class="big" style="background:${p.h}" role="img" aria-label="Estimated swatch colour ${p.h}"></div>
 <dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
 <p>Looking for a substitute for ${esc(brandName)} ${esc(p.n)}? These are the closest paints in each other brand on The Painters Desk.
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
-ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Swatches are estimates, so check the real paints before you commit.</p>
+ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Swatches are estimates, so check the real paints before you commit.</p>
+${p.now ? `<p>${esc(p.n)} is an old Army Painter Warpaints colour. Army Painter's Warpaints Fanatic conversion chart lists <a href="${paintUrl(p.now)}">${esc(p.now.n)}</a> as its replacement in Warpaints Fanatic, a close match but not always exact. The swatch shown here is ${esc(p.now.n)}'s.</p>` : ''}
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a></p>
 ${stdLinksHTML(D, p)}
 ${mt ? `<h2 class="sec">Metallic matches</h2><p class="s">${esc(p.n)} is a metallic${p.t === 'pearl' ? ' (pearl)' : ''} paint, so these are metallic and pearl paints only.</p>` : ''}
@@ -379,6 +413,7 @@ ${grid('ch', 'near')}
 ${xgrid ? `<h2 class="sec">${mt ? 'Non-metallic colours' : 'Metallic matches'}</h2><p class="s">${mt
     ? `The nearest non-metallic paint in each brand to ${esc(p.n)}'s swatch, for non-metallic metal (NMM) or a matt alternative. A different finish, so not a straight swap.`
     : `The nearest metallic paint in each brand to ${esc(p.n)}'s colour. A different finish, so not a straight swap.`}</p>${xgrid}` : ''}
+${allHTML}
 ${compareLinksHTML(D, p)}
 ${usedInHTML(p, rs)}`;
   return page({
@@ -627,26 +662,29 @@ ${top.length ? `<div class="panel"><ul class="m sr">${top.map(h => `<li><i class
 
 // A few lines about each brand. Plain, well-known facts only: anything about how the paints compare comes from the data below.
 const BRAND_INFO = {
-  'army-painter': 'The Army Painter is a Danish hobby company. Its Warpaints Fanatic range is a large set of dropper-bottle acrylics built around colour triads, and Speedpaint is its one-coat range, painted over a light primer.',
+  'army-painter': 'The Army Painter is a Danish hobby company. Its Warpaints Fanatic range is a large set of dropper-bottle acrylics built around colour triads, Speedpaint is its one-coat range, painted over a light primer, Warpaints Historical is a WWII range of uniform, camo and skin colours, and Warpaints Legacy lists the old Warpaints names with the Fanatic paint that replaced each one.',
   citadel: 'Citadel is Games Workshop\'s paint range, made for Warhammer. Paints are sorted by job: Base paints cover in one coat, Layers build up highlights, Shades sink into recesses, Contrast paints shade and colour in a single coat, and Technical paints add textures and effects.',
   'pro-acryl': 'Pro Acryl is made by Monument Hobbies in the United States. It is a highly pigmented, matt acrylic in dropper bottles, with a Signature range of colours chosen by well-known painters and an Expert Acrylics line.',
   vallejo: 'Acrylicos Vallejo is a Spanish paint maker. Game Color is its range for fantasy and sci-fi miniatures, Model Color has the muted and historical colours, Model Air is thinned for airbrushes and Xpress Color is its one-coat range.',
-  'ak-interactive': 'AK Interactive is a Spanish hobby company best known in scale modelling. Its 3rd Generation acrylics come in Standard, Intense, Pastel, Metallic and Ink types, plus AFV, Figure and Air series. Quick Gen is its quick-shade range.',
+  'ak-interactive': 'AK Interactive is a Spanish hobby company best known in scale modelling. Its 3rd Generation acrylics come in Standard, Intense, Pastel, Metallic and Ink types, plus AFV, Figure and Air series and the extra-strong Color Punch paints. Quick Gen is its quick-shade range, and Glow Precision Fluor is a set of enamel fluorescents for glowing details.',
   'two-thin-coats': 'Two Thin Coats is the paint range from Duncan Rhodes Painting Academy. Most colours come as triads of a shadow, a midtone and a highlight, so a full three-step ramp is ready to use.',
   'turbo-dork': 'Turbo Dork is an American brand that only makes metallic and colour-shift paints. TurboShift and ZeniShift paints change colour with the viewing angle and look best over the recommended basecoat.',
   tamiya: 'Tamiya is a Japanese model kit maker. Its XF (flat) and X (gloss) acrylics and its spray cans are made for scale models, but are popular for vehicles, terrain and airbrushing miniatures too.',
-  scale75: 'Scale75 is a Spanish miniatures and paint company. Scalecolor is a very matt acrylic range, Fantasy & Games has brighter colours, Instant Colors is the one-coat range and Metal n\' Alchemy is its metallics.',
-  'ammo-by-mig': 'AMMO by Mig Jimenez is a Spanish scale modelling company. ATOM is its acrylic range for brush and airbrush, with military and aircraft camouflage colours alongside brights, metallics and washable paints.',
+  scale75: 'Scale75 is a Spanish miniatures and paint company. Scalecolor is a very matt acrylic range, Fantasy & Games has brighter colours, Instant Colors is the one-coat range Metal n\' Alchemy is its metallics and Prism Effect is a set of Chromaflair colour-shift paints.',
+  'ammo-by-mig': 'AMMO by Mig Jimenez is a Spanish scale modelling company. ATOM is its acrylic range for brush and airbrush, with military and aircraft camouflage colours alongside brights, metallics and washable paints. IONIC Smart Colors is its high-coverage brush range for figures and tabletop games, Acrylic Colors for Figures is its uniform and skin range, Oilbrushers are oil paints in a tube with a brush in the cap, Dio Drybrush paints are made for drybrushing, and Shaders are semi-transparent colours for shading and filters.',
   'mr-hobby': 'Mr. Hobby is the hobby paint brand of GSI Creos in Japan. Mr. Color is its solvent-based acrylic lacquer, Aqueous Hobby Color the water-based acrylic and Acrysion the low-odour water-based range, all with large sets of aircraft, armour and ship colours.',
   reaper: 'Reaper Miniatures is an American miniatures company. Its Master Series Paints come in triads of a shadow, a midtone and a highlight, with skin, metallic, liner, clear and ink colours.',
   'formula-p3': 'Formula P3 is the paint range Privateer Press made for its Warmachine and Hordes miniatures. Many colours are named after the factions they were made for, and the range includes metallics, inks and washes.',
   'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters.',
+  'golden': 'Golden Artist Colors makes artist-grade acrylics in New York. Its Heavy Body paints are mostly single pigments, so they mix cleanly, and many miniature painters use them for wet blending and glazing alongside hobby paints. High Flow is the same pigments as a thin, ink-like acrylic for airbrushing, glazes and washes, with fluorescent, iridescent and interference colours too.',
+  'nocturna-models': 'Nocturna Models is a Spanish fantasy miniatures company. Its N-Paint range comes in sets of eight: flesh, greys, reds, blues, greens and browns, each a ramp from shadow to highlight, plus metallic and ink sets.',
+  'bear-cavalry': 'Bear Cavalry is an American miniature painting company. Its paints are named after battles, songs and history, and come in reds, oranges, yellows, greens, blues, purples, greys and browns.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
 const TYPE_NAME = { op: 'opaque base and layer paints', met: 'metallics', pearl: 'pearls', con: 'one-coat contrast-style paints', wash: 'washes and shades', ink: 'inks, glazes and transparents', fx: 'fluorescents and effects', tech: 'technical paints, primers and mediums' };
 const short = br => br.name.replace(' / Warhammer', '');
 // Brands in the order people search for them, used to pick which matches go in a paint page's description.
-const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'reaper', 'formula-p3', 'kimera-kolors', 'scale75', 'tamiya', 'mr-hobby', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
+const POP = ['citadel', 'vallejo', 'army-painter', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'reaper', 'formula-p3', 'kimera-kolors', 'golden', 'nocturna-models', 'bear-cavalry', 'scale75', 'tamiya', 'mr-hobby', 'ammo-by-mig', 'green-stuff-world', 'turbo-dork'];
 const popRank = br => { const k = POP.indexOf(br.slug); return k < 0 ? POP.length : k; };
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0 };
 const pct = (k, n) => n ? Math.round(100 * k / n) + '%' : '0%';
@@ -793,7 +831,7 @@ function convPage(D, g) {
   const desc = `${short(A)} to ${short(B)} paint conversion chart: the closest ${short(B)} match for all ${A.paints.length} ${short(A)} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} paint on The Painters Desk and its closest ${esc(short(B))} paints. The first column (<span class="ck">✓</span>) is the equivalent a manufacturer or community conversion chart lists, where there is one; the second (≈) is the nearest swatch colour of the same paint type (shade for shade, metallic for metallic), worked out from our swatch estimates. When the two disagree, either the chart pairing is a loose one or our swatch estimate is off, so compare the real paints.
-ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
 ${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>${close} of ${A.paints.length} paints (${pct(close, A.paints.length)}) have a ${esc(short(B))} match under ΔE 6, and ${charted} have a chart-listed equivalent. Tap any paint for its matches in every other brand.</p></div>
 ${groups.map(x => `<section class="panel"><h2>${esc(short(A))} ${esc(D.GL[x.g])}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(short(A))}</th><th>Chart-listed ${esc(short(B))}</th><th>Nearest ${esc(short(B))} colour</th></tr></thead><tbody>${x.ps.map(p => { const r = by.get(p); return `<tr><td><i class="sw" style="background:${p.h}"></i><a href="${p.url}">${esc(label(p))}</a></td><td>${cell(r.doc)}</td><td>${cell(r.near)}</td></tr>` }).join('')}</tbody></table></div></section>`).join('')}
 ${guideLinks(g)}`;
@@ -810,7 +848,7 @@ function multiConvPage(D, g) {
   const desc = `${short(A)} ${rng} conversion chart: the closest ${Bs.map(short).join(', ')} match for all ${ps.length} ${rng} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} ${esc(rng)} paint on The Painters Desk and its closest match in ${Bs.map(B => esc(short(B))).join(', ')}. A <span class="ck">✓</span> means a manufacturer or community conversion chart lists that pairing; ≈ means it is the nearest swatch colour of the same paint type, worked out from our swatch estimates.
-ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
 ${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>Tap any paint for its matches in every brand.</p></div>
 <section class="panel"><h2>${esc(short(A))} ${esc(rng)}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(rng)}</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr><td><i class="sw" style="background:${r.p.h}"></i><a href="${r.p.url}">${esc(label(r.p))}</a></td>${r.m.map(m => `<td>${cell(m)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
 ${guideLinks(g)}`;
@@ -1263,7 +1301,7 @@ const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => 
 
 function guideLinks(cur) {
   const li = g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`;
-  return `<section class="panel"><h2>More guides</h2><ul class="m list">${guideOrder().filter(g => g !== cur).map(li).join('')}</ul></section>`;
+  return `<section class="panel"><h2>More guides</h2><ul class="m list">${guideOrder().filter(g => g !== cur).map(li).join('')}${PALS.length ? '<li><a href="/guides/palettes">Colour palettes</a></li>' : ''}</ul></section>`;
 }
 
 function guidesPage(D) {
@@ -1275,6 +1313,7 @@ function guidesPage(D) {
   const body = `<h1>Paint guides</h1>
 <p class="prose">Guides to colour, painting basics, techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
+${PALS.length ? `<section class="panel"><h2>Colour palettes</h2><p class="s">${PALS.length} themed colour schemes, each with the closest paint in every major brand.</p><ul class="m gl">${PALS.slice(0, 6).map(x => `<li><a href="/guides/palettes/${x.s}"><b>${esc(x.n)}</b></a><span class="chip">${x.c.map(c => `<i style="background:${c.h}"></i>`).join('')}</span><em>${esc(x.b)}</em></li>`).join('')}</ul><p><a class="btn" href="/guides/palettes">All ${PALS.length} palettes</a></p></section>` : ''}
 <section class="panel"><h2>Painting basics</h2><p class="s">The groundwork every model needs: thinning, priming and varnishing, airbrushing, contrast paints, black and white, bases and weathering.</p><ul class="m gl">${guideOrder().filter(g => g.basic).map(card).join('')}</ul></section>
 <section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
 <section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
@@ -1291,9 +1330,82 @@ function notFound() {
   }).replace('<meta name="description"', '<meta name="robots" content="noindex"><meta name="description"');
 }
 
+// Any other address that doesn't exist (an old link or a typo): a themed page with the way back, still sent as a 404.
+export async function pageNotFound(request, env, url) {
+  try { await load(env, url) } catch (e) { console.error(e) }
+  const body = page({
+    title: 'Page not found | The Painters Desk', desc: 'That page does not exist.', path: '/',
+    crumbs: [['Home', '/']],
+    body: `<section class="panel"><h1>Page not found</h1><p>There's nothing at <b>${esc(url.pathname.slice(0, 120))}</b>. The link may be old, or the address may have a typo.</p>
+<p><a class="btn" href="/">Open the colour wheel</a> <a class="btn" href="/paints">Browse paints</a> <a class="btn" href="/guides">Painting guides</a></p></section>`,
+  }).replace('<meta name="description"', '<meta name="robots" content="noindex"><meta name="description"');
+  const r = send(body, 'text/html; charset=utf-8', 404);
+  r.headers.set('cache-control', 'no-store');
+  return request.method === 'HEAD' ? new Response(null, r) : r;
+}
+
 function sitemap(D) {
-  const u = ['/', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
+  const u = ['/', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...(PALS.length ? ['/guides/palettes', ...PALS.map(x => '/guides/palettes/' + x.s)] : []), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
     '/paints/colour-standards', ...standards(D).map(x => '/paints/colour-standards/' + x.slug), ...vsPairs(D).map(([a, b]) => vsUrl(a, b))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     u.map(x => `<url><loc>${SITE}${esc(x)}</loc></url>`).join('\n') + '\n</urlset>\n';
+}
+
+/* ---------- inspiration palettes: /guides/palettes and /guides/palettes/<slug> ---------- */
+
+// palettes.js is "const PALETTES=" followed by plain JSON (Workers can't eval). Exported for tools/check_seo.mjs.
+export function parsePalettes(src) {
+  const a = src.indexOf('const PALETTES=') + 15, b = src.lastIndexOf(';');
+  const xs = JSON.parse(src.slice(a, b));
+  xs.forEach(x => x.c.forEach(c => { c.lab = hexLab(c.h) }));
+  return xs;
+}
+export function renderPalettes(D, pals) {
+  PALS = pals;
+  if (!palettesPage(D).includes('class="chip')) throw new Error('Empty palettes page');
+  pals.forEach(x => { if (!palettePage(D, x).includes('<table')) throw new Error('Empty palette page: ' + x.s) });
+  return pals.length;
+}
+const PAL_DATE = '2026-11-08';
+const PAL_BRANDS = ['citadel', 'army-painter', 'vallejo', 'pro-acryl', 'ak-interactive', 'two-thin-coats', 'scale75'];
+const palChip = (x, tall) => `<span class="chip${tall ? ' tall' : ''}">${x.c.map(c => `<i style="background:${c.h}" title="${esc(c.r + ': ' + c.u)}"></i>`).join('')}</span>`;
+// The nearest paint of the same finish (metallic for a metal colour, opaque otherwise) in one brand.
+function palNear(D, br, c) {
+  let best = null;
+  for (const p of br.paints) {
+    if (c.m ? p.t !== 'met' : p.t !== 'op') continue;
+    const d = dE(c, p);
+    if (!best || d < best.d) best = { p, d };
+  }
+  return best;
+}
+
+function palettesPage(D) {
+  const title = 'Colour schemes for miniatures: themed paint palettes';
+  const desc = `${PALS.length} original colour schemes for miniatures and wargaming armies, from sci-fi and grimdark to fantasy and bright, each matched to the closest Citadel, Army Painter, Vallejo, Pro Acryl, AK, Two Thin Coats and Scale75 paints. Swatch colours are estimates.`;
+  const tags = [...new Set(PALS.flatMap(x => x.t))];
+  const body = `<h1>Colour schemes for miniatures</h1>
+<div class="prose"><p>Stuck on a colour scheme? These ${PALS.length} palettes are our own ideas, made for The Painters Desk. Each one has five or six colours with a job each (main colour, second colour, accent, metal, skin or base) and the closest paint in every major brand.</p>
+<p>Open any palette in the <a href="/#/palettes">Palettes page</a> of the colour wheel to match it to the paints you own, show it on the wheel or build blends from it. Swatch colours are estimates, so check the real paints first.</p></div>
+${tags.map(t => `<section class="panel"><h2>${esc(t)}</h2><ul class="m gl">${PALS.filter(x => x.t[0] === t).map(x => `<li><a href="/guides/palettes/${x.s}"><b>${esc(x.n)}</b></a>${palChip(x)}<em>${esc(x.b)}</em></li>`).join('')}</ul></section>`).filter(h => h.includes('<li>')).join('\n')}
+${guideLinks(null)}`;
+  return page({ title, desc, path: '/guides/palettes', body, crumbs: [['Guides', '/guides'], ['Colour palettes', '/guides/palettes']], ld: [webPage('/guides/palettes', title, desc, 'CollectionPage')] });
+}
+
+function palettePage(D, x) {
+  const path = '/guides/palettes/' + x.s, title = `${x.n} colour scheme for miniatures`;
+  const Bs = PAL_BRANDS.map(s => brandBy(D, s)).filter(Boolean);
+  const desc = `${x.n}: ${x.b} The closest ${Bs.map(short).join(', ')} paints for each colour. Swatch colours are estimates.`;
+  const cell = m => m ? `<i class="sw" style="background:${m.p.h}"></i><a href="${m.p.url}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}</em>` : '–';
+  const others = PALS.filter(y => y !== x && y.t.some(t => x.t.includes(t))).slice(0, 6);
+  const body = `<h1>${esc(title)}</h1>
+${palChip(x, true)}
+<div class="prose"><p>${esc(x.b)}</p><p><b>Tip:</b> ${esc(x.tip)}</p>
+<p>Below is each colour in the scheme with the closest paint in every major brand. Metal colours are matched to metallic paints, the rest to opaque paints. ΔE is how far the paint is from the target colour: under about 6 is close, over about 15 is loose. These are worked out from swatch estimates, so check the real paints before you start.</p>
+<p><a class="btn" href="/#/palettes/${x.s}">Match it to my paints</a></p></div>
+<section class="panel"><h2>The colours</h2><ul class="m">${x.c.map(c => `<li><i class="sw" style="background:${c.h}"></i><span><b>${esc(c.r)}</b>: ${esc(c.u)}${c.m ? ' (metallic)' : ''}</span></li>`).join('')}</ul></section>
+<section class="panel"><h2>Paints for ${esc(x.n)} in every brand</h2><div class="tw"><table class="cv pk"><thead><tr><th>Colour</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${x.c.map(c => `<tr><td><i class="sw" style="background:${c.h}"></i><b>${esc(c.r)}</b><em>${esc(c.u)}</em></td>${Bs.map(B => `<td>${cell(palNear(D, B, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+${others.length ? `<section class="panel"><h2>Similar palettes</h2><ul class="m gl">${others.map(y => `<li><a href="/guides/palettes/${y.s}"><b>${esc(y.n)}</b></a>${palChip(y)}<em>${esc(y.b)}</em></li>`).join('')}</ul><p><a href="/guides/palettes">All ${PALS.length} palettes</a></p></section>` : ''}
+${guideLinks(null)}`;
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], ['Colour palettes', '/guides/palettes'], [x.n, path]], ld: [article(path, title, desc, PAL_DATE)] });
 }
