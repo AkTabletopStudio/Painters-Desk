@@ -50,7 +50,7 @@ let MODE='col',NB=null,nmmSkip=[],NMM_DRAFT=null;const NMO={n:7,t:false,q:'nmm',
 // Objects each technique's preview can be shown on (first = default). Keys the object art doesn't draw fall back to the technique's own preview.
 const PV={nmm:[['sword','Sword'],['axe','Axe'],['shield','Shield'],['armour','Armour'],['helmet','Helmet'],['goblet','Goblet']],
 osl:[['glow','Glow'],['lantern','Lantern'],['lens','Eye lenses']],gem:[['round','Round'],['tear','Teardrop'],['square','Square cut']],
-skin:[['face','Face'],['hand','Hand'],['torso','Torso'],['steps','Steps']],zen:[['figure','Cloaked figure'],['rock','Rock'],['cube','Cube and ball'],['steps','Steps']],
+skin:[['face','Face'],['hand','Hand'],['arm','Arm'],['steps','Steps']],zen:[['figure','Cloaked figure'],['rock','Rock'],['cube','Cube'],['steps','Steps']],
 edge:[['plate','Armour plate'],['pauldron','Pauldron'],['hull','Tank panel'],['steps','Steps']],glaze:[['cloak','Cloak'],['panel','Flat panel'],['steps','Steps']]};
 const pvGet=()=>{const l=PV[NMO.q];return l?(l.some(x=>x[0]===NMO.v[NMO.q])?NMO.v[NMO.q]:l[0][0]):''};
 const nmmSave=()=>{try{localStorage.setItem('pd-nmm',JSON.stringify({m:MODE,n:NMO.n,t:NMO.t,q:NMO.q,v:NMO.v}))}catch(e){}};
@@ -228,277 +228,55 @@ function nmmWheel(R){const T=TQN();let s=stepLine(R.filter(x=>x.p).map(x=>x.p),N
 return s+`<defs>${rampGrad('ng',T.prev==='under'?underFin(R):R,T.prev==='osl')}</defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#ng)" stroke="#1b1b1b" stroke-width="3"><title>${T.full} ramp</title></circle>`}
 // Underpainting: the colour steps (glazes and final highlight) dark to light, which is how the finished area reads.
 const underFin=R=>R.filter(x=>!x.u&&x.p).sort((a,b)=>a.p.lab[0]-b.p.lab[0]);
-// Ramp preview objects: original drawings painted with the ramp's own paints. PV lists which objects each technique offers.
+// NMM preview objects. st runs dark to light; the last step is the glint.
 const objPick=()=>{const l=PV[NMO.q],v=pvGet();return l?`<div class="nvw" role="group" aria-label="Show the ramp on">${l.map(([k,t])=>`<button type="button" class="btn sm${v===k?' pri':''}" data-nv="${k}" aria-pressed="${v===k}">${t}</button>`).join('')}</div>`:''};
-function prevObj(st){if(!st.length)return'';const v=pvGet();if(!v||v==='steps')return'';
-// S: the ramp's paints, darkest first. cx(f): the ramp colour a fraction f of the way from darkest to lightest (blended between steps).
-const S=[...st].sort((a,b)=>a.p.lab[0]-b.p.lab[0]).map(x=>x.p.h),n=S.length,K='#1b1b1b',HI=S[n-1],
-rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),
-mix=(a,b,t)=>{const A=rgb(a),B=rgb(b);return'#'+A.map((x,i)=>Math.round(x+(B[i]-x)*t).toString(16).padStart(2,'0')).join('')},
-cx=f=>{if(typeof f==='string')return f;const x=Math.max(0,Math.min(1,f))*(n-1),i=Math.floor(x);return i>=n-1?S[n-1]:mix(S[i],S[i+1],x-i)},
-// Gradient stops are [offset, ramp fraction or colour, opacity].
-sp=a=>a.map(([t,f,o])=>`<stop offset="${t}" stop-color="${cx(f)}"${o==null?'':` stop-opacity="${o}"`}/>`).join(''),
-G=(id,a,x1=0,y1=0,x2=1,y2=0)=>`<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${sp(a)}</linearGradient>`,
-U=(id,a,x1,y1,x2,y2,tf)=>`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${tf?` gradientTransform="${tf}"`:''}>${sp(a)}</linearGradient>`,
-RU=(id,a,x,y,r)=>`<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${x}" cy="${y}" r="${r}">${sp(a)}</radialGradient>`,
-BL=(id,d)=>`<filter id="${id}" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="${d}"/></filter>`,
-CP=(id,d)=>`<clipPath id="${id}"><path d="${d}"/></clipPath>`,
-O=`stroke="${K}" stroke-width="3" stroke-linejoin="round"`,o2=`stroke="${K}" stroke-width="2" stroke-linejoin="round"`,
-PA=(d,f,x='')=>`<path d="${d}" fill="${f}" ${x}/>`,ln=(d,c,w=2,x='')=>`<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`,
-el=(x,y,rx,ry,f,e='')=>`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${cx(f)}" ${e}/>`,
-gl=(x,y,r=7)=>`<path d="M${x} ${y-r}L${x+r*.22} ${y-r*.22}L${x+r} ${y}L${x+r*.22} ${y+r*.22}L${x} ${y+r}L${x-r*.22} ${y+r*.22}L${x-r} ${y}L${x-r*.22} ${y-r*.22}Z" fill="${HI}"/><circle cx="${x}" cy="${y}" r="${r*.3}" fill="${HI}"/>`,
-rivet=(x,y,r=3)=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${cx(.45)}" stroke="${K}" stroke-width="1.2"/><circle cx="${x-r*.3}" cy="${y-r*.3}" r="${r*.35}" fill="${HI}"/>`,
-shadow=(x,y,rx,ry=5)=>`<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="#000" opacity=".28"/>`,
-sv=(lab,h,defs,b)=>`<svg class="blade" viewBox="0 0 300 ${h}" role="img" aria-label="Ramp preview on ${lab}"><defs>${defs}</defs>${b}</svg>`,
-// Polished metal seen side-on: sky light, a sharp horizon, then light bounced back up from the ground.
-TUBE=[[0,.35],[.1,.6],[.22,.95],[.3,1],[.36,1],[.38,.1],[.55,.25],[.78,.55],[.92,.82],[1,.4]],
-A={
-// ---------- NMM ----------
-sword(){const d='M84 35L252 38L294 50L252 62L84 65Z';
- return sv('a sword',100,U('pa',[[0,.3],[.16,.55],[.3,.92],[.36,1],[.41,1],[.42,.1],[.58,.3],[.78,.62],[.92,.88],[1,.95]],114,0,324,0,'skewX(-35)')+
-  U('pb',[[0,.04],[.2,.18],[.44,.5],[.6,.85],[.66,.98],[.67,.06],[.84,.25],[1,.5]],124,0,334,0,'skewX(-35)')+G('pc',TUBE,0,0,0,1)+G('pd',TUBE)+
-  RU('pe',[[0,1],[.2,.92],[.5,.5],[.82,.12],[1,.4]],12,45,16)+G('pf',[[0,'#7a5230'],[.5,'#4a2e16'],[1,'#2a190b']],0,0,0,1),
-  `<rect x="26" y="43" width="44" height="14" rx="3" fill="url(#pf)" ${o2}/>${[32,39,46,53,60].map(x=>ln(`M${x} 44L${x+5} 56`,'#1e1208',1.6)).join('')}
-  <circle cx="16" cy="50" r="11" fill="url(#pe)" ${O}/>
-  ${PA('M84 35L252 38L294 50L84 50Z','url(#pa)')}${PA('M84 50L294 50L252 62L84 65Z','url(#pb)')}
-  ${ln('M86 36.6L251 39.6L290 50',HI,1.3,'opacity=".85"')}${ln('M88 50H288',K,1.2,'opacity=".45"')}${ln('M88 48.8H250',HI,.9,'opacity=".5"')}
-  ${PA(d,'none',O)}
-  <rect x="70" y="20" width="16" height="60" rx="6" fill="url(#pc)" ${O}/><rect x="65" y="41" width="26" height="18" rx="4" fill="url(#pd)" ${O}/>
-  ${gl(166,42,8)}${gl(78,28,4)}${gl(12,45,4)}`)},
-axe(){const head='M214 78Q208 54 164 36Q222 -4 288 22Q254 46 246 78Z',bev='M164 36Q222 -4 288 22L279 30Q224 10 176 41Z';
- return sv('an axe',124,U('pa',[[0,.5],[.2,.9],[.3,1],[.35,1],[.36,.08],[.58,.28],[.8,.6],[1,.85]],150,0,300,0,'skewX(-30)')+
-  G('pb',[[0,.08],[.3,.3],[.5,.92],[.57,1],[.59,.15],[.8,.4],[1,.7]])+G('pc',TUBE,0,0,0,1)+G('pd',TUBE)+
-  G('pf',[[0,'#8a5c34'],[.45,'#6b4423'],[1,'#3a2410']],0,0,0,1)+G('pg',[[0,'#5a4030'],[1,'#2a1c14']],0,0,0,1),
-  `<rect x="14" y="82" width="250" height="13" rx="5" fill="url(#pf)" ${O}/>${ln('M70 86H200',K,1,'opacity=".3"')}${ln('M96 91H230',K,1,'opacity=".25"')}
-  <rect x="30" y="81" width="52" height="15" rx="3" fill="url(#pg)" ${o2}/>${[38,47,56,65,74].map(x=>ln(`M${x} 82L${x-4} 95`,'#140d08',1.5)).join('')}
-  <rect x="6" y="78" width="16" height="21" rx="5" fill="url(#pc)" ${O}/>
-  ${PA('M220 98H242L238 114H224Z','url(#pd)',O)}
-  ${PA(head,'url(#pa)',O)}${PA(bev,'url(#pb)',`stroke="${K}" stroke-width="1.6" stroke-linejoin="round"`)}
-  ${ln('M168 35Q222 0 284 22.5',HI,1.3,'opacity=".9"')}
-  <rect x="210" y="74" width="40" height="28" rx="4" fill="url(#pc)" ${O}/>${rivet(230,88,3.2)}
-  ${gl(232,12,7)}${gl(204,52,5)}${gl(216,80,3.5)}`)},
-shield(){const out='M88 14Q150 4 212 14Q216 86 150 134Q84 86 88 14Z',inn='M99 23Q150 15 201 23Q203 80 150 120Q97 80 99 23Z';
- return sv('a shield',142,CP('pk',inn)+G('pa',[[0,.1],[.3,.3],[.48,.85],[.55,1],[.57,.15],[.8,.45],[1,.75]],0,0,1,1)+
-  G('pb',[[0,.9],[.12,1],[.22,1],[.5,.62],[1,.3]],0,0,.25,1)+G('pc',[[0,.3],[.42,.06],[.5,.05],[.52,.5],[.8,.7],[1,.9]],0,0,-.2,1)+
-  RU('pd',[[0,1],[.2,.95],[.5,.55],[.8,.12],[1,.45]],144,56,20),
-  `${PA(out,'url(#pa)',O)}<g clip-path="url(#pk)"><rect x="90" y="10" width="60" height="120" fill="url(#pb)"/><rect x="150" y="10" width="60" height="120" fill="url(#pc)"/></g>
-  ${ln('M149 19V119',HI,1.6,'opacity=".8"')}${ln('M151 19V119',K,1.4,'opacity=".5"')}${PA(inn,'none',o2)}
-  <circle cx="150" cy="62" r="16" fill="url(#pd)" ${O}/>
-  ${[[94,19],[206,19],[92,58],[208,58],[112,98],[188,98],[150,127]].map(([x,y])=>rivet(x,y,2.6)).join('')}
-  ${gl(117,36,9)}${gl(144,56,4.5)}${gl(176,104,4)}`)},
-armour(){const body='M124 16Q150 36 176 16L202 20Q190 46 222 68Q218 96 204 110Q176 120 150 122Q124 120 96 110Q82 96 78 68Q110 46 98 20Z',
- pl='M90 100Q122 94 150 80Q178 94 210 100Q208 106 204 110Q176 120 150 122Q124 120 96 110Q92 106 90 100Z';
- return sv('a breastplate',160,CP('pk',body)+RU('pa',[[0,1],[.14,.97],[.42,.66],[.72,.34],[1,.12]],116,50,50)+RU('pb',[[0,.92],[.2,.72],[.5,.42],[.8,.16],[1,.05]],170,52,54)+
-  G('pc',[[0,.95],[.2,.6],[.5,.3],[1,.12]],0,0,0,1)+G('pe',TUBE,0,0,0,1)+BL('pz',3),
-  `<g clip-path="url(#pk)"><rect x="70" y="0" width="80" height="130" fill="url(#pa)"/><rect x="150" y="0" width="80" height="130" fill="url(#pb)"/>
-  <g filter="url(#pz)">${ln('M82 92Q116 104 148 86',cx(.05),7)}${ln('M152 86Q184 104 218 92',cx(0),8)}${ln('M210 66Q200 84 190 92',cx(.75),4,'opacity=".8"')}</g></g>
-  ${ln('M148.8 32V82',HI,1.6,'opacity=".85"')}${ln('M151 32V82',K,1.5,'opacity=".55"')}
-  ${PA(pl,'url(#pc)',o2)}${PA(body,'none',O)}
-  ${PA('M124 16Q150 36 176 16L172 9Q150 27 128 9Z','url(#pe)',O)}
-  ${[[96,204,120],[92,208,137]].map(([a,b,y])=>{const d=`M${a} ${y}Q150 ${y+18} ${b} ${y}`,t=(c,w,dy,o=1)=>ln(d,c,w,`transform="translate(0 ${dy})" stroke-linecap="butt" opacity="${o}"`);
-   return ln(`M${a-1.5} ${y}Q150 ${y+18} ${b+1.5} ${y}`,K,19,'stroke-linecap="butt"')+t(cx(.3),13,0)+t(cx(.8),5,-3.5)+t(HI,2.2,-4)+t(cx(.05),2.6,.6)+t(cx(.6),2.4,4.6,.8)}).join('')}
-  ${rivet(110,24,2.6)}${rivet(190,24,2.6)}${rivet(104,123,2)}${rivet(196,123,2)}${rivet(100,140,2)}${rivet(200,140,2)}
-  ${gl(109,44,9)}${gl(150,84,4.5)}${gl(128,118,4)}`)},
-helmet(){const out='M98 132V62Q98 10 150 10Q202 10 202 62V132H170V90H190V70H110V90H130V132Z',op='M110 70H190V90H170V132H130V90H110Z';
- return sv('a helmet',142,CP('pk',out)+RU('pa',[[0,1],[.1,.97],[.34,.68],[.58,.42],[.82,.14],[1,.06]],126,34,96)+
-  G('pb',[[0,0,0],[.35,.1,.0],[.5,.5,.85],[1,.8,.9]],0,0,0,1)+G('pc',[[0,.9],[.35,1],[.48,.75],[.52,.1],[1,.4]])+BL('pz',2.5),
-  `<rect x="104" y="64" width="92" height="70" fill="#0d0d0d"/>
-  ${PA(out,'url(#pa)')}<g clip-path="url(#pk)"><rect x="98" y="92" width="34" height="42" fill="url(#pb)"/><rect x="168" y="92" width="34" height="42" fill="url(#pb)" opacity=".7"/>
-  <g filter="url(#pz)">${ln('M98 66H202',cx(.02),6,'opacity=".75"')}</g></g>
-  ${ln('M104 132V92',HI,1.4,'opacity=".7"')}
-  <g clip-path="url(#pk)">${PA(op,'none',`stroke="${cx(.85)}" stroke-width="7" stroke-linejoin="round"`)}${PA(op,'#0d0d0d',o2)}</g>
-  ${PA('M146 13Q150 8 154 13V70H146Z','url(#pc)',o2)}${PA(out,'none',O)}
-  ${[[104,102],[104,120],[196,102],[196,120],[118,60],[182,60]].map(([x,y])=>rivet(x,y,2.4)).join('')}
-  ${gl(124,32,9)}${gl(113,112,4)}${gl(148,22,3.5)}`)},
-goblet(){return sv('a goblet',152,G('pa',[[0,.25],[.08,.48],[.2,.92],[.27,1],[.33,1],[.35,.1],[.6,.3],[.82,.6],[.93,.86],[1,.4]])+
-  G('pb',[[0,.05],[.5,.2],[.8,.55],[1,.85]])+G('pc',[[0,.6],[.25,1],[.4,1],[.44,.12],[.75,.4],[1,.7]]),
-  `${PA('M106 16C104 52 122 78 150 80C178 78 196 52 194 16Z','url(#pa)',O)}
-  <ellipse cx="150" cy="16" rx="44" ry="8" fill="url(#pb)" ${O}/>${ln('M108 17Q150 30 192 17',HI,1.2,'opacity=".6"')}
-  ${ln('M108 38Q150 53 192 38',K,1.6,'opacity=".7"')}${ln('M111 46Q150 60 189 46',K,1.6,'opacity=".7"')}
-  ${[118,134,150,166,182].map((x,i)=>`<circle cx="${x}" cy="${[45.5,49,50.5,49,45.5][i]}" r="2" fill="${cx(i<2?.95:.3)}" stroke="${K}" stroke-width=".8"/>`).join('')}
-  ${PA('M143 79L145 110H155L157 79Z','url(#pc)',O)}<ellipse cx="150" cy="93" rx="14" ry="7.5" fill="url(#pc)" ${O}/>
-  ${PA('M145 108H155C160 114 184 122 188 138Q150 152 112 138C116 122 140 114 145 108Z','url(#pa)',O)}${ln('M116 136Q150 147 184 136',K,1.4,'opacity=".5"')}
-  ${gl(130,32,9)}${gl(144,91,4)}${gl(133,126,4.5)}`)},
-// ---------- Skin ----------
-// Proportions: eyes halfway down the head and one eye-width apart, nose base halfway from eyes to chin, ears from brow to nose base.
-face(){const head='M150 14C175 14 191 32 191 58C191 72 189 86 183 99C177 113 165 127 150 129C135 127 123 113 117 99C111 86 109 72 109 58C109 32 125 14 150 14Z',HR='#33241a',
- eye=(x,s)=>{const d=`M${x-9} 69Q${x-3*s} 62.5 ${x+9} 69Q${x} 73.5 ${x-9} 69Z`;return`<clipPath id="pe${s>0?1:2}"><path d="${d}"/></clipPath>${PA(d,'#efe7da')}<g clip-path="url(#pe${s>0?1:2})"><circle cx="${x}" cy="67.6" r="4.3" fill="#4a3524"/><circle cx="${x}" cy="67.6" r="1.9" fill="#120c08"/><rect x="${x-10}" y="60" width="20" height="5.5" fill="#000" opacity=".28"/></g><circle cx="${x-1.4}" cy="66.3" r="1" fill="#fff"/>${ln(`M${x-9.6} 69.2Q${x-3*s} 62 ${x+9.6} 69`,K,2.1)}${ln(`M${x-7} 71.4Q${x} 74 ${x+7.5} 70.8`,cx(.12),1,'opacity=".7"')}`};
- return sv('a face',166,CP('pk',head)+BL('pz',4.5)+BL('py',2)+BL('px',1)+G('pa',[[0,.08],[.22,.3],[.5,.6],[1,.5]],0,0,0,1)+G('pb',[[0,.85],[.5,.6],[1,.3]],0,0,1,.3),
-  `${PA('M132 112V138C120 146 98 150 78 156V166H222V156C202 150 180 146 168 138V112Z','url(#pb)',O)}
-  <g filter="url(#py)">${PA('M133 118H167V134Q150 142 133 134Z',cx(.1),'opacity=".85"')}${ln('M136 136Q128 148 106 153',cx(.9),3,'opacity=".7"')}${ln('M164 136Q172 148 194 153',cx(.75),3,'opacity=".5"')}${ln('M139 124L146 146',cx(.25),2.5,'opacity=".6"')}${ln('M161 124L154 146',cx(.2),2.5,'opacity=".6"')}</g>
-  ${PA('M110 62C103 59 100 66 102 76C104 86 108 93 113 92Z',cx(.5),o2)}${ln('M106 68Q104 76 109 86',cx(.15),1.4)}
-  ${PA('M190 62C197 59 200 66 198 76C196 86 192 93 187 92Z',cx(.28),o2)}${ln('M194 68Q196 76 191 86',cx(.05),1.4)}
-  ${PA(head,cx(.56))}<g clip-path="url(#pk)"><g filter="url(#pz)">
-  ${el(143,42,24,11,.9)}${el(191,78,13,42,.1)}${el(110,80,7,30,.34)}${el(133,68,12,7,.24)}${el(167,68,12,7,.17)}
-  ${el(129,87,10,5.5,.93)}${el(172,87,9,5.5,.72)}${el(126,105,7,10,.3)}${el(176,106,9,11,.15)}${el(150,122,9,4.5,.9)}</g>
-  <g filter="url(#py)">${el(141,36,10,4,1)}${PA('M147.6 62Q146.6 80 146.8 94H151.6Q151.4 78 151.6 62Z',cx(.97))}${PA('M152 68Q152.6 82 152.4 95H157Q156.4 82 155.4 68Z',cx(.26))}
-  ${el(150,102.2,8.5,2.2,.06)}${el(142,96.5,3,2.6,.5)}${el(158.5,96.5,3,2.6,.22)}${el(150,116.6,8,2,.16)}</g>
-  <circle cx="149" cy="95" r="2.6" fill="${HI}" opacity=".75" filter="url(#px)"/></g>
-  ${PA('M107 66C101 30 124 6 150 6C176 6 199 30 193 66C191 50 185 40 176 34C162 38 140 37 126 31C116 38 110 50 107 66Z',HR,O)}
-  <g filter="url(#px)">${ln('M124 20Q138 11 156 12','#6a503a',2.2,'opacity=".8"')}${ln('M120 28Q126 22 134 19','#6a503a',1.6,'opacity=".6"')}</g>
-  ${PA('M122 61.5Q131 55.5 142.5 59.5L142 62.2Q131 59.4 122.6 63.6Z',HR)}${PA('M178 61.5Q169 55.5 157.5 59.5L158 62.2Q169 59.4 177.4 63.6Z',HR)}
-  ${eye(133,1)}${eye(167,-1)}
-  ${ln('M142.4 97.6Q144.6 100.6 147.6 99.6Q150 101.2 152.4 99.6Q155.4 100.6 157.6 97.6',cx(0),1.7)}
-  ${PA('M139 109.4Q145 106.4 150 108Q155 106.4 161 109.4Q150 111.6 139 109.4Z',cx(.3))}${PA('M139 109.4Q150 111.6 161 109.4Q156 115.4 150 115.4Q144 115.4 139 109.4Z',cx(.62))}
-  ${ln('M138.4 109.4Q150 112 161.6 109.4',cx(0),1.6)}${ln('M145 113Q150 114.4 155 113',cx(.97),1.4,'opacity=".9"')}
-  ${ln('M109 58C109 72 111 86 117 99C123 113 135 127 150 129C165 127 177 113 183 99C189 86 191 72 191 58',K,3)}`)},
-// Back of a hand: palm about as long as the middle finger, knuckles on an arc, thumb set low on the side and reaching the index knuckle.
-hand(){const F=[[126.5,97,49,15,-6],[143.5,92,57,15.5,-2],[160.5,95,53,15,3],[176,103,41,13,9]],
- fin=([x,by,len,w,a])=>{const y=by-len,h=len+10,c1=y+len*.29,c2=y+len*.58,nw=w*.6;
-  return`<g transform="rotate(${a} ${x} ${by})"><rect x="${x-w/2}" y="${y}" width="${w}" height="${h}" rx="${w/2}" fill="url(#pa)" ${O}/>
-  <rect x="${x-nw/2}" y="${y+2.6}" width="${nw}" height="${len*.17}" rx="${nw*.45}" fill="${cx(.9)}" stroke="${cx(.32)}" stroke-width=".9"/>
-  ${[c1,c1+2.6,c2,c2+2.8].map((c,i)=>ln(`M${x-w*.3} ${c}Q${x} ${c+2.2} ${x+w*.3} ${c}`,cx(.05),i%2?1:1.4,`opacity="${i%2?.4:.7}"`)).join('')}
-  <ellipse cx="${x-1}" cy="${c2+1.4}" rx="${w*.26}" ry="2.4" fill="${cx(.98)}" opacity=".6" filter="url(#py)"/></g>`},
- body='M127 172L128 152C121 148 114 142 110 134L109 112Q116 110 118 101C121 95 130 92 135 93C142 88 152 88 159 91C166 90 174 94 179 99C184 103 185 108 185 114C185 128 181 142 173 152L174 172Z';
- return sv('the back of a hand',172,G('pa',[[0,.34],[.28,.88],[.44,1],[.74,.56],[1,.14]])+G('pb',[[0,.84],[.4,.64],[1,.24]],0,0,1,.5)+CP('pk',body)+BL('pz',3)+BL('py',1.3),
-  `<g transform="rotate(-38 120 140)"><rect x="110.5" y="82" width="19" height="66" rx="9.5" fill="url(#pa)" ${O}/><rect x="114.4" y="84.8" width="11.2" height="10" rx="4.8" fill="${cx(.9)}" stroke="${cx(.32)}" stroke-width=".9"/>
-  ${ln('M114 108Q120 110.4 126 108',cx(.05),1.4,'opacity=".7"')}${ln('M114 111Q120 113 126 111',cx(.05),1,'opacity=".4"')}</g>
-  ${F.map(fin).join('')}${PA(body,'url(#pb)')}<g clip-path="url(#pk)"><g filter="url(#pz)">
-  ${[[127,100,141,152],[144,96,147.5,152],[161,99,154,152],[176,106,161,152]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.94),3,'opacity=".8"')).join('')}
-  ${[[135.5,104,144.5,150],[152.5,102,151,150],[169,106,158,150]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.18),3.2,'opacity=".7"')).join('')}
-  ${el(185,130,7,30,.06)}${ln('M108 116Q112 130 126 146',cx(.94),5,'opacity=".8"')}${ln('M119 110Q120 128 129 146',cx(.22),3.6,'opacity=".6"')}${el(150,170,26,7,.3)}${el(139,160,8,9,.88)}${el(169,151,5,5,.92)}</g>
-  <g filter="url(#py)">${[[127.5,99,5.4,3.4],[144.5,95,5.8,3.6],[161,97.6,5.4,3.4],[176.5,105,4.6,3.2]].map(([x,y,a,b])=>el(x,y,a,b,.98,'opacity=".75"')).join('')}
-  ${[[136,96.5],[152.5,94],[169,98.5]].map(([x,y])=>ln(`M${x} ${y-4}V${y+5}`,cx(.05),2.2,'opacity=".6"')).join('')}</g></g>
-  ${ln('M127 172L128 152Q121 150 113.5 145.5',K,3)}${ln('M109.6 111.6Q116 110 118 101',K,3)}${ln('M185 112C185.5 127 181 142 173 152L174 172',K,3)}
-  ${ln('M130 153.4Q150 158.4 171 153.4',cx(.05),1.4,'opacity=".55"')}`)},
-// Bare torso from the front: shoulders about twice the waist, pecs to a third of the way down, six abdominal blocks either side of the midline.
-torso(){const t='M136 4V16C124 22 104 24 88 28C72 32 62 46 62 62C62 76 66 90 70 102L92 102C92 92 94 84 97 78C99 100 104 124 108 140C110 152 110 162 110 172H190C190 162 190 152 192 140C196 124 201 100 203 78C206 84 208 92 208 102L230 102C234 90 238 76 238 62C238 46 228 32 212 28C196 24 176 22 164 16V4Z';
- return sv('a bare torso',172,CP('pk',t)+BL('pz',5)+BL('py',2.2)+BL('px',1),
-  `${PA(t,cx(.56))}<g clip-path="url(#pk)"><g filter="url(#pz)">
-  ${el(124,56,22,11,.93)}${el(176,57,21,11,.84)}${el(78,46,13,11,.95)}${el(222,48,12,11,.8)}${el(74,78,6,18,.85)}${el(228,80,6,18,.5)}
-  ${el(150,8,16,7,.1)}${el(216,104,20,72,.1,'opacity=".8"')}${el(104,122,7,34,.26)}${el(197,122,8,36,.12)}${el(88,92,6,14,.14)}${el(212,92,6,14,.08)}
-  ${el(150,166,44,9,.22)}</g>
-  <g filter="url(#py)">${ln('M99 82Q124 96 148 84',cx(.06),4.6,'opacity=".85"')}${ln('M152 84Q176 96 201 82',cx(.03),5,'opacity=".9"')}
-  ${ln('M150 38V84',cx(.14),3.4,'opacity=".75"')}${ln('M150 90V162',cx(.1),3.4,'opacity=".8"')}
-  ${ln('M96 40Q100 58 97 76',cx(.14),3.6,'opacity=".7"')}${ln('M204 40Q200 58 203 76',cx(.06),3.8,'opacity=".75"')}
-  ${ln('M146 31Q124 26 100 30',cx(.97),3,'opacity=".9"')}${ln('M154 31Q176 26 200 30',cx(.88),3,'opacity=".8"')}${ln('M146 35.5Q124 31 102 35',cx(.2),2.4,'opacity=".6"')}${ln('M154 35.5Q176 31 198 35',cx(.14),2.4,'opacity=".6"')}
-  ${[[104,.6],[121,.7],[138,.75]].map(([y,o])=>ln(`M131 ${y+2}Q141 ${y-1} 149 ${y+1}`,cx(.1),2.6,`opacity="${o}"`)+ln(`M151 ${y+1}Q159 ${y-1} 169 ${y+2}`,cx(.06),2.6,`opacity="${o}"`)).join('')}
-  ${[[96,.95,.8],[113,.9,.72],[130,.8,.62],[148,.68,.52]].map(([y,a,b])=>el(140.5,y,7,5.6,a,'opacity=".9"')+el(159.5,y,7,5.6,b,'opacity=".9"')).join('')}
-  ${ln('M129 92Q124 120 128 150',cx(.2),2.6,'opacity=".55"')}${ln('M171 92Q176 120 172 150',cx(.12),2.6,'opacity=".6"')}
-  ${[100,110,120].map((y,i)=>ln(`M110 ${y}L120 ${y+5}`,cx(.9),2.2,`opacity="${.6-i*.12}"`)).join('')}${el(150,24,5,3,.12)}</g>
-  <g filter="url(#px)">${el(120,51,10,4,1,'opacity=".85"')}${el(76,41,7,4,1,'opacity=".9"')}${el(172,52,8,3.4,1,'opacity=".6"')}</g>
-  <ellipse cx="150" cy="154" rx="2.2" ry="3.2" fill="${cx(0)}" opacity=".85"/><circle cx="124" cy="73" r="2.3" fill="${cx(.28)}"/><circle cx="176" cy="73.6" r="2.3" fill="${cx(.2)}"/></g>
-  ${ln('M97 78Q95 70 97 62',K,2.2,'opacity=".8"')}${ln('M203 78Q205 70 203 62',K,2.2,'opacity=".8"')}${PA(t,'none',O)}`)},
-// ---------- Zenithal: light from straight above ----------
-figure(){const cl='M120 46C98 70 86 108 76 138Q94 146 112 139Q130 148 150 140Q170 148 188 139Q206 146 224 138C214 108 202 70 180 46Z',hood='M150 6C177 6 188 30 183 50C176 60 124 60 117 50C112 30 123 6 150 6Z';
- return sv('a cloaked figure',152,CP('pk',cl)+G('pa',[[0,1],[.1,.88],[.32,.56],[.62,.3],[1,.04]],0,0,0,1)+RU('pb',[[0,1],[.28,.85],[.62,.45],[1,.12]],148,8,54)+BL('pz',3),
-  `${shadow(150,141,84,7)}${PA(cl,'url(#pa)')}<g clip-path="url(#pk)" filter="url(#pz)">
-  ${[[128,60,104,146,.02,7],[142,62,134,146,.04,6],[158,62,166,146,.04,6],[172,60,196,146,.02,7]].map(([a,b,c,d,f,w])=>ln(`M${a} ${b}Q${(a+c)/2+(a<150?-4:4)} ${(b+d)/2} ${c} ${d}`,cx(f),w,'opacity=".7"')).join('')}
-  ${[[122,50,96,100],[135,56,120,104],[165,56,180,104],[178,50,204,100]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.95),3,'opacity=".55"')).join('')}
-  ${el(120,52,14,5,1)}${el(180,52,14,5,1)}</g>
-  ${ln('M150 60V140',K,1.6,'opacity=".6"')}${PA(cl,'none',O)}
-  ${PA(hood,'url(#pb)',O)}<ellipse cx="150" cy="37" rx="15" ry="18" fill="#0d0d0d" ${o2}/>
-  <circle cx="150" cy="61" r="5" fill="${cx(.9)}" ${o2}/>`)},
-rock(){return sv('a rock',134,G('pa',[[0,1],[.5,.88],[1,.72]],0,0,1,1)+G('pb',[[0,.62],[1,.28]],0,0,0,1)+G('pc',[[0,.5],[1,.12]],0,0,0,1)+G('pd',[[0,.3],[1,0]],0,0,0,1),
-  `${shadow(158,116,104,8)}
-  ${PA('M80 72L104 40L118 60L110 116H70Z','url(#pb)',O)}${PA('M118 60L168 62L182 116H110Z','url(#pc)',O)}${PA('M168 62L226 52L246 86L238 116H182Z','url(#pd)',O)}
-  ${PA('M104 40L150 22L206 30L226 52L168 62L118 60Z','url(#pa)',O)}
-  ${ln('M105 41L118.5 59L168 61L225 51.5',HI,1.6,'opacity=".9"')}${ln('M150 24L160 44L168 61',K,1.2,'opacity=".35"')}${ln('M132 62L140 86L134 114',K,1.2,'opacity=".4"')}${ln('M200 58L206 84L198 114',K,1.2,'opacity=".4"')}${ln('M92 58L96 84',K,1.2,'opacity=".35"')}
-  ${PA('M224 104L240 92L262 96L270 116H222Z','url(#pc)',O)}${PA('M240 92L250 84L266 88L262 96Z','url(#pa)',o2)}
-  ${PA('M40 116L48 100L62 98L72 116Z','url(#pb)',O)}${PA('M48 100L54 94L64 94L62 98Z','url(#pa)',o2)}`)},
-cube(){return sv('a cube and a ball',140,G('pa',[[0,1],[1,.86]],0,0,1,1)+G('pb',[[0,.62],[1,.22]],0,0,0,1)+G('pc',[[0,.4],[1,.03]],0,0,0,1)+
-  RU('pd',[[0,1],[.14,.92],[.4,.62],[.66,.34],[.9,.08],[1,.03]],222,48,80),
-  `${shadow(104,124,62,7)}${shadow(222,124,42,6)}
-  ${PA('M104 18L160 42L104 66L48 42Z','url(#pa)',O)}${PA('M48 42L104 66V126L48 102Z','url(#pb)',O)}${PA('M104 66L160 42V102L104 126Z','url(#pc)',O)}
-  ${ln('M50 42.5L104 65.5L158 42.5',HI,1.4,'opacity=".8"')}
-  <circle cx="222" cy="86" r="38" fill="url(#pd)" ${O}/>`)},
-// ---------- Edge highlights: flat base colour, every edge in the first edge colour, upward edges in the next, corners dotted ----------
-plate(){const e1=S[Math.min(1,n-1)],e2=S[Math.min(2,n-1)],rv=(x,y)=>`<circle cx="${x}" cy="${y}" r="5" fill="${S[0]}" ${o2}/>${ln(`M${x-2.8} ${y-.5}A3 3 0 0 1 ${x+.5} ${y-2.8}`,e1,1.6)}<circle cx="${x-1.6}" cy="${y-1.6}" r="1" fill="${HI}"/>`;
- return sv('an armour plate',134,'',`${PA('M36 12H264L288 36V102L264 124H36L12 102V36Z',S[0],O)}
-  ${ln('M37 15.6H263L284.4 37V101L263 120.4H37L15.6 101V37Z',e1,3.6)}${ln('M15.6 74V37L37 15.6H263L284.4 37',e2,1.8)}
-  ${PA('M66 40H234L250 54V84L234 98H66L50 84V54Z','#000','opacity=".22"')}${ln('M66 40H234L250 54V84L234 98H66L50 84V54Z',K,2)}
-  ${ln('M64.5 36.6H235.5L253.4 52.5V85.5L235.5 101.4H64.5L46.6 85.5V52.5Z',e1,2.2)}${ln('M48.5 86L66 99.6H234L251.6 86',e2,1.4)}
-  ${PA('M150 48L172 69L150 90L128 69Z',S[0],o2)}${ln('M150 51L169 69L150 87L131 69Z',e1,2.4)}${ln('M131 69L150 51L169 69',e2,1.4)}<circle cx="150" cy="51" r="1.6" fill="${HI}"/>
-  ${[204,216,228].map(x=>`<rect x="${x}" y="56" width="6" height="26" rx="3" fill="#0d0d0d"/>${ln(`M${x+1} 83.5H${x+5}`,e1,1.6)}`).join('')}
-  ${rv(32,36)}${rv(268,36)}${rv(32,100)}${rv(268,100)}
-  ${[[37,15.6],[263,15.6],[15.6,37],[284.4,37],[66,36.6],[234,36.6]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="2" fill="${HI}"/>`).join('')}`)},
-pauldron(){const e1=S[Math.min(1,n-1)],e2=S[Math.min(2,n-1)],arch='M70 110C70 42 110 14 150 14C190 14 230 42 230 110',inn='M92 110C92 58 120 36 150 36C180 36 208 58 208 110';
- return sv('a pauldron',140,'',`${PA(arch+'Z',S[0],O)}${PA(inn+'Z','#000','opacity=".22"')}${ln(inn,K,2)}
-  ${ln('M73.6 108C73.6 45 112 17.6 150 17.6C188 17.6 226.4 45 226.4 108',e1,3.6)}${ln('M73.6 108C73.6 45 112 17.6 150 17.6C188 17.6 226.4 45 226.4 108',e2,1.8,'pathLength="100" stroke-dasharray="46 100" stroke-dashoffset="-27"')}
-  ${ln('M88.6 108C88.6 56 118 32.6 150 32.6C182 32.6 211.4 56 211.4 108',e1,2.2)}
-  ${PA('M150 58L174 78V100L150 84L126 100V78Z',S[0],o2)}${ln('M150 61L171.5 79V95.5L150 81L128.5 95.5V79Z',e1,2.2)}${ln('M128.5 79L150 61L171.5 79',e2,1.4)}
-  ${PA('M60 106H240V124Q150 136 60 124Z',S[0],O)}${ln('M63.6 109.6H236.4',e1,3.4)}${ln('M63.6 109.6H170',e2,1.6)}
-  ${[82,116,150,184,218].map(x=>`<circle cx="${x}" cy="${118+(x===150?2:x===116||x===184?1.2:0)}" r="3.4" fill="${S[0]}" stroke="${K}" stroke-width="1.4"/><circle cx="${x-1}" cy="${117+(x===150?2:x===116||x===184?1.2:0)}" r="1.1" fill="${e2}"/>`).join('')}
-  ${[[150,17.6],[150,61],[64,109.6],[150,32.6]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="2" fill="${HI}"/>`).join('')}`)},
-hull(){const e1=S[Math.min(1,n-1)],e2=S[Math.min(2,n-1)],chip=(x,y,s=1)=>`${PA(`M${x} ${y}l${5*s} ${-2*s} ${4*s} ${3*s} ${-3*s} ${4*s} ${-6*s} ${-1*s}z`,'#0d0d0d','opacity=".75"')}${ln(`M${x} ${y+1.5*s}l${6*s} ${1.5*s} ${3*s} ${-3.5*s}`,e1,1.1)}`;
- return sv('a tank hull panel',134,'',`${PA('M8 62L62 14H292V120H8Z',S[0],O)}
-  ${ln('M62 16V118M196 16V118',K,2,'opacity=".6"')}${ln('M63.6 20V116M197.6 20V116',e1,1.3,'opacity=".9"')}
-  ${ln('M11.6 62.8L63 17.6H288.4',e1,3.6)}${ln('M11.6 62.8L63 17.6H150',e2,1.8)}
-  ${[0,1,2,3].map(i=>`<rect x="82" y="${40+i*14}" width="92" height="8" rx="2" fill="#0d0d0d"/>${ln(`M83 ${49.4+i*14}H173`,e1,1.6)}${ln(`M83 ${49.4+i*14}H120`,e2,.9)}`).join('')}
-  <rect x="214" y="38" width="62" height="50" rx="10" fill="${S[0]}" ${o2}/><rect x="216.8" y="40.8" width="56.4" height="44.4" rx="8" fill="none" stroke="${e1}" stroke-width="2.4"/>
-  ${ln('M217 62V49Q217 41 225 41H265Q273 41 273 49',e2,1.3)}<rect x="232" y="58" width="26" height="8" rx="4" fill="${S[0]}" ${o2}/>${ln('M235 59.6H255',e1,1.4)}
-  ${[76,100,124,148,172,214,238,262,282].map(x=>`<circle cx="${x}" cy="27" r="2.6" fill="${S[0]}" stroke="${K}" stroke-width="1.2"/><circle cx="${x-.8}" cy="26.2" r="1" fill="${e1}"/>`).join('')}
-  ${[76,100,124,148,172,214,238,262,282].map(x=>`<circle cx="${x}" cy="108" r="2.6" fill="${S[0]}" stroke="${K}" stroke-width="1.2"/><circle cx="${x-.8}" cy="107.2" r="1" fill="${e1}"/>`).join('')}
-  ${chip(28,84)}${chip(42,100,.8)}${chip(110,100,.9)}${chip(204,96,.8)}${chip(30,60,.7)}${chip(246,100,.7)}
-  ${[[63,17.6],[217.5,42],[11.6,62.8]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="2" fill="${HI}"/>`).join('')}`)},
-// ---------- Glazes: smooth blends ----------
-cloak(){const cl='M90 14Q150 34 210 14L238 128Q226 140 212 130Q198 142 184 131Q167 143 150 132Q133 143 116 131Q102 142 88 130Q74 140 62 128Z',k=5,tw=128/k,bw=176/k;
- return sv('a cloak',150,CP('pk',cl)+G('pa',[[0,.03],[.2,.3],[.42,.82],[.54,1],[.68,.66],[.86,.28],[1,.03]])+U('pb',[[0,'#000',0],[.55,'#000',0],[1,'#000',.38]],0,16,0,140)+
-  U('pc',[[0,'#fff',.14],[.3,'#fff',0]],0,16,0,140)+G('pd',[[0,'#d8c9a0'],[.45,'#9c8858'],[1,'#4a3c22']],0,0,0,1),
-  `<g clip-path="url(#pk)">${Array.from({length:k},(_,i)=>PA(`M${86+i*tw-.5} 8H${86+(i+1)*tw+.5}L${62+(i+1)*bw+.5} 146H${62+i*bw-.5}Z`,'url(#pa)')).join('')}
-  <rect x="56" y="14" width="190" height="132" fill="url(#pb)"/><rect x="56" y="14" width="190" height="132" fill="url(#pc)"/></g>${PA(cl,'none',O)}
-  ${ln('M96 18Q150 46 204 18','#4a3c22',3.4)}${ln('M96 18Q150 46 204 18','#d8c9a0',1.4,'stroke-dasharray="3 3"')}<circle cx="93" cy="16" r="8" fill="url(#pd)" ${O}/><circle cx="207" cy="16" r="8" fill="url(#pd)" ${O}/><circle cx="91" cy="14" r="2" fill="#fff" opacity=".8"/><circle cx="205" cy="14" r="2" fill="#fff" opacity=".8"/>`)},
-panel(){return sv('a flat panel',124,G('pa',[[0,1],[.18,.9],[.5,.5],[.82,.14],[1,0]],0,0,1,1)+G('pb',[[0,.7],[1,.2]],0,0,1,1),
-  `<rect x="30" y="8" width="240" height="108" rx="12" fill="url(#pb)" ${O}/><rect x="44" y="22" width="212" height="80" rx="6" fill="url(#pa)" ${o2}/>
-  ${[[37,15],[263,15],[37,109],[263,109]].map(([x,y])=>rivet(x,y,2.8)).join('')}`)},
-// ---------- Gems: dark towards the light, bright where light comes out the far side, hard glint ----------
-round(){return A._gem('a round gem','M150 25A40 40 0 1 1 149.9 25Z',`<circle cx="150" cy="65" r="51" fill="url(#ps)" ${O}/>`,[150,65,40],132)},
-tear(){return A._gem('a teardrop gem','M150 20Q188 66 180 90A31 31 0 0 1 120 90Q112 66 150 20Z',PA('M150 4Q200 62 191 92A42 42 0 0 1 109 92Q100 62 150 4Z','url(#ps)',O),[150,84,34],140)},
-_gem(lab,d,setting,[x,y,r],h){const m=n-1;
- return sv(lab,h,CP('pk',d)+BL('pz',3)+G('ps',[[0,'#d8c9a0'],[.45,'#9c8858'],[1,'#4a3c22']],0,0,1,1)+
-  U('pa',S.slice(0,m).map((c,i)=>[(i/Math.max(1,m-1)).toFixed(3),c]),x-r*.6,y-r*.8,x+r*.6,y+r*.8),
-  `${setting}${PA(d,'url(#pa)')}<g clip-path="url(#pk)"><g filter="url(#pz)">${ln(`M${x-r*.2} ${y+r*.78}Q${x+r*.62} ${y+r*.62} ${x+r*.8} ${y-r*.1}`,S[m-1],r*.2,'opacity=".9"')}</g>
-  ${ln(`M${x-r*.7} ${y+r*.1}Q${x-r*.62} ${y-r*.5} ${x-r*.1} ${y-r*.72}`,S[0],r*.16,'opacity=".5"')}</g>${PA(d,'none',O)}
-  <ellipse cx="${x-r*.36}" cy="${y-r*.36}" rx="${r*.2}" ry="${r*.13}" fill="${HI}" transform="rotate(-40 ${x-r*.36} ${y-r*.36})"/><circle cx="${x-r*.56}" cy="${y-r*.08}" r="${r*.06}" fill="${HI}"/>
-  <circle cx="${x+r*.44}" cy="${y+r*.46}" r="${r*.07}" fill="${HI}" opacity=".9"/>`)},
-square(){const m=n-1,q=f=>cx(f*(m-1)/Math.max(1,m)),o='M118 16H182L206 40V90L182 114H118L94 90V40Z',t='M128 38H172L184 50V80L172 92H128L116 80V50Z';
- return sv('a square cut gem',130,G('ps',[[0,'#d8c9a0'],[.45,'#9c8858'],[1,'#4a3c22']],0,0,1,1)+U('pa',S.slice(0,m).map((c,i)=>[(i/Math.max(1,m-1)).toFixed(3),c]),120,42,180,88),
-  `<rect x="84" y="6" width="132" height="118" rx="10" fill="url(#ps)" ${O}/>
-  ${PA('M118 16H182L172 38H128Z',q(.05),o2)}${PA('M94 40L118 16L128 38L116 50Z',q(0),o2)}${PA('M94 40L116 50V80L94 90Z',q(.15),o2)}${PA('M182 16L206 40L184 50L172 38Z',q(.35),o2)}
-  ${PA('M94 90L116 80L128 92L118 114Z',q(.5),o2)}${PA('M206 40V90L184 80V50Z',q(.75),o2)}${PA('M118 114L128 92H172L182 114Z',q(.9),o2)}${PA('M206 90L182 114L172 92L184 80Z',q(1),o2)}
-  ${PA(t,'url(#pa)',o2)}${PA(o,'none',O)}
-  ${PA('M124 52L138 42H150L124 62Z',HI)}<circle cx="176" cy="84" r="2.6" fill="${HI}" opacity=".9"/>${ln('M186 100L196 90',HI,1.6,'opacity=".8"')}`)},
-// ---------- OSL: the lightest step is the source, the darkest is the surface the light does not reach ----------
-_lit(id,x,y,r){return RU(id,S.slice().reverse().map((c,i)=>[(i/Math.max(1,n-1)).toFixed(3),c,i===n-1?0:1]),x,y,r)},
-_wall(h,fl){let s='';for(let r=0,y=10;y<fl;r++,y+=18){s+=ln(`M6 ${y}H294`,K,1.2,'opacity=".3"');for(let x=(r%2?24:52);x<294;x+=56)s+=ln(`M${x} ${y}V${Math.min(fl,y+18)}`,K,1.2,'opacity=".3"')}return s},
-glow(){return sv('a glowing orb lighting a wall',140,CP('pk','M18 4H282Q296 4 296 18V122Q296 136 282 136H18Q4 136 4 122V18Q4 4 18 4Z')+A._lit('pa',150,70,150)+BL('pz',5)+
-  G('pl',[[0,0],[.55,0],[.8,.55],[1,.85]])+G('pr',[[0,.85],[.2,.55],[.45,0],[1,0]]),
-  `<g clip-path="url(#pk)"><rect x="4" y="4" width="292" height="132" fill="${S[0]}"/><rect x="4" y="4" width="292" height="132" fill="url(#pa)"/>${A._wall(140,110)}
-  <rect x="4" y="110" width="292" height="26" fill="#000" opacity=".25"/>${ln('M4 110H296',K,1.6,'opacity=".5"')}
-  <rect x="40" y="18" width="30" height="118" fill="url(#pl)" ${o2}/><rect x="34" y="14" width="42" height="10" rx="2" fill="url(#pl)" ${o2}/>
-  <rect x="230" y="18" width="30" height="118" fill="url(#pr)" ${o2}/><rect x="224" y="14" width="42" height="10" rx="2" fill="url(#pr)" ${o2}/>
-  <circle cx="150" cy="70" r="22" fill="${cx(.92)}" filter="url(#pz)" opacity=".9"/></g>
-  ${PA('M138 112L142 92H158L162 112Z','#0d0d0d',o2)}${ln('M141 94H159',cx(.85),1.6)}
-  <circle cx="150" cy="70" r="14" fill="${HI}" stroke="${cx(.75)}" stroke-width="2.5"/>
-  <rect x="4" y="4" width="292" height="132" rx="14" fill="none" ${O}/>`)},
-lantern(){return sv('a lantern lighting a wall and a crate',140,CP('pk','M18 4H282Q296 4 296 18V122Q296 136 282 136H18Q4 136 4 122V18Q4 4 18 4Z')+A._lit('pa',104,58,170)+BL('pz',5)+
-  G('pb',[[0,.9],[.5,.6],[1,.3]],0,0,1,.4)+G('pc',[[0,.7],[1,.25]],0,0,1,0)+G('pd',[[0,.35],[.6,.05],[1,0]]),
-  `<g clip-path="url(#pk)"><rect x="4" y="4" width="292" height="132" fill="${S[0]}"/><rect x="4" y="4" width="292" height="132" fill="url(#pa)"/>${A._wall(140,112)}
-  <rect x="4" y="112" width="292" height="24" fill="#000" opacity=".22"/>${ln('M4 112H296',K,1.6,'opacity=".5"')}
-  ${PA('M176 74L196 64H250L232 74Z','url(#pc)',o2)}${PA('M176 74H232V126H176Z','url(#pb)',o2)}${PA('M232 74L250 64V114L232 126Z','url(#pd)',o2)}
-  ${ln('M180 78L228 122M228 78L180 122',K,1.5,'opacity=".45"')}${ln('M177.4 76V124',cx(.95),1.6,'opacity=".9"')}
-  ${PA('M232 126L250 114L296 122V136H240Z','#000','opacity=".4"')}
-  <circle cx="104" cy="58" r="24" fill="${cx(.92)}" filter="url(#pz)" opacity=".85"/></g>
-  ${ln('M104 4V24',K,2.5)}${ln('M94 34Q104 20 114 34',K,2.5)}
-  ${PA('M88 40L94 32H114L120 40Z','#141414',o2)}<rect x="92" y="40" width="24" height="34" rx="2" fill="${HI}" ${o2}/>${ln('M100 40V74M108 40V74',K,1.6)}
-  ${PA('M88 74H120L116 82H92Z','#141414',o2)}${ln('M90 75.6H118',cx(.85),1.4)}
-  <rect x="4" y="4" width="292" height="132" rx="14" fill="none" ${O}/>`)},
-lens(){const hd='M96 14Q150 0 204 14Q218 60 204 98L182 134H118L96 98Q82 60 96 14Z';
- return sv('glowing eye lenses',142,CP('pk',hd)+A._lit('pa',124,60,58)+A._lit('pb',176,60,58)+BL('pz',3),
-  `${PA(hd,S[0])}<g clip-path="url(#pk)"><rect x="80" y="0" width="70" height="140" fill="url(#pa)"/><rect x="150" y="0" width="70" height="140" fill="url(#pb)"/>
-  ${ln('M100 44Q150 26 200 44',K,2,'opacity=".6"')}${ln('M150 8V40',K,2,'opacity=".5"')}${ln('M118 134L124 98H176L182 134',K,2,'opacity=".6"')}
-  ${[132,144,156,168].map(x=>`<rect x="${x-3}" y="104" width="6" height="22" rx="3" fill="#0d0d0d" opacity=".85"/>`).join('')}
-  <g filter="url(#pz)">${PA('M108 54L142 50L140 68L112 66Z',cx(.9),'opacity=".8"')}${PA('M192 54L158 50L160 68L188 66Z',cx(.9),'opacity=".8"')}</g></g>
-  ${PA('M110 55L141 51L139 67L113 65Z',HI,`stroke="${cx(.7)}" stroke-width="2" stroke-linejoin="round"`)}${PA('M190 55L159 51L161 67L187 65Z',HI,`stroke="${cx(.7)}" stroke-width="2" stroke-linejoin="round"`)}
-  ${ln('M107 50L144 46',K,3)}${ln('M193 50L156 46',K,3)}${PA(hd,'none',O)}`)}
-};
-return A[v]&&v[0]!=='_'?A[v]():''}
+function prevObj(st){if(!st.length)return'';const S=[...st].sort((a,b)=>a.p.lab[0]-b.p.lab[0]).map(x=>x.p.h),n=S.length,L=[...S].reverse(),off=(i,m)=>(i/Math.max(1,m)).toFixed(3),
+// pk(f): the step a fraction f of the way from darkest to lightest. g: a gradient through any colour list, first colour at (x1,y1).
+pk=f=>S[Math.round(Math.max(0,Math.min(1,f))*(n-1))],g=(id,C,a,b,c,d)=>`<linearGradient id="${id}" x1="${a}" y1="${b}" x2="${c}" y2="${d}">${C.map((h,i)=>`<stop offset="${off(i,C.length-1)}" stop-color="${h}"/>`).join('')}</linearGradient>`,
+// lin: lightest at (x1,y1). rev: darkest there. cyl: dark edges with a light stripe at pk, like a polished tube.
+lin=(id,a,b,c,d,r)=>`<linearGradient id="${id}" x1="${a}" y1="${b}" x2="${c}" y2="${d}">${(r?S:L).map((h,i)=>`<stop offset="${off(i,n-1)}" stop-color="${h}"/>`).join('')}</linearGradient>`,
+cyl=(id,pk=.32)=>`<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0">${S.map((h,i)=>`<stop offset="${(pk*i/Math.max(1,n-1)).toFixed(3)}" stop-color="${h}"/>`).join('')}${L.slice(1).map((h,i)=>`<stop offset="${(pk+(1-pk)*(i+1)/Math.max(1,n-1)).toFixed(3)}" stop-color="${h}"/>`).join('')}</linearGradient>`,
+rad=(id,cx,cy,r)=>`<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}">${L.map((h,i)=>`<stop offset="${off(i,n-1)}" stop-color="${h}"/>`).join('')}</radialGradient>`,
+gl=(x,y,r=7)=>`<path d="M${x} ${y-r}L${x+r*.25} ${y-r*.25}L${x+r} ${y}L${x+r*.25} ${y+r*.25}L${x} ${y+r}L${x-r*.25} ${y+r*.25}L${x-r} ${y}L${x-r*.25} ${y-r*.25}Z" fill="${S[n-1]}"/>`,
+O='stroke="#1b1b1b" stroke-width="3" stroke-linejoin="round"',o2='stroke="#1b1b1b" stroke-width="2" stroke-linejoin="round"',sv=(lab,h,b)=>`<svg class="blade" viewBox="0 0 300 ${h}" role="img" aria-label="Ramp preview on ${lab}">${b}</svg>`,v=pvGet(),E=S[Math.min(2,n-1)];
+if(v==='axe')return sv('an axe',110,`<defs>${lin('nxa',0,0,.3,1)}${lin('nxb',0,0,.3,1,1)}${cyl('nxc')}</defs><rect x="12" y="70" width="270" height="12" rx="5" fill="#5a3a1a" stroke="#1b1b1b" stroke-width="2.5"/><rect x="4" y="66" width="14" height="20" rx="4" fill="url(#nxc)" ${O}/><path d="M236 64Q226 46 194 32Q240 0 296 18Q270 40 260 64Z" fill="url(#nxa)" ${O}/><path d="M194 32Q240 0 296 18L289 27Q244 12 205 38Z" fill="url(#nxb)" stroke="#1b1b1b" stroke-width="2" stroke-linejoin="round"/><path d="M241 88L248 106L255 88Z" fill="url(#nxa)" ${O}/><rect x="232" y="62" width="30" height="28" rx="4" fill="url(#nxc)" ${O}/>${gl(222,24)}${gl(240,70,4)}`);
+if(v==='shield')return sv('a shield',124,`<defs>${lin('nsa',0,0,.9,1)}${lin('nsb',0,0,.9,1,1)}${rad('nsc',.35,.3,.75)}</defs><path d="M92 8H208Q211 76 150 118Q89 76 92 8Z" fill="url(#nsb)" ${O}/><path d="M104 19H196Q197 72 150 104Q103 72 104 19Z" fill="url(#nsa)" ${O}/><path d="M150 19V104M104 50H195" stroke="#1b1b1b" stroke-width="2" opacity=".35"/><circle cx="150" cy="52" r="15" fill="url(#nsc)" ${O}/>${gl(118,30)}${gl(145,46,4)}`);
+if(v==='armour')return sv('a breastplate',124,`<defs><clipPath id="nac"><path d="M96 12Q150 30 204 12L220 44Q210 78 200 96H100Q90 78 80 44Z"/></clipPath>${lin('naa',1,0,0,1)}${lin('nab',0,1,1,0)}${cyl('nad')}${cyl('nan',.4)}</defs><g clip-path="url(#nac)"><rect x="70" y="0" width="80" height="100" fill="url(#naa)"/><rect x="150" y="0" width="80" height="100" fill="url(#nab)"/></g><path d="M96 12Q150 30 204 12L220 44Q210 78 200 96H100Q90 78 80 44Z" fill="none" ${O}/><path d="M150 22V96" stroke="#1b1b1b" stroke-width="2"/><path d="M118 8Q150 22 182 8L186 16Q150 34 114 16Z" fill="url(#nan)" ${O}/><rect x="98" y="94" width="104" height="13" rx="3" fill="url(#nad)" ${O}/><rect x="104" y="105" width="92" height="13" rx="3" fill="url(#nad)" ${O}/>${gl(146,30,6)}${gl(112,44)}`);
+if(v==='helmet')return sv('a helmet',108,`<defs>${rad('nha',.36,.28,.8)}${cyl('nhb')}${lin('nhc',0,0,0,1)}</defs><path d="M94 88Q92 14 150 12Q208 14 206 88Z" fill="url(#nha)" ${O}/><path d="M146 12H154V60H146Z" fill="url(#nhc)" stroke="#1b1b1b" stroke-width="2"/><path d="M110 56H190V68H110Z" fill="${S[0]}" ${O}/><path d="M145 56H155V96H145Z" fill="url(#nhc)" stroke="#1b1b1b" stroke-width="2.5"/><rect x="84" y="84" width="132" height="16" rx="7" fill="url(#nhb)" ${O}/>${gl(124,32)}${gl(110,90,4)}`);
+if(v==='goblet')return sv('a goblet',124,`<defs>${cyl('nga')}${cyl('ngb',.36)}</defs><path d="M108 14H192Q192 64 150 74Q108 64 108 14Z" fill="url(#nga)" ${O}/><ellipse cx="150" cy="14" rx="42" ry="7" fill="${S[0]}" ${O}/><path d="M108 34Q150 46 192 34" fill="none" stroke="#1b1b1b" stroke-width="2"/><rect x="143" y="72" width="14" height="26" fill="url(#ngb)" ${O}/><ellipse cx="150" cy="84" rx="13" ry="5" fill="url(#ngb)" ${O}/><path d="M118 116Q122 100 150 98Q178 100 182 116Z" fill="url(#ngb)" ${O}/>${gl(124,26)}${gl(127,108,4)}`);
+// Skin: shadows in the sockets, under the nose and chin; highlights on brow, nose, cheekbones and knuckles.
+if(v==='face')return sv('a face',130,`<defs>${rad('nfa',.5,.36,.7)}${lin('nfb',0,0,0,1)}${cyl('nfc',.45)}</defs><path d="M92 130Q98 110 132 106H168Q202 110 208 130Z" fill="url(#nfb)" ${O}/><rect x="133" y="84" width="34" height="28" fill="${pk(.2)}" ${o2}/><ellipse cx="111" cy="58" rx="7" ry="11" fill="url(#nfc)" ${o2}/><ellipse cx="189" cy="58" rx="7" ry="11" fill="url(#nfc)" ${o2}/><ellipse cx="150" cy="56" rx="38" ry="48" fill="url(#nfa)" ${O}/><ellipse cx="135" cy="52" rx="10" ry="6" fill="${pk(.2)}"/><ellipse cx="165" cy="52" rx="10" ry="6" fill="${pk(.2)}"/><circle cx="135" cy="52" r="2.6" fill="#1b1b1b"/><circle cx="165" cy="52" r="2.6" fill="#1b1b1b"/><path d="M124 43Q135 38 145 42M155 42Q165 38 176 43" stroke="${pk(.85)}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M150 50V66" stroke="${pk(.9)}" stroke-width="3" stroke-linecap="round"/><path d="M143 72Q150 76 157 72" stroke="${pk(.15)}" stroke-width="4" fill="none" stroke-linecap="round"/><ellipse cx="126" cy="66" rx="7" ry="4" fill="${pk(.8)}"/><ellipse cx="174" cy="66" rx="7" ry="4" fill="${pk(.8)}"/><path d="M139 85Q150 90 161 85" stroke="${pk(.25)}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M130 100Q150 108 170 100" stroke="${pk(.85)}" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="150" cy="24" rx="16" ry="6" fill="${pk(.9)}" opacity=".8"/>`);
+if(v==='hand')return sv('a hand',130,`<defs>${cyl('nka',.4)}</defs><rect x="124" y="98" width="52" height="32" fill="url(#nka)" ${O}/>${[[112,22],[132,12],[152,14],[172,26]].map(([x,y])=>`<rect x="${x}" y="${y}" width="18" height="${76-y}" rx="9" fill="url(#nka)" ${O}/>`).join('')}<rect x="110" y="52" width="82" height="56" rx="18" fill="url(#nka)" ${O}/><path d="M112 72Q90 64 80 46Q76 38 84 36Q92 36 98 46L116 62Z" fill="url(#nka)" ${O}/>${[121,141,161,181].map(x=>`<ellipse cx="${x}" cy="60" rx="6" ry="3.5" fill="${S[n-1]}"/>`).join('')}<path d="M112 84Q150 92 190 84" stroke="${pk(.3)}" stroke-width="2" fill="none" opacity=".7"/>`);
+if(v==='arm')return sv('an arm',110,`<defs><linearGradient id="nma" x1="0" y1="0" x2="0" y2="1">${[pk(.35),pk(.7),S[n-1],pk(.6),pk(.3),S[0]].map((h,i)=>`<stop offset="${[0,.12,.28,.55,.8,1][i]}" stop-color="${h}"/>`).join('')}</linearGradient></defs><path d="M8 34Q60 14 112 26Q150 36 176 48Q228 50 286 46L290 84Q226 88 176 86Q140 94 108 98Q56 104 8 92Z" fill="url(#nma)" ${O}/><path d="M176 50Q170 68 176 86" stroke="${pk(.15)}" stroke-width="3" fill="none"/><ellipse cx="80" cy="34" rx="30" ry="6" fill="${S[n-1]}" opacity=".75"/><ellipse cx="236" cy="54" rx="22" ry="4" fill="${pk(.9)}" opacity=".7"/>`);
+// Zenithal: light from straight above, so tops catch it and undersides fall to the darkest step.
+if(v==='figure')return sv('a cloaked figure',130,`<defs>${lin('nza',.5,0,.5,1)}${rad('nzb',.5,.15,.9)}</defs><ellipse cx="150" cy="124" rx="62" ry="5" fill="${S[0]}"/><path d="M128 40Q110 80 96 124H204Q190 80 172 40Z" fill="url(#nza)" ${O}/><path d="M140 50Q132 90 124 124M160 50Q168 90 176 124M150 58V124" stroke="#1b1b1b" stroke-width="2" opacity=".3" fill="none"/><path d="M124 40Q150 50 176 40Q170 56 150 58Q130 56 124 40Z" fill="${pk(.75)}" ${o2}/><circle cx="150" cy="30" r="22" fill="url(#nzb)" ${O}/><ellipse cx="150" cy="36" rx="11" ry="13" fill="${S[0]}" ${o2}/>`);
+if(v==='rock')return sv('a rock',120,`<ellipse cx="156" cy="112" rx="96" ry="6" fill="${S[0]}"/><path d="M70 110L90 60L120 66L130 110Z" fill="${pk(.4)}" ${O}/><path d="M120 66L170 62L182 110H130Z" fill="${pk(.55)}" ${O}/><path d="M170 62L230 56L244 110H182Z" fill="${pk(.2)}" ${O}/><path d="M90 60L130 34L190 28L230 56L170 62L120 66Z" fill="${pk(.88)}" ${O}/><path d="M130 34L190 28" stroke="${S[n-1]}" stroke-width="3" stroke-linecap="round"/>`);
+if(v==='cube')return sv('a cube',124,`<defs>${g('nca',[pk(.6),pk(.1)],0,0,0,1)}${g('ncb',[pk(.4),S[0]],0,0,0,1)}</defs><ellipse cx="150" cy="116" rx="70" ry="6" fill="${S[0]}"/><path d="M150 10L208 36L150 62L92 36Z" fill="${S[n-1]}" ${O}/><path d="M92 36L150 62V116L92 90Z" fill="url(#nca)" ${O}/><path d="M150 62L208 36V90L150 116Z" fill="url(#ncb)" ${O}/>`);
+// Edges: the base colour everywhere, then each lighter edge line thinner and only on the top and outer edges.
+if(v==='plate')return sv('an armour plate',110,`<path d="M40 10H260L284 34V100H16V34Z" fill="${S[0]}" ${O}/><path d="M52 22H248L270 40V90H30V40Z" fill="none" stroke="#1b1b1b" stroke-width="2" opacity=".4"/><path d="M18 98V34L41 11H259L282 34" fill="none" stroke="${S[1]}" stroke-width="5" stroke-linejoin="round"/><path d="M20 60V35L42 13H258L280 35" fill="none" stroke="${E}" stroke-width="2"/>${[[40,40],[260,40],[40,80],[260,80]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="6" fill="${S[0]}" ${o2}/><circle cx="${x-2}" cy="${y-2}" r="2" fill="${E}"/>`).join('')}${gl(41,12,5)}${gl(259,12,5)}`);
+if(v==='pauldron')return sv('a pauldron',120,`<path d="M88 100Q88 20 150 16Q212 20 212 100Z" fill="${S[0]}" ${O}/><path d="M96 92Q96 30 150 24Q170 25 186 34" fill="none" stroke="${S[1]}" stroke-width="5" stroke-linecap="round"/><path d="M104 64Q110 32 150 26" fill="none" stroke="${E}" stroke-width="2.5" stroke-linecap="round"/><rect x="80" y="96" width="140" height="18" rx="7" fill="${S[0]}" ${O}/><path d="M86 99H214" stroke="${S[1]}" stroke-width="4" stroke-linecap="round"/><path d="M90 99H150" stroke="${E}" stroke-width="2" stroke-linecap="round"/>${gl(150,25,5)}${gl(88,100,4)}`);
+if(v==='hull')return sv('a tank panel',110,`<path d="M10 52L54 18H290V100H10Z" fill="${S[0]}" ${O}/><path d="M54 18V100M180 18V100M10 70H290" stroke="#1b1b1b" stroke-width="2" opacity=".45"/><path d="M12 52L55 20H288" fill="none" stroke="${S[1]}" stroke-width="5" stroke-linejoin="round"/><path d="M14 52L56 22H120" fill="none" stroke="${E}" stroke-width="2"/><ellipse cx="236" cy="44" rx="30" ry="13" fill="${S[0]}" ${O}/><path d="M208 42Q236 28 264 42" fill="none" stroke="${E}" stroke-width="2.5"/>${[[100,40],[140,52],[220,82],[60,84]].map(([x,y],i)=>`<path d="M${x} ${y}l6 -3 5 4 -4 4 -7 -1z" fill="${i%2?S[n-1]:S[1]}"/>`).join('')}${gl(55,20,5)}`);
+// Glazes: folds of cloth blended through the ramp, and a panel with each glaze covering less than the one under it.
+if(v==='cloak'){const k=6,C=[];for(let i=0;i<k;i++){S.forEach(h=>C.push(h));L.slice(1,-1).forEach(h=>C.push(h))}C.push(S[0]);
+ return sv('a cloak',124,`<defs>${g('nla',C,0,0,1,0)}</defs><path d="M70 14H230L240 112Q225 120 210 112Q195 120 180 112Q165 120 150 112Q135 120 120 112Q105 120 90 112Q75 120 60 112Z" fill="url(#nla)" ${O}/><rect x="62" y="8" width="176" height="10" rx="5" fill="#5a3a1a" ${o2}/>`)}
+if(v==='panel')return sv('a flat panel',110,`<rect x="40" y="8" width="220" height="94" rx="8" fill="${S[0]}"/>${S.slice(1).map((h,i)=>{const f=1-(i+1)/n;return`<rect x="40" y="8" width="${(220*(.35+.65*f)).toFixed(1)}" height="${(94*(.35+.65*f)).toFixed(1)}" rx="${(8+40*(1-f)).toFixed(1)}" fill="${h}" opacity=".75"/>`}).join('')}<rect x="40" y="8" width="220" height="94" rx="8" fill="none" ${O}/>`);
+// Gems: dark on the side facing the light, light pooling on the far side, glint on the near corner.
+if(v==='tear'){const C=S.slice(0,-1);return sv('a teardrop gem',120,`<defs>${g('nta',C,.2,0,.8,1)}</defs><path d="M150 4Q194 58 186 84A36 36 0 0 1 114 84Q106 58 150 4Z" fill="#7a6a4a" ${O}/><path d="M150 16Q184 62 178 84A28 28 0 0 1 122 84Q116 62 150 16Z" fill="url(#nta)" ${O}/>${gl(140,52,6)}`)}
+if(v==='square')return sv('a square cut gem',120,`<defs>${g('nqa',S.slice(0,-1),0,0,1,1)}</defs><rect x="98" y="8" width="104" height="104" rx="6" fill="#7a6a4a" ${O}/><path d="M108 18H192L172 38H128Z" fill="${S[0]}" ${o2}/><path d="M108 18L128 38V82L108 102Z" fill="${pk(.25)}" ${o2}/><path d="M192 18V102L172 82V38Z" fill="${pk(.7)}" ${o2}/><path d="M108 102H192L172 82H128Z" fill="${pk(.9)}" ${o2}/><rect x="128" y="38" width="44" height="44" fill="url(#nqa)" ${o2}/>${gl(134,44,6)}`);
+// OSL: a lit spot fading into the unlit surface, with the source itself in the lightest step.
+if(v==='lantern')return sv('a lantern lighting a wall',120,`<defs><radialGradient id="noa" cx=".36" cy=".42" r=".6">${L.map((h,i)=>`<stop offset="${off(i,n-1)}" stop-color="${h}"/>`).join('')}</radialGradient></defs><rect x="4" y="4" width="292" height="112" rx="14" fill="url(#noa)" ${O}/><path d="M4 92H296" stroke="#1b1b1b" stroke-width="2" opacity=".35"/><path d="M108 8V24" stroke="#1b1b1b" stroke-width="3"/><path d="M96 30Q108 18 120 30" fill="none" stroke="#1b1b1b" stroke-width="3"/><rect x="94" y="30" width="28" height="8" rx="2" fill="#2b2b2b" ${o2}/><rect x="96" y="38" width="24" height="30" rx="3" fill="${S[n-1]}" ${O}/><path d="M108 38V68" stroke="#1b1b1b" stroke-width="2"/><rect x="92" y="68" width="32" height="8" rx="2" fill="#2b2b2b" ${o2}/>`);
+if(v==='lens')return sv('glowing eye lenses',120,`<defs><clipPath id="nec"><path d="M92 10H208Q220 60 198 112H102Q80 60 92 10Z"/></clipPath>${['a','b'].map((k,i)=>`<radialGradient id="ne${k}" cx="${i?.62:.38}" cy=".4" r=".42">${L.map((h,j)=>`<stop offset="${off(j,n-1)}" stop-color="${h}" stop-opacity="${j===n-1?0:1}"/>`).join('')}</radialGradient>`).join('')}</defs><path d="M92 10H208Q220 60 198 112H102Q80 60 92 10Z" fill="${S[0]}"/><g clip-path="url(#nec)"><rect x="80" y="0" width="140" height="120" fill="url(#nea)"/><rect x="80" y="0" width="140" height="120" fill="url(#neb)"/></g><path d="M92 10H208Q220 60 198 112H102Q80 60 92 10Z" fill="none" ${O}/><path d="M116 50L140 46L138 58L116 58Z" fill="${S[n-1]}" ${o2}/><path d="M184 50L160 46L162 58L184 58Z" fill="${S[n-1]}" ${o2}/>${[124,138,152,166].map(x=>`<rect x="${x}" y="84" width="10" height="16" rx="2" fill="#1b1b1b" opacity=".5"/>`).join('')}`);
+if(v!=='sword')return'';
+return sv('a sword blade',90,`<defs>${rampGrad('nb',st)}</defs><rect x="6" y="38" width="44" height="14" rx="3" fill="#5a3a1a" stroke="#1b1b1b" stroke-width="2.5"/><rect x="48" y="20" width="12" height="50" rx="3" fill="url(#nb)" stroke="#1b1b1b" stroke-width="2.5"/><path d="M60 26 L262 26 L294 45 L262 64 L60 64 Z" fill="url(#nb)" stroke="#1b1b1b" stroke-width="3" stroke-linejoin="round"/>`)}
 // Small preview of the ramp on a shape that suits the technique.
 function rampPrev(R,T){return rampArt(R,T)+objPick()}
 function rampArt(R,T){const st=R.filter(x=>x.p),ob=prevObj(st);if(ob)return ob;
 if(T.prev==='under'){const U=R.filter(x=>x.u&&x.p),F=underFin(R),pan=(x,id,rows,lab)=>rows.length?`<rect x="${x}" y="6" width="138" height="78" rx="8" fill="url(#${id})" stroke="#1b1b1b" stroke-width="3"/><text x="${x+69}" y="102" text-anchor="middle" font-size="13" fill="currentColor">${lab}</text>`:'';
  // Left: the value underpainting. Right: the same area once the glazes and final highlight are on.
  return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Underpainting next to the glazed result"><defs>${rampGrad('nbu',U)}${rampGrad('nbf',F)}</defs>${pan(6,'nbu',U,'Underpainting')}<text x="150" y="51" text-anchor="middle" font-size="18" fill="currentColor">›</text>${pan(156,'nbf',F,'After glazes')}</svg>`}
+if(T.prev==='osl')return`<svg class="blade" viewBox="0 0 300 120" role="img" aria-label="Ramp preview as light spreading from a source"><defs>${rampGrad('nb',R,1)}</defs><rect x="4" y="4" width="292" height="112" rx="14" fill="${st[0].p.h}" stroke="#1b1b1b" stroke-width="3"/><ellipse cx="150" cy="60" rx="120" ry="54" fill="url(#nb)"/><circle cx="150" cy="60" r="7" fill="${st[st.length-1].p.h}" stroke="#1b1b1b" stroke-width="2"/></svg>`;
+if(T.prev==='gem'){const lin=st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-2)).toFixed(3)}" stop-color="${x.p.h}"/>`).slice(0,-1).join('');
+ return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Ramp preview on a round gem"><defs><linearGradient id="nb" x1=".2" y1="0" x2=".8" y2="1">${lin}</linearGradient></defs><circle cx="150" cy="55" r="46" fill="#7a6a4a" stroke="#1b1b1b" stroke-width="3"/><circle cx="150" cy="55" r="38" fill="url(#nb)" stroke="#1b1b1b" stroke-width="3"/><circle cx="137" cy="40" r="5" fill="${st[st.length-1].p.h}"/></svg>`}
 if(T.prev==='rocks'){const rk=[[50,66,42,30],[128,58,40,40],[206,70,36,26],[262,62,30,34]];
  // Rocks: the basecoat, then each drybrush layer catching less of the top of each rock.
  return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Ramp preview as drybrush layers on rocks"><defs>${rk.map(([x,y,rx,ry],i)=>`<clipPath id="nr${i}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}"/></clipPath>`).join('')}</defs><rect x="4" y="80" width="292" height="26" rx="6" fill="${st[0].p.h}" stroke="#1b1b1b" stroke-width="3"/>${rk.map(([x,y,rx,ry],i)=>`<g clip-path="url(#nr${i})">${st.map((s,k)=>`<ellipse cx="${x-k*rx*.12}" cy="${y-k*ry*.42}" rx="${rx}" ry="${ry}" fill="${s.p.h}"/>`).join('')}</g><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="none" stroke="#1b1b1b" stroke-width="3"/>`).join('')}</svg>`}
