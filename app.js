@@ -50,7 +50,7 @@ let MODE='col',NB=null,nmmSkip=[],NMM_DRAFT=null;const NMO={n:7,t:false,q:'nmm',
 // Objects each technique's preview can be shown on (first = default). Keys the object art doesn't draw fall back to the technique's own preview.
 const PV={nmm:[['sword','Sword'],['axe','Axe'],['shield','Shield'],['armour','Armour'],['helmet','Helmet'],['goblet','Goblet']],
 osl:[['glow','Glow'],['lantern','Lantern'],['lens','Eye lenses']],gem:[['round','Round'],['tear','Teardrop'],['square','Square cut']],
-skin:[['face','Face'],['hand','Hand'],['arm','Arm'],['steps','Steps']],zen:[['figure','Cloaked figure'],['rock','Rock'],['cube','Cube and ball'],['steps','Steps']],
+skin:[['face','Face'],['hand','Hand'],['torso','Torso'],['steps','Steps']],zen:[['figure','Cloaked figure'],['rock','Rock'],['cube','Cube and ball'],['steps','Steps']],
 edge:[['plate','Armour plate'],['pauldron','Pauldron'],['hull','Tank panel'],['steps','Steps']],glaze:[['cloak','Cloak'],['panel','Flat panel'],['steps','Steps']]};
 const pvGet=()=>{const l=PV[NMO.q];return l?(l.some(x=>x[0]===NMO.v[NMO.q])?NMO.v[NMO.q]:l[0][0]):''};
 const nmmSave=()=>{try{localStorage.setItem('pd-nmm',JSON.stringify({m:MODE,n:NMO.n,t:NMO.t,q:NMO.q,v:NMO.v}))}catch(e){}};
@@ -320,44 +320,65 @@ goblet(){return sv('a goblet',152,G('pa',[[0,.25],[.08,.48],[.2,.92],[.27,1],[.3
   ${PA('M145 108H155C160 114 184 122 188 138Q150 152 112 138C116 122 140 114 145 108Z','url(#pa)',O)}${ln('M116 136Q150 147 184 136',K,1.4,'opacity=".5"')}
   ${gl(130,32,9)}${gl(144,91,4)}${gl(133,126,4.5)}`)},
 // ---------- Skin ----------
-face(){const head='M150 10C182 10 196 34 194 62C193 84 184 104 168 116C160 122 140 122 132 116C116 104 107 84 106 62C104 34 118 10 150 10Z';
- return sv('a face',152,CP('pk',head)+BL('pz',4)+BL('py',2)+G('pa',[[0,.12],[.3,.4],[.65,.72],[1,.5]],0,0,0,1),
-  `${PA('M134 108V128Q118 138 92 144V152H208V144Q182 138 166 128V108Z','url(#pa)',O)}
-  <ellipse cx="105" cy="68" rx="6.5" ry="12" fill="${cx(.5)}" ${o2}/><ellipse cx="195" cy="68" rx="6.5" ry="12" fill="${cx(.3)}" ${o2}/>
-  ${PA(head,cx(.55))}<g clip-path="url(#pk)"><g filter="url(#pz)">
-  ${el(142,32,30,14,.9)}${el(197,66,16,46,.12)}${el(104,74,9,36,.35)}${el(132,64,14,8,.2)}${el(168,64,14,8,.14)}
-  ${el(124,83,11,6,.92)}${el(175,83,10,6,.74)}${el(124,102,8,9,.32)}${el(178,102,10,10,.18)}${el(150,116,10,5,.9)}</g>
-  <g filter="url(#py)">${el(138,25,12,5,1)}<rect x="146.5" y="52" width="5" height="30" rx="2.5" fill="${cx(.97)}"/><rect x="153" y="60" width="5" height="24" rx="2.5" fill="${cx(.28)}"/>
-  ${el(150,93,9,3.2,.1)}${el(150,97.5,8,1.8,.72)}${el(150,110.5,9,2.4,.18)}</g></g>
-  ${ln('M119 56Q131 49 144 55',K,3.2,'opacity=".85"')}${ln('M156 55Q169 49 181 56',K,3.2,'opacity=".85"')}
-  ${[132,168].map(x=>`${PA(`M${x-10} 65Q${x} 58 ${x+10} 65Q${x} 70.5 ${x-10} 65Z`,'#f3ede2',`stroke="${K}" stroke-width="1.5"`)}<circle cx="${x+1}" cy="64.6" r="3.4" fill="#33241a"/><circle cx="${x}" cy="63.6" r="1" fill="#fff"/>${ln(`M${x-10} 65Q${x} 57.5 ${x+10} 65`,K,2)}`).join('')}
-  ${ln('M143 88Q146 91.5 150 90Q154 91.5 157 88',cx(0),2)}<circle cx="148.8" cy="84.5" r="2.2" fill="${HI}" opacity=".7"/>
-  ${ln('M139 102Q150 106.5 161 102',cx(0),2.2)}${ln('M144 105.6Q150 108.2 156 105.6',cx(.95),2)}
-  ${PA(head,'none',O)}`)},
-hand(){const F=[[126,34,-7],[144,20,-2],[162,28,4],[179,48,10]],fin=([x,y,a],i)=>{const h=90-y,j1=y+h*.36,j2=y+h*.66;
-  return`<g transform="rotate(${a} ${x} 90)"><rect x="${x-8.5}" y="${y}" width="17" height="${h+6}" rx="8.5" fill="url(#pa)" ${O}/>
-  <rect x="${x-5}" y="${y+2.5}" width="10" height="10" rx="4.5" fill="${cx(.92)}" stroke="${cx(.3)}" stroke-width="1"/>
-  ${ln(`M${x-5} ${j1}Q${x} ${j1+3} ${x+5} ${j1}`,cx(.05),1.5,'opacity=".7"')}${ln(`M${x-5} ${j1+3.5}Q${x} ${j1+6} ${x+5} ${j1+3.5}`,cx(.05),1.2,'opacity=".45"')}
-  ${ln(`M${x-5} ${j2}Q${x} ${j2+3} ${x+5} ${j2}`,cx(.05),1.5,'opacity=".7"')}</g>`},back='M116 86Q150 76 188 86L184 124Q152 134 124 124Z';
- return sv('a hand',152,G('pa',[[0,.3],[.28,.85],[.42,1],[.7,.55],[1,.12]])+G('pb',[[0,.8],[.35,.6],[1,.2]],0,0,.6,1)+CP('pk',back)+BL('pz',2.5)+BL('py',1.3)+
-  RU('pc',[[0,1],[.5,.85],[1,.5,0]],0,0,9),
-  `${PA('M126 120L124 152H182L180 120Z','url(#pa)',O)}
-  <g transform="rotate(-38 112 118)"><rect x="102" y="62" width="19" height="60" rx="9.5" fill="url(#pa)" ${O}/><rect x="106" y="65" width="11" height="11" rx="5" fill="${cx(.92)}" stroke="${cx(.3)}" stroke-width="1"/>${ln('M106 92Q111.5 95 117 92',cx(.05),1.5,'opacity=".7"')}</g>
-  ${F.map(fin).join('')}
-  ${PA(back,'url(#pb)')}<g clip-path="url(#pk)" filter="url(#pz)">${[[128,90,134,124],[146,88,146,126],[163,88,158,126],[178,92,170,124]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.92),3.5)).join('')}
-  ${[[137,96,140,124],[155,96,152,124],[171,98,164,124]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.15),3,'opacity=".8"')).join('')}${el(186,106,6,22,.08)}</g>
-  ${ln('M116 86Q112 104 124 124',K,3)}${ln('M188 86L184 124Q152 134 124 124',K,3)}
-  ${[[127,88],[145,85],[163,86],[179,91]].map(([x,y])=>`<ellipse cx="${x}" cy="${y+1}" rx="5.5" ry="3.6" fill="${cx(.97)}" filter="url(#py)" opacity=".9"/>`).join('')}
-  ${ln('M128 122Q152 130 180 122',cx(.05),1.6,'opacity=".6"')}`)},
-arm(){const arm='M14 74Q30 60 52 62Q92 22 142 60Q152 66 160 62Q166 46 172 34L226 38Q240 76 226 104Q222 120 208 124Q180 128 160 118Q100 134 14 118Z';
- return sv('a flexed arm',136,CP('pk',arm)+BL('pz',5)+BL('py',2.5)+G('pa',[[0,.9],[.4,.7],[1,.2]],0,0,.5,1),
-  `${PA(arm,cx(.55))}<g clip-path="url(#pk)"><g filter="url(#pz)">
-  ${el(98,50,34,11,.97)}${el(34,72,18,9,.9)}${el(100,124,96,12,.05)}${el(96,88,46,7,.3)}${el(232,84,11,36,.1)}${el(190,66,9,26,.95)}${el(206,122,26,8,.12)}${el(60,96,30,8,.7)}</g>
-  <g filter="url(#py)">${ln('M148 62Q158 72 162 90',cx(.05),4,'opacity=".8"')}${ln('M56 64Q62 82 54 100',cx(.25),3,'opacity=".7"')}${ln('M176 98Q196 108 214 100',cx(.3),3,'opacity=".7"')}${el(92,46,14,4,1)}</g></g>
-  ${PA(arm,'none',O)}
-  <rect x="166" y="6" width="62" height="38" rx="13" fill="url(#pa)" ${O}/>${[181,195,209].map(x=>ln(`M${x} 8V24`,cx(.05),1.6,'opacity=".7"')).join('')}
-  ${PA('M168 28Q186 20 206 28Q212 36 204 40Q186 34 172 40Q164 36 168 28Z','url(#pa)',o2)}
-  ${[174,188,202,216].map(x=>`<ellipse cx="${x}" cy="10" rx="5" ry="2.6" fill="${HI}" opacity=".85"/>`).join('')}`)},
+// Proportions: eyes halfway down the head and one eye-width apart, nose base halfway from eyes to chin, ears from brow to nose base.
+face(){const head='M150 14C175 14 191 32 191 58C191 72 189 86 183 99C177 113 165 127 150 129C135 127 123 113 117 99C111 86 109 72 109 58C109 32 125 14 150 14Z',HR='#33241a',
+ eye=(x,s)=>{const d=`M${x-9} 69Q${x-3*s} 62.5 ${x+9} 69Q${x} 73.5 ${x-9} 69Z`;return`<clipPath id="pe${s>0?1:2}"><path d="${d}"/></clipPath>${PA(d,'#efe7da')}<g clip-path="url(#pe${s>0?1:2})"><circle cx="${x}" cy="67.6" r="4.3" fill="#4a3524"/><circle cx="${x}" cy="67.6" r="1.9" fill="#120c08"/><rect x="${x-10}" y="60" width="20" height="5.5" fill="#000" opacity=".28"/></g><circle cx="${x-1.4}" cy="66.3" r="1" fill="#fff"/>${ln(`M${x-9.6} 69.2Q${x-3*s} 62 ${x+9.6} 69`,K,2.1)}${ln(`M${x-7} 71.4Q${x} 74 ${x+7.5} 70.8`,cx(.12),1,'opacity=".7"')}`};
+ return sv('a face',166,CP('pk',head)+BL('pz',4.5)+BL('py',2)+BL('px',1)+G('pa',[[0,.08],[.22,.3],[.5,.6],[1,.5]],0,0,0,1)+G('pb',[[0,.85],[.5,.6],[1,.3]],0,0,1,.3),
+  `${PA('M132 112V138C120 146 98 150 78 156V166H222V156C202 150 180 146 168 138V112Z','url(#pb)',O)}
+  <g filter="url(#py)">${PA('M133 118H167V134Q150 142 133 134Z',cx(.1),'opacity=".85"')}${ln('M136 136Q128 148 106 153',cx(.9),3,'opacity=".7"')}${ln('M164 136Q172 148 194 153',cx(.75),3,'opacity=".5"')}${ln('M139 124L146 146',cx(.25),2.5,'opacity=".6"')}${ln('M161 124L154 146',cx(.2),2.5,'opacity=".6"')}</g>
+  ${PA('M110 62C103 59 100 66 102 76C104 86 108 93 113 92Z',cx(.5),o2)}${ln('M106 68Q104 76 109 86',cx(.15),1.4)}
+  ${PA('M190 62C197 59 200 66 198 76C196 86 192 93 187 92Z',cx(.28),o2)}${ln('M194 68Q196 76 191 86',cx(.05),1.4)}
+  ${PA(head,cx(.56))}<g clip-path="url(#pk)"><g filter="url(#pz)">
+  ${el(143,42,24,11,.9)}${el(191,78,13,42,.1)}${el(110,80,7,30,.34)}${el(133,68,12,7,.24)}${el(167,68,12,7,.17)}
+  ${el(129,87,10,5.5,.93)}${el(172,87,9,5.5,.72)}${el(126,105,7,10,.3)}${el(176,106,9,11,.15)}${el(150,122,9,4.5,.9)}</g>
+  <g filter="url(#py)">${el(141,36,10,4,1)}${PA('M147.6 62Q146.6 80 146.8 94H151.6Q151.4 78 151.6 62Z',cx(.97))}${PA('M152 68Q152.6 82 152.4 95H157Q156.4 82 155.4 68Z',cx(.26))}
+  ${el(150,102.2,8.5,2.2,.06)}${el(142,96.5,3,2.6,.5)}${el(158.5,96.5,3,2.6,.22)}${el(150,116.6,8,2,.16)}</g>
+  <circle cx="149" cy="95" r="2.6" fill="${HI}" opacity=".75" filter="url(#px)"/></g>
+  ${PA('M107 66C101 30 124 6 150 6C176 6 199 30 193 66C191 50 185 40 176 34C162 38 140 37 126 31C116 38 110 50 107 66Z',HR,O)}
+  <g filter="url(#px)">${ln('M124 20Q138 11 156 12','#6a503a',2.2,'opacity=".8"')}${ln('M120 28Q126 22 134 19','#6a503a',1.6,'opacity=".6"')}</g>
+  ${PA('M122 61.5Q131 55.5 142.5 59.5L142 62.2Q131 59.4 122.6 63.6Z',HR)}${PA('M178 61.5Q169 55.5 157.5 59.5L158 62.2Q169 59.4 177.4 63.6Z',HR)}
+  ${eye(133,1)}${eye(167,-1)}
+  ${ln('M142.4 97.6Q144.6 100.6 147.6 99.6Q150 101.2 152.4 99.6Q155.4 100.6 157.6 97.6',cx(0),1.7)}
+  ${PA('M139 109.4Q145 106.4 150 108Q155 106.4 161 109.4Q150 111.6 139 109.4Z',cx(.3))}${PA('M139 109.4Q150 111.6 161 109.4Q156 115.4 150 115.4Q144 115.4 139 109.4Z',cx(.62))}
+  ${ln('M138.4 109.4Q150 112 161.6 109.4',cx(0),1.6)}${ln('M145 113Q150 114.4 155 113',cx(.97),1.4,'opacity=".9"')}
+  ${ln('M109 58C109 72 111 86 117 99C123 113 135 127 150 129C165 127 177 113 183 99C189 86 191 72 191 58',K,3)}`)},
+// Back of a hand: palm about as long as the middle finger, knuckles on an arc, thumb set low on the side and reaching the index knuckle.
+hand(){const F=[[126.5,97,49,15,-6],[143.5,92,57,15.5,-2],[160.5,95,53,15,3],[176,103,41,13,9]],
+ fin=([x,by,len,w,a])=>{const y=by-len,h=len+10,c1=y+len*.29,c2=y+len*.58,nw=w*.6;
+  return`<g transform="rotate(${a} ${x} ${by})"><rect x="${x-w/2}" y="${y}" width="${w}" height="${h}" rx="${w/2}" fill="url(#pa)" ${O}/>
+  <rect x="${x-nw/2}" y="${y+2.6}" width="${nw}" height="${len*.17}" rx="${nw*.45}" fill="${cx(.9)}" stroke="${cx(.32)}" stroke-width=".9"/>
+  ${[c1,c1+2.6,c2,c2+2.8].map((c,i)=>ln(`M${x-w*.3} ${c}Q${x} ${c+2.2} ${x+w*.3} ${c}`,cx(.05),i%2?1:1.4,`opacity="${i%2?.4:.7}"`)).join('')}
+  <ellipse cx="${x-1}" cy="${c2+1.4}" rx="${w*.26}" ry="2.4" fill="${cx(.98)}" opacity=".6" filter="url(#py)"/></g>`},
+ body='M127 172L128 152C121 148 114 142 110 134L109 112Q116 110 118 101C121 95 130 92 135 93C142 88 152 88 159 91C166 90 174 94 179 99C184 103 185 108 185 114C185 128 181 142 173 152L174 172Z';
+ return sv('the back of a hand',172,G('pa',[[0,.34],[.28,.88],[.44,1],[.74,.56],[1,.14]])+G('pb',[[0,.84],[.4,.64],[1,.24]],0,0,1,.5)+CP('pk',body)+BL('pz',3)+BL('py',1.3),
+  `<g transform="rotate(-38 120 140)"><rect x="110.5" y="82" width="19" height="66" rx="9.5" fill="url(#pa)" ${O}/><rect x="114.4" y="84.8" width="11.2" height="10" rx="4.8" fill="${cx(.9)}" stroke="${cx(.32)}" stroke-width=".9"/>
+  ${ln('M114 108Q120 110.4 126 108',cx(.05),1.4,'opacity=".7"')}${ln('M114 111Q120 113 126 111',cx(.05),1,'opacity=".4"')}</g>
+  ${F.map(fin).join('')}${PA(body,'url(#pb)')}<g clip-path="url(#pk)"><g filter="url(#pz)">
+  ${[[127,100,141,152],[144,96,147.5,152],[161,99,154,152],[176,106,161,152]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.94),3,'opacity=".8"')).join('')}
+  ${[[135.5,104,144.5,150],[152.5,102,151,150],[169,106,158,150]].map(([a,b,c,d])=>ln(`M${a} ${b}L${c} ${d}`,cx(.18),3.2,'opacity=".7"')).join('')}
+  ${el(185,130,7,30,.06)}${ln('M108 116Q112 130 126 146',cx(.94),5,'opacity=".8"')}${ln('M119 110Q120 128 129 146',cx(.22),3.6,'opacity=".6"')}${el(150,170,26,7,.3)}${el(139,160,8,9,.88)}${el(169,151,5,5,.92)}</g>
+  <g filter="url(#py)">${[[127.5,99,5.4,3.4],[144.5,95,5.8,3.6],[161,97.6,5.4,3.4],[176.5,105,4.6,3.2]].map(([x,y,a,b])=>el(x,y,a,b,.98,'opacity=".75"')).join('')}
+  ${[[136,96.5],[152.5,94],[169,98.5]].map(([x,y])=>ln(`M${x} ${y-4}V${y+5}`,cx(.05),2.2,'opacity=".6"')).join('')}</g></g>
+  ${ln('M127 172L128 152Q121 150 113.5 145.5',K,3)}${ln('M109.6 111.6Q116 110 118 101',K,3)}${ln('M185 112C185.5 127 181 142 173 152L174 172',K,3)}
+  ${ln('M130 153.4Q150 158.4 171 153.4',cx(.05),1.4,'opacity=".55"')}`)},
+// Bare torso from the front: shoulders about twice the waist, pecs to a third of the way down, six abdominal blocks either side of the midline.
+torso(){const t='M136 4V16C124 22 104 24 88 28C72 32 62 46 62 62C62 76 66 90 70 102L92 102C92 92 94 84 97 78C99 100 104 124 108 140C110 152 110 162 110 172H190C190 162 190 152 192 140C196 124 201 100 203 78C206 84 208 92 208 102L230 102C234 90 238 76 238 62C238 46 228 32 212 28C196 24 176 22 164 16V4Z';
+ return sv('a bare torso',172,CP('pk',t)+BL('pz',5)+BL('py',2.2)+BL('px',1),
+  `${PA(t,cx(.56))}<g clip-path="url(#pk)"><g filter="url(#pz)">
+  ${el(124,56,22,11,.93)}${el(176,57,21,11,.84)}${el(78,46,13,11,.95)}${el(222,48,12,11,.8)}${el(74,78,6,18,.85)}${el(228,80,6,18,.5)}
+  ${el(150,8,16,7,.1)}${el(216,104,20,72,.1,'opacity=".8"')}${el(104,122,7,34,.26)}${el(197,122,8,36,.12)}${el(88,92,6,14,.14)}${el(212,92,6,14,.08)}
+  ${el(150,166,44,9,.22)}</g>
+  <g filter="url(#py)">${ln('M99 82Q124 96 148 84',cx(.06),4.6,'opacity=".85"')}${ln('M152 84Q176 96 201 82',cx(.03),5,'opacity=".9"')}
+  ${ln('M150 38V84',cx(.14),3.4,'opacity=".75"')}${ln('M150 90V162',cx(.1),3.4,'opacity=".8"')}
+  ${ln('M96 40Q100 58 97 76',cx(.14),3.6,'opacity=".7"')}${ln('M204 40Q200 58 203 76',cx(.06),3.8,'opacity=".75"')}
+  ${ln('M146 31Q124 26 100 30',cx(.97),3,'opacity=".9"')}${ln('M154 31Q176 26 200 30',cx(.88),3,'opacity=".8"')}${ln('M146 35.5Q124 31 102 35',cx(.2),2.4,'opacity=".6"')}${ln('M154 35.5Q176 31 198 35',cx(.14),2.4,'opacity=".6"')}
+  ${[[104,.6],[121,.7],[138,.75]].map(([y,o])=>ln(`M131 ${y+2}Q141 ${y-1} 149 ${y+1}`,cx(.1),2.6,`opacity="${o}"`)+ln(`M151 ${y+1}Q159 ${y-1} 169 ${y+2}`,cx(.06),2.6,`opacity="${o}"`)).join('')}
+  ${[[96,.95,.8],[113,.9,.72],[130,.8,.62],[148,.68,.52]].map(([y,a,b])=>el(140.5,y,7,5.6,a,'opacity=".9"')+el(159.5,y,7,5.6,b,'opacity=".9"')).join('')}
+  ${ln('M129 92Q124 120 128 150',cx(.2),2.6,'opacity=".55"')}${ln('M171 92Q176 120 172 150',cx(.12),2.6,'opacity=".6"')}
+  ${[100,110,120].map((y,i)=>ln(`M110 ${y}L120 ${y+5}`,cx(.9),2.2,`opacity="${.6-i*.12}"`)).join('')}${el(150,24,5,3,.12)}</g>
+  <g filter="url(#px)">${el(120,51,10,4,1,'opacity=".85"')}${el(76,41,7,4,1,'opacity=".9"')}${el(172,52,8,3.4,1,'opacity=".6"')}</g>
+  <ellipse cx="150" cy="154" rx="2.2" ry="3.2" fill="${cx(0)}" opacity=".85"/><circle cx="124" cy="73" r="2.3" fill="${cx(.28)}"/><circle cx="176" cy="73.6" r="2.3" fill="${cx(.2)}"/></g>
+  ${ln('M97 78Q95 70 97 62',K,2.2,'opacity=".8"')}${ln('M203 78Q205 70 203 62',K,2.2,'opacity=".8"')}${PA(t,'none',O)}`)},
 // ---------- Zenithal: light from straight above ----------
 figure(){const cl='M120 46C98 70 86 108 76 138Q94 146 112 139Q130 148 150 140Q170 148 188 139Q206 146 224 138C214 108 202 70 180 46Z',hood='M150 6C177 6 188 30 183 50C176 60 124 60 117 50C112 30 123 6 150 6Z';
  return sv('a cloaked figure',152,CP('pk',cl)+G('pa',[[0,1],[.1,.88],[.32,.56],[.62,.3],[1,.04]],0,0,0,1)+RU('pb',[[0,1],[.28,.85],[.62,.45],[1,.12]],148,8,54)+BL('pz',3),
