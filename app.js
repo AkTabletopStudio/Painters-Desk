@@ -806,7 +806,7 @@ cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.
  const c={lab:rgbLab(...s),h:hx(...s),w:0},C=cands();c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const u=new Set(COLS.map(x=>x.pick)),f=c.m.find(m=>!u.has(m.p))||c.m[0];c.pick=f?f.p:null;COLS.unshift(c);render()};
 $('phFile').onchange=e=>load(e.target.files[0]);
 $('phK').onchange=run;$('phMine').onchange=match;
-$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=!(window.pdApi&&pdApi());if(!OWN)$('phMine').checked=false;dlg.showModal()};
+$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=false;if(!OWN)$('phMine').checked=false;dlg.showModal()};
 $('phNo').onclick=()=>dlg.close();
 const bar=$('phUndo');
 // Save as palette card: opens the palette editor (account.js) filled with one colour per chosen paint. The photo is only uploaded if the painter adds it there.
@@ -850,13 +850,13 @@ function gallery(el){const xs=PL.filter(x=>!ST.t||x.t.includes(ST.t)),sh=ALL||ST
  el.querySelector('.pltags').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;ST.t=b.dataset.t;save();gallery(el)};
  const A=el.querySelector('#plAll');if(A)A.onclick=()=>{ALL=true;gallery(el)}}
 window.pdPalGallery=gallery;
-function detail(el,x){const R=matchAll(x),api=!!(window.pdApi&&pdApi()),hv=R.filter(r=>r.pick&&own(r.pick.p)).length;CUR={x,R};
+function detail(el,x){const R=matchAll(x),hv=R.filter(r=>r.pick&&own(r.pick.p)).length;CUR={x,R};
  el.innerHTML=`${window.pdCommHead?pdCommHead('palette'):''}<p><a href="#/recipes/palette">← All palettes</a></p><h2 class="plh">${esc(x.n)}</h2>${strip(x)}<p class="lead">${esc(x.b)}</p><p><b>Tip:</b> ${esc(x.tip)}</p>`+bar()+
  `<div class="panel plrows">`+R.map((r,ci)=>`<div class="phr"><span class="phs" style="background:${r.c.h}" title="Target colour"></span><div class="plcol"><b>${esc(r.c.r)}</b> <span class="s">${esc(r.c.u)}${r.c.m?' (metallic)':''}</span><div class="chips">`+
   (r.m.length?r.m.map(m=>`<button type="button" class="chip${r.pick&&m.p===r.pick.p?' on':''}" data-c="${ci}" data-i="${m.p.i}" aria-pressed="${!!(r.pick&&m.p===r.pick.p)}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0].split(' / ')[0])} · ${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints of this kind here. Try All brands.</span>')+
   `</div></div>${r.pick&&!r.c.m?`<button type="button" class="btn sm" data-bl="${ci}" title="Open a shadow, mid and highlight for this colour in Blends">Blend</button>`:''}</div>`).join('')+
  `<p class="s">${OWN&&OWN.size?`You own ${hv} of the ${R.length} paints picked. `:''}Tap a paint to use it instead. ΔE is how far the paint is from the target colour: under about 6 is close. Swatches are estimates.</p></div>`+
- `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button>${api?'<button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Community">Save as palette card</button>':''}<a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
+ `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button><button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Community (needs an account)">Save as palette card</button><a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
  const B=$('plB');if(B)B.onchange=()=>{ST.b=B.value;save();detail(el,x)};const M=$('plMine');if(M)M.onchange=()=>{ST.mine=M.checked?1:0;save();detail(el,x)};
  el.querySelector('.plrows').onclick=e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.bl!==undefined){const m=R[+b.dataset.bl].pick.p,band=pool({}).filter(p=>hd(p.H,m.H)<=20),bl=hBlend(m,band,p=>!mine()||own(p));

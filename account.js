@@ -130,7 +130,7 @@ function route(){
  PREV=location.hash||'#/';
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
- if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'&&view!=='palettes'))view='wheel';
+ if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'&&view!=='palettes'&&view!=='recipes'))view='wheel';
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
@@ -543,6 +543,8 @@ const commHead=tab=>`<h1>Tutorials &amp; Community</h1><nav class="ctabs" aria-l
 async function renderRecipes(k){
  if(['tutorial','recipe','palette'].includes(k))rKind=k;else if(!rKind)rKind='tutorial';
  if(!ME)rScope='public';
+ // Accounts unreachable (e.g. a preview build with no database): keep the tabs and the Inspiration palettes, ask to sign in for the rest.
+ if(!API){const el=$('v-recipes');el.innerHTML=commHead(rKind)+(rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':'')+signInLink('Tutorials, recipes and shared palettes load from painters\' accounts.');if($('rInsp'))pdPalGallery($('rInsp'));return}
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint);
  const T={tutorial:['tutorials','A whole model, step by step with photos and video. Steps can use recipes.','<a class="btn pri" href="#/new">+ New tutorial</a>'],
   recipe:['recipes','One colour, layer by layer from base to highlight: bone, purple robes, rusty metal and so on.','<a class="btn pri" href="#/new/recipe">+ New recipe</a>'],
