@@ -139,7 +139,7 @@ function route(){
  if(view==='welcome')renderWelcome();
  else if(view==='palettes')window.pdPalettes&&pdPalettes(id);
  else if(view==='paints')renderPaints();
- else if(view==='recipes')renderRecipes();
+ else if(view==='recipes')renderRecipes(id);
  else if(view==='recipe')renderRecipe(id);
  else if(view==='edit')renderEdit(v==='new'?null:id,v==='new'&&(id==='recipe'||id==='palette')?id:'tutorial');
  else if(view==='account')renderAccount();
@@ -534,24 +534,30 @@ $('addMine').onclick=()=>{if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix).map(
 $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
 
 /* ---------- recipes list ---------- */
-let rScope='public',rKind='',rPaint='';
-async function renderRecipes(){
+let rScope='public',rKind='tutorial',rPaint='';
+// Tutorials & Community: one page with tabs. Tutorials, Recipes and Palettes share the card list (#/recipes/<kind>);
+// Painters is the painter list (#/people), with Takes commissions (#/painters) as a filter inside it.
+const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette'],['people','Painters','#/people']];
+const commHead=tab=>`<h1>Tutorials &amp; Community</h1><nav class="ctabs" aria-label="Tutorials and community sections">${COMM_TABS.map(([k,t,u])=>`<a href="${u}"${k===tab?' class="on" aria-current="page"':''}>${t}</a>`).join('')}</nav>`;
+async function renderRecipes(k){
+ if(['tutorial','recipe','palette'].includes(k))rKind=k;else if(!rKind)rKind='tutorial';
  if(!ME)rScope='public';
- const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint),kb=(k,t)=>`<button class="btn${rKind===k?' pri':''}" data-kd="${k}" type="button">${t}</button>`;
- el.innerHTML=`<h1>Recipes &amp; tutorials</h1>
- <div class="kinds"><p><span class="tag trec">Recipe</span> One colour: the paints for a look like bone, purple robes or rusty metal, layer by layer from base to highlight.</p><p><span class="tag ttut">Tutorial</span> A whole model, step by step with photos. Steps can use recipes.</p><p><span class="tag tpal">Palette</span> A set of paints matched to the colours of a photo. Make one with From a photo on the colour wheel.</p><p><span class="tag topen">Commission painters</span> Painters who take commissions, with photos of their work. <a href="#/painters">Find a painter →</a></p><p><span class="tag">Painters</span> Everyone sharing on the site. Search by name, see their work and send a message. <a href="#/people">Browse painters →</a></p></div>
- <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${ME?'<a class="btn pri" href="#/new/recipe">+ New recipe</a><a class="btn pri" href="#/new">+ New tutorial</a>':'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
- <div class="row">${kb('','All')}${kb('recipe','Recipes')}${kb('tutorial','Tutorials')}${kb('palette','Palettes')}<a class="btn" href="#/painters">🖌 Commission painters</a><a class="btn" href="#/people">👥 Find painters</a>${pp?`<span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span>`:''}</div>
- <div class="bar"><input id="rq" type="search" placeholder="Search titles and summaries"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
+ const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint);
+ const T={tutorial:['tutorials','A whole model, step by step with photos and video. Steps can use recipes.','<a class="btn pri" href="#/new">+ New tutorial</a>'],
+  recipe:['recipes','One colour, layer by layer from base to highlight: bone, purple robes, rusty metal and so on.','<a class="btn pri" href="#/new/recipe">+ New recipe</a>'],
+  palette:['palettes','A set of paints matched to the colours of a photo. Make one with From a photo under More tools on the colour wheel.','<a class="btn pri" href="#/">Make one from a photo</a>']}[rKind];
+ el.innerHTML=`${commHead(rKind)}<p class="s ctl">${T[1]}</p>
+ <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${ME?T[2]:'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
+ ${pp?`<div class="row"><span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span></div>`:''}
+ <div class="bar"><input id="rq" type="search" placeholder="Search ${T[0]}" aria-label="Search ${T[0]}"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
- el.querySelectorAll('[data-kd]').forEach(b=>b.onclick=()=>{rKind=b.dataset.kd;renderRecipes()});
  if($('rPaintC'))$('rPaintC').onclick=()=>{rPaint='';renderRecipes()};
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
- const what=rKind==='recipe'?'recipes':rKind==='tutorial'?'tutorials':rKind==='palette'?'palettes':'recipes or tutorials';
+ const what=T[0];
  async function load(){const L=$('rlist');
   try{const d=await api(`/recipes?scope=${rScope}&kind=${rKind}&paint=${encodeURIComponent(rPaint)}&q=${encodeURIComponent($('rq').value)}`);
    L.innerHTML=d.recipes.length?d.recipes.map(cardHTML).join('')
-    :`<p class="s">${rScope==='mine'?`You have not written any ${what} yet.`:rScope==='saved'?'Nothing saved yet. Press ☆ Save on a tutorial or recipe to keep it here.':rScope==='following'?'Nothing here yet. <a href="#/people">Find painters</a> and press Follow on their profile to see their new work here.':`No public ${what} yet. Be the first to share one.`}</p>`}
+    :`<p class="s">${rScope==='mine'?`You have not written any ${what} yet.`:rScope==='saved'?'Nothing saved yet. Press ☆ Save on one to keep it here.':rScope==='following'?'Nothing here yet. <a href="#/people">Find painters</a> and press Follow on their profile to see their new work here.':`No public ${what} yet. Be the first to share one.`}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
  load()}
 
@@ -811,8 +817,9 @@ const openTag=c=>c.open?'<span class="tag topen">Taking commissions</span>':'<sp
 let cmOpen=false;
 async function renderPainters(){
  const el=$('v-painters');
- el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>Commission painters</h1>
- <p class="s">Painters who'll paint your models for you. Open a painter to see their work, prices and tutorials, and send them a message. Agreements, payment and shipping are between you and the painter: The Painters Desk doesn't take part or check painters.</p>
+ el.innerHTML=`${commHead('people')}
+ <div class="row"><a class="btn" href="#/people">All painters</a><a class="btn pri" href="#/painters" aria-current="page">🖌 Takes commissions</a></div>
+ <p class="s ctl">Painters who'll paint your models for you. Open a painter to see their work, prices and tutorials, and send them a message. Agreements, payment and shipping are between you and the painter: The Painters Desk doesn't take part or check painters.</p>
  <div class="row"><label><input type="checkbox" id="cmOpen"${cmOpen?' checked':''}> Only painters taking commissions now</label><span class="sp" style="flex:1"></span><a class="btn${ME?' pri':''}" href="#/account?commission">${ME?'List yourself as a painter':'Sign in to list yourself'}</a></div>
  <div class="bar"><input id="cmq" type="search" placeholder="Search names, styles and descriptions"></div><div id="cmlist" class="cards"><p class="s">Loading…</p></div>`;
  $('cmOpen').onchange=e=>{cmOpen=e.target.checked;load()};
@@ -952,9 +959,9 @@ let pSort='active',pRel='';
 async function renderPeople(){
  if(!(ME&&INFO.follows))pRel='';
  const el=$('v-people'),sb=(k,t)=>`<button class="btn${!pRel&&pSort===k?' pri':''}" data-ps="${k}" type="button">${t}</button>`,rb=(k,t)=>`<button class="btn${pRel===k?' pri':''}" data-pr="${k}" type="button">${t}</button>`;
- el.innerHTML=`<p><a href="#/recipes">← Tutorials &amp; recipes</a></p><h1>Painters</h1>
- <p class="s">Painters sharing on The Painters Desk. Open a profile to see their tutorials, recipes and favourite paints${INFO.messages?', or send them a message':''}.${ME?' You can hide yourself from this list on your <a href="#/account">account page</a>.':''}</p>
- <div class="row">${sb('active','Most active')}${sb('new','Newest')}${ME&&INFO.follows?rb('following','Following')+rb('followers','Followers'):''}<span class="sp" style="flex:1"></span><a class="btn" href="#/painters">🖌 Commission painters</a></div>
+ el.innerHTML=`${commHead('people')}
+ <p class="s ctl">Painters sharing on The Painters Desk. Open a profile to see their tutorials, recipes and favourite paints${INFO.messages?', or send them a message':''}.${ME?' You can hide yourself from this list on your <a href="#/account">account page</a>.':''}</p>
+ <div class="row">${sb('active','Most active')}${sb('new','Newest')}${ME&&INFO.follows?rb('following','Following')+rb('followers','Followers'):''}<a class="btn" href="#/painters">🖌 Takes commissions</a></div>
  <div class="bar"><input id="pq" type="search" placeholder="Search by name" aria-label="Search painters by name"></div><div id="plist" class="cards"><p class="s">Loading…</p></div>
  <div class="row" id="pMoreR" hidden><button class="btn" type="button" id="pMore">Show more</button></div>`;
  el.querySelectorAll('[data-ps]').forEach(b=>b.onclick=()=>{pSort=b.dataset.ps;pRel='';renderPeople()});
