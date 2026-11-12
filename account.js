@@ -134,7 +134,7 @@ function route(){
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
- document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'))));
+ document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
  {const s=document.querySelector('#nav .secs'),o=s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8}
  if(view==='welcome')renderWelcome();
  else if(view==='palettes')window.pdPalettes&&pdPalettes(id);
@@ -538,6 +538,7 @@ let rScope='public',rKind='tutorial',rPaint='';
 // Tutorials & Community: one page with tabs. Tutorials, Recipes and Palettes share the card list (#/recipes/<kind>);
 // Painters is the painter list (#/people), with Takes commissions (#/painters) as a filter inside it.
 const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette'],['people','Painters','#/people']];
+window.pdCommHead=tab=>commHead(tab);
 const commHead=tab=>`<h1>Tutorials &amp; Community</h1><nav class="ctabs" aria-label="Tutorials and community sections">${COMM_TABS.map(([k,t,u])=>`<a href="${u}"${k===tab?' class="on" aria-current="page"':''}>${t}</a>`).join('')}</nav>`;
 async function renderRecipes(k){
  if(['tutorial','recipe','palette'].includes(k))rKind=k;else if(!rKind)rKind='tutorial';
@@ -545,11 +546,13 @@ async function renderRecipes(k){
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint);
  const T={tutorial:['tutorials','A whole model, step by step with photos and video. Steps can use recipes.','<a class="btn pri" href="#/new">+ New tutorial</a>'],
   recipe:['recipes','One colour, layer by layer from base to highlight: bone, purple robes, rusty metal and so on.','<a class="btn pri" href="#/new/recipe">+ New recipe</a>'],
-  palette:['palettes','A set of paints matched to the colours of a photo. Make one with From a photo under More tools on the colour wheel.','<a class="btn pri" href="#/">Make one from a photo</a>']}[rKind];
+  palette:['palettes','Themed colour schemes matched to your paints, and palette cards painters have shared. Make your own from a photo with From a photo under More tools on the colour wheel.','<a class="btn pri" href="#/">Make one from a photo</a>']}[rKind];
  el.innerHTML=`${commHead(rKind)}<p class="s ctl">${T[1]}</p>
+ ${rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section><h2 class="rsh">Shared by painters</h2>':''}
  <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${ME?T[2]:'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
  ${pp?`<div class="row"><span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span></div>`:''}
  <div class="bar"><input id="rq" type="search" placeholder="Search ${T[0]}" aria-label="Search ${T[0]}"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
+ if($('rInsp'))pdPalGallery($('rInsp'));
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  if($('rPaintC'))$('rPaintC').onclick=()=>{rPaint='';renderRecipes()};
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
