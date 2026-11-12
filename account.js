@@ -632,13 +632,13 @@ async function renderRecipe(id){
  const r=d.recipe;r.paints=r.paints.filter(k=>k!==WATER.k);const mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
  const rec=r.kind!=='tutorial',pal=r.kind==='palette',K=kindOf(r),L=d.linked||{};
  // A recipe reads as one colour: a strip of its layers, then each layer's paints. A tutorial reads as a model, step by step.
- const layersHTML=(ls,cls='',W='Layer')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||W+' '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${esc(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
+ const layersHTML=(ls,cls='',W='Layer')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||W+' '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${esc(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank" data-big="${esc(s.image)}"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
  const linkHTML=id=>{const l=L[id];return l?`<div class="lrec"><a href="#/recipe/${esc(l.id)}">${stripHTML(l.layers.map(x=>x.mix))}<b>Recipe: ${esc(l.title)}</b> <span class="s">by ${esc(l.author.name)}</span></a>${layersHTML(l.layers,'sm')}</div>`:'<p class="s">This step used a recipe that is no longer shared.</p>'};
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
  <p class="s"><span class="tag ${K.c}">${K.t}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>${rec?'':metaTags(r.meta)}by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
  ${voteHTML(r,mine)}
  ${rec&&r.steps.length?stripHTML(r.steps.map(s=>s.mix),'tall'):''}
- ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank"><img class="ph cover${rec?' rcov':''}" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
+ ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank" data-big="${esc(r.cover)}"><img class="ph cover${rec?' rcov':''}" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
  ${r.summary?`<p>${esc(r.summary)}</p>`:''}
  ${r.link?videoEmbed(r.link):''}
  ${rec&&r.steps.length?`<div class="panel"><h2>${pal?'Colours':'Layers'}</h2>${layersHTML(r.steps,'',pal?'Colour':'Layer')}</div>`:''}
@@ -646,7 +646,7 @@ async function renderRecipe(id){
   :`<div class="panel"><h2>${rec&&r.steps.length?'Other paints':'Paints used'}</h2><div class="chips" id="rp">${r.paints.map(k=>pchip(k)).join('')||'<span class="s">No paints listed.</span>'}</div>
  ${r.paints.length?'<button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>':''}</div>`}
  ${rec?'':r.steps.map((s,i)=>`<div class="panel step"><h2>Step ${i+1}${s.title?' · '+esc(s.title):''}</h2>
-  ${s.image?`<a href="${imgURL(s.image)}" target="_blank"><img class="ph" src="${imgURL(s.image)}" alt="Step ${i+1}" loading="lazy"></a>`:''}
+  ${s.image?`<a href="${imgURL(s.image)}" target="_blank" data-big="${esc(s.image)}"><img class="ph" src="${imgURL(s.image)}" alt="Step ${i+1}" loading="lazy"></a>`:''}
   ${s.recipe?linkHTML(s.recipe):''}${mixHTML(s.mix)}${s.text?`<div class="steps">${esc(s.text)}</div>`:''}</div>`).join('')}
  ${r.body?`<div class="panel"><h2>${r.steps.length?'Notes':rec?'How to paint it':'Steps'}</h2><div class="steps">${esc(r.body)}</div></div>`:''}
  ${rec&&d.usedIn?.length?`<div class="panel"><h2>Used in tutorials</h2><ul class="used">${d.usedIn.map(t=>`<li><a href="#/recipe/${esc(t.id)}">${esc(t.title)}</a></li>`).join('')}</ul></div>`:''}
@@ -840,7 +840,7 @@ function commissionHTML(c,p,mine){
  return `<div class="panel cmp"><h2>Commissions ${openTag(c)}</h2>
  ${c.pitch?`<div class="steps">${esc(c.pitch)}</div>`:''}
  <dl class="cmf">${c.styles?`<dt>Styles</dt><dd>${esc(c.styles)}</dd>`:''}${c.price?`<dt>Prices</dt><dd>${esc(c.price)}</dd>`:''}${c.turnaround?`<dt>Turnaround</dt><dd>${esc(c.turnaround)}</dd>`:''}</dl>
- ${c.photos.length?`<div class="pgal">${c.photos.map(id=>`<a href="${imgURL(id)}" target="_blank" rel="noopener"><img src="${imgURL(id)}" alt="Painted by ${esc(p.name)}" loading="lazy"></a>`).join('')}</div>`:''}
+ ${c.photos.length?`<div class="pgal">${c.photos.map(id=>`<a href="${imgURL(id)}" target="_blank" rel="noopener" data-big="${esc(id)}"><img src="${imgURL(id)}" alt="Painted by ${esc(p.name)}" loading="lazy"></a>`).join('')}</div>`:''}
  <div class="row">${mine?'<a class="btn" href="#/account?commission">Edit your listing</a>':c.contact?(ME?`<button class="btn pri" type="button" id="cmMsg">✉ Message ${esc(p.name)}</button>`:`<a class="btn pri" href="#/account">Sign in to message ${esc(p.name)}</a>`):''}
  ${c.links.map(l=>`<a class="btn" href="${esc(l)}" target="_blank" rel="noopener nofollow ugc">${esc(linkLabel(l))} ↗</a>`).join('')}</div>
  <p class="s">Agreements, payment and shipping are between you and the painter. The Painters Desk doesn't take part or check painters.</p></div>`}
@@ -1212,7 +1212,7 @@ function postHTML(p,th){
   :`<a class="btn sm vote" href="#/account" title="Sign in to upvote">${bottle()}Upvote · ${p.votes}</a>`;
  const mod=ME?.admin?(p.hiddenByMod?'<span class="tag dang">removed</span> ':'')+(p.authorBlocked?'<span class="tag dang">author blocked</span> ':''):'';
  const content=`${mod}${p.body?`<div class="fbody">${linkify(p.body)}</div>`:''}
-  ${p.images.length?`<div class="pgal">${p.images.map(id=>`<a href="${imgURL(id)}" target="_blank"><img src="${imgURL(id)}" alt="Photo" loading="lazy"></a>`).join('')}</div>`:''}
+  ${p.images.length?`<div class="pgal">${p.images.map(id=>`<a href="${imgURL(id)}" target="_blank" data-big="${esc(id)}"><img src="${imgURL(id)}" alt="Photo" loading="lazy"></a>`).join('')}</div>`:''}
   ${p.paints.length?`<div class="chips fpp">${p.paints.map(k=>pchip(k)).join('')}</div>`:''}
   ${p.recipes.map(r=>`<a class="lrec frec" href="#/recipe/${esc(r.id)}">${r.kind==='tutorial'?(r.cover?`<img class="rthumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''):stripHTML(r.layers)}<span class="tag ${kindOf(r).c}">${kindOf(r).t}</span><b>${esc(r.title)}</b> <span class="s">by ${esc(r.author)}</span></a>`).join('')}`;
  return `<div class="fpost${p.first?' first':''}" data-p="${esc(p.id)}" id="post-${esc(p.id)}">${head}
@@ -1456,6 +1456,8 @@ function chatBox(){
  if(!CT.why)chatComposer()}
 // Photos in chat open large over the page; a tap anywhere (or Esc) closes them.
 $('chImg').onclick=()=>$('chImg').close();
+// Any photo link marked data-big opens in the lightbox instead of a new tab. Ctrl/Cmd/middle-click still open a tab.
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[data-big]');if(!a||e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const d=$('chImg');if(!d||d.open)return;e.preventDefault();$('chImgI').src=imgURL(a.dataset.big);$('chImgI').alt=a.querySelector('img')?.alt||'Photo';d.showModal()});
 // On phones the popup covers the page, so following a link out of it (a profile) closes it.
 $('chatPop').addEventListener('click',e=>{if(innerWidth<=700&&e.target.closest('a[href^="#/"]'))chatHide()});
 
