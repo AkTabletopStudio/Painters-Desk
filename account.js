@@ -539,21 +539,24 @@ let rScope='public',rKind='tutorial',rPaint='';
 // Painters is the painter list (#/people), with Takes commissions (#/painters) as a filter inside it.
 const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette'],['people','Painters','#/people']];
 window.pdCommHead=tab=>commHead(tab);
-const commHead=tab=>`<h1>Tutorials &amp; Community</h1><nav class="ctabs" aria-label="Tutorials and community sections">${COMM_TABS.map(([k,t,u])=>`<a href="${u}"${k===tab?' class="on" aria-current="page"':''}>${t}</a>`).join('')}</nav>`;
+// The Commissions button sits beside the heading on every tab, so hiring a painter is always one tap away.
+const commHead=tab=>{const cm=tab==='commissions';if(cm)tab='people';
+ return `<div class="chead"><h1>Tutorials &amp; Community</h1><a class="btn${cm?' pri':''} cmbtn" href="#/painters"${cm?' aria-current="page"':''} title="Painters you can hire to paint your models">🖌 Commissions</a></div><nav class="ctabs" aria-label="Tutorials and community sections">${COMM_TABS.map(([k,t,u])=>`<a href="${u}"${k===tab?' class="on"'+(cm?'':' aria-current="page"'):''}>${t}</a>`).join('')}</nav>`};
 async function renderRecipes(k){
  if(['tutorial','recipe','palette'].includes(k))rKind=k;else if(!rKind)rKind='tutorial';
  if(!ME)rScope='public';
  // Accounts unreachable (e.g. a preview build with no database): keep the tabs and the Inspiration palettes, ask to sign in for the rest.
- if(!API){const el=$('v-recipes');el.innerHTML=commHead(rKind)+(rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':'')+signInLink('Tutorials, recipes and shared palettes load from painters\' accounts.');if($('rInsp'))pdPalGallery($('rInsp'));return}
+ if(!API){const el=$('v-recipes');el.innerHTML=commHead(rKind)+signInLink('Tutorials, recipes and shared palettes load from painters\' accounts.')+(rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':'');if($('rInsp'))pdPalGallery($('rInsp'));return}
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint);
  const T={tutorial:['tutorials','A whole model, step by step with photos and video. Steps can use recipes.','<a class="btn pri" href="#/new">+ New tutorial</a>'],
   recipe:['recipes','One colour, layer by layer from base to highlight: bone, purple robes, rusty metal and so on.','<a class="btn pri" href="#/new/recipe">+ New recipe</a>'],
-  palette:['palettes','Themed colour schemes matched to your paints, and palette cards painters have shared. Make your own from a photo with From a photo under More tools on the colour wheel.','<a class="btn pri" href="#/">Make one from a photo</a>']}[rKind];
+  palette:['palettes','Palette cards painters have shared, then our themed Inspiration palettes matched to your paints. Make your own from a photo with From a photo under More tools on the colour wheel.','<a class="btn pri" href="#/">Make one from a photo</a>']}[rKind];
  el.innerHTML=`${commHead(rKind)}<p class="s ctl">${T[1]}</p>
- ${rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section><h2 class="rsh">Shared by painters</h2>':''}
+ ${rKind==='palette'?'<h2 class="rsh">Shared by painters</h2>':''}
  <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${ME?T[2]:'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
  ${pp?`<div class="row"><span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span></div>`:''}
- <div class="bar"><input id="rq" type="search" placeholder="Search ${T[0]}" aria-label="Search ${T[0]}"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>`;
+ <div class="bar"><input id="rq" type="search" placeholder="Search ${T[0]}" aria-label="Search ${T[0]}"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>
+ ${rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':''}`;
  if($('rInsp'))pdPalGallery($('rInsp'));
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  if($('rPaintC'))$('rPaintC').onclick=()=>{rPaint='';renderRecipes()};
@@ -822,7 +825,7 @@ const openTag=c=>c.open?'<span class="tag topen">Taking commissions</span>':'<sp
 let cmOpen=false;
 async function renderPainters(){
  const el=$('v-painters');
- el.innerHTML=`${commHead('people')}
+ el.innerHTML=`${commHead('commissions')}
  <div class="row"><a class="btn" href="#/people">All painters</a><a class="btn pri" href="#/painters" aria-current="page">🖌 Takes commissions</a></div>
  <p class="s ctl">Painters who'll paint your models for you. Open a painter to see their work, prices and tutorials, and send them a message. Agreements, payment and shipping are between you and the painter: The Painters Desk doesn't take part or check painters.</p>
  <div class="row"><label><input type="checkbox" id="cmOpen"${cmOpen?' checked':''}> Only painters taking commissions now</label><span class="sp" style="flex:1"></span><a class="btn${ME?' pri':''}" href="#/account?commission">${ME?'List yourself as a painter':'Sign in to list yourself'}</a></div>
