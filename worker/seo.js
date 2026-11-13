@@ -211,7 +211,7 @@ export function matches(D, p, all = false) {
   return D.brands.map((br, bi) => {
     if (bi === p.b) return null;
     let b = doc.filter(m => m.p.b === bi).sort((a, b) => a.d - b.d);
-    const have = new Set(b.map(m => m.p)), pool = br.paints.filter(q => !have.has(q)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d);
+    const have = new Set(b.map(m => m.p)), pool = br.paints.filter(q => !have.has(q) && clearOf(q) === clearOf(p)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d);
     if (all) {
       const ch = b.filter(m => isMetT(m.p) === mt), xch = b.filter(m => isMetT(m.p) !== mt);
       const near = pool.filter(m => isMetT(m.p) === mt).slice(0, ch.length ? 2 : 3), xnear = pool.filter(m => isMetT(m.p) !== mt).slice(0, xch.length ? 0 : 1);
@@ -304,7 +304,7 @@ i.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);flex:n
 .m em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .ck{color:#2a9d5c;font-weight:700}
 ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ul.u li:first-child{border-top:0}
-ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}ul.m.list{padding-left:0}ul.m.list li{display:block}
+ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}ul.list li i.sw{display:inline-block;width:14px;height:14px;border-width:1.5px;vertical-align:-2px;margin:0 6px 0 0}ul.m.list{padding-left:0}ul.m.list li{display:block}
 ul.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 20px}ul.gl li{display:block;padding:6px 0}ul.gl b{font-size:17px}ul.gl .chip{height:12px;margin:6px 0 4px;max-width:240px}.prose h3,.panel h3{font-size:17px;margin:4px 0 6px}
 footer{font-size:12px;color:var(--mut);margin-top:24px}
 .av{width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;border:2px solid var(--ink);box-sizing:border-box}img.av{object-fit:cover}
@@ -406,7 +406,7 @@ function paintPage(D, p, rs) {
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
 ΔE is the colour difference between the two swatches: under about 6 is a close match, over about 15 is a loose one. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Swatches are estimates, so check the real paints before you commit.</p>
 ${p.now ? `<p>${esc(p.n)} is an old Army Painter Warpaints colour. Army Painter's Warpaints Fanatic conversion chart lists <a href="${paintUrl(p.now)}">${esc(p.now.n)}</a> as its replacement in Warpaints Fanatic, a close match but not always exact. The swatch shown here is ${esc(p.now.n)}'s.</p>` : ''}
-<p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a></p>
+<p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;own=1" rel="nofollow">＋ Add ${esc(p.n)} to My paints</a></p>
 ${stdLinksHTML(D, p)}
 ${mt ? `<h2 class="sec">Metallic matches</h2><p class="s">${esc(p.n)} is a metallic${p.t === 'pearl' ? ' (pearl)' : ''} paint, so these are metallic and pearl paints only.</p>` : ''}
 ${grid('ch', 'near')}
@@ -701,9 +701,11 @@ function links(D) {
 
 // Matches for p in brand bi: the closest chart-listed equivalent (if any), and the nearest other paint of the same type
 // (shade for shade, metallic for metallic) when the brand has that type, else the nearest of any type.
+// Varnishes, mediums and thinners are only ever matched with each other: a clear varnish isn't a stand-in for a crackle or blood effect.
+const CLEAR = /\b(varnish|thinner|retarder|flow improver|(matt|matte|gloss|satin|glaze|glazing|airbrush|lahmian|contrast|wash|blending|texture|pouring|speedpaint|metallic|shading|chipping) medium)\b/i, clearOf = q => CLEAR.test(q.n);
 function bestIn(D, p, bi, gs) {
   const doc = (links(D).get(p.i) || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug && m.p.b === bi && (!gs || gs.includes(m.p.g))).sort((a, b) => a.d - b.d);
-  const all = D.brands[bi].paints.filter(q => !gs || gs.includes(q.g)), same = all.filter(q => q.t === p.t), have = new Set(doc.map(m => m.p));
+  const all = D.brands[bi].paints.filter(q => (!gs || gs.includes(q.g)) && clearOf(q) === clearOf(p)), same = all.filter(q => q.t === p.t), have = new Set(doc.map(m => m.p));
   const near = (same.length ? same : all).filter(q => !have.has(q)).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d);
   return { doc: doc[0], near: near[0], best: [doc[0], near[0]].filter(Boolean).sort((a, b) => a.d - b.d)[0] };
 }
@@ -751,7 +753,7 @@ function brandPage(D, br) {
 <p>Every ${esc(br.name)} paint on The Painters Desk (${br.paints.length} in all). Pick one to see its closest matches in the other brands. Swatch colours are estimates.</p>
 ${brandGuide(D, br)}
 ${guides.length ? `<section class="panel"><h2>Conversion charts</h2><ul class="m">${guides.map(g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`).join('')}</ul></section>` : ''}
-${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="list">${x.ps.map(p => `<li><a href="${paintUrl(p)}">${esc(label(p))}</a></li>`).join('')}</ul></section>`).join('')}`;
+${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="list">${x.ps.map(p => `<li><i class="sw" style="background:${p.h}"></i><a href="${paintUrl(p)}">${esc(label(p))}</a></li>`).join('')}</ul></section>`).join('')}`;
   return page({
     title, desc, path: '/paints/' + br.slug, body,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug]],

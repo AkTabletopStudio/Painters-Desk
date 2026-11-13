@@ -479,7 +479,7 @@ document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+
 function neuMark(w){const ins=new Set(OFF.map(x=>x[0].i));let n=0;document.querySelectorAll('#neu .chip').forEach(e=>{const h=ins.has(+e.dataset.i);e.classList.toggle('inr',h);n+=h});
 document.getElementById('neuN').textContent=(NE.length===1?'(1 paint':`(${NE.length} paints`)+(n?` · ${n} in this ${w||'ramp'})`:')')}
 function tyUI(){const b=document.getElementById('hTy'),n=HIDE_T.size;b.textContent=n?`Paint types (${n} hidden)`:'Paint types';b.setAttribute('aria-pressed',n>0)}
-(()=>{const d=document.getElementById('tyDlg'),cnt={};P.forEach(p=>{const t=paintType(p);cnt[t]=(cnt[t]||0)+1});
+(()=>{const d=document.getElementById('tyDlg'),cnt={};P.forEach(p=>{if(p.g==='B'||p.mix)return;const t=paintType(p);cnt[t]=(cnt[t]||0)+1});
 document.getElementById('tyList').innerHTML=`<label class="tyr"><input type="checkbox" checked disabled><span><b>Base & layer paints</b> <em>${cnt.op}</em><small>Opaque paints, always shown</small></span></label>`+
  PTYPES.map(([k,t,h])=>`<label class="tyr"><input type="checkbox" data-ty="${k}"${HIDE_T.has(k)?'':' checked'}><span><b>${t}</b> <em>${cnt[k]||0}</em><small>${h}</small></span></label>`).join('');
 document.getElementById('hTy').onclick=()=>d.showModal();
@@ -518,11 +518,13 @@ const isMetT=p=>{const t=paintType(p);return t==='met'||t==='pearl'};
 // same type within ΔE 12; same-named paints in one brand shown once. MATCH_ALL (Show all button) brings back the full list: every chart
 // match plus the 2-3 nearest per brand, no limit. Same split by finish either way (xch/xnear = metallic vs non-metallic section).
 let MATCH_ALL=false;const M_TICK=25,M_NEAR=12,tyG=t=>t==='ink'?'wash':t;
+// Varnishes, mediums and thinners only match each other (mirrored in worker/seo.js clearOf).
+const CLEAR=/\b(varnish|thinner|retarder|flow improver|(matt|matte|gloss|satin|glaze|glazing|airbrush|lahmian|contrast|wash|blending|texture|pouring|speedpaint|metallic|shading|chipping) medium)\b/i,clearOf=q=>CLEAR.test(q.n);
 const dedupe=a=>{const s=new Set();return a.filter(m=>{const k=m.p.n.trim().toLowerCase();if(s.has(k))return false;s.add(k);return true})};
 function matchData(p,all=MATCH_ALL){const i=p.i,mt=isMetT(p),ty=tyG(paintType(p)),mine=q=>!ONLY_MINE||own(q),doc=(MT[i]||[]).map(([j,s])=>({p:P[j],s,d:dE(p,P[j])})).filter(m=>mine(m.p)),out=[];
 BRANDS.forEach(([bn,gs],bi)=>{if(BR_OF[p.g]===bi)return;let b=doc.filter(m=>BR_OF[m.p.g]===bi).sort((a,b)=>a.d-b.d);const have=new Set(b.map(m=>m.p));if(!all)b=b.filter(m=>m.d<=M_TICK);
 let ch=b.filter(m=>isMetT(m.p)===mt),xch=b.filter(m=>isMetT(m.p)!==mt);
-const pool=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d);
+const pool=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)&&clearOf(q)===clearOf(p)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d);
 let near,xnear;if(all){near=pool.filter(m=>isMetT(m.p)===mt).slice(0,ch.length?2:3);xnear=pool.filter(m=>isMetT(m.p)!==mt).slice(0,xch.length?0:1)}
 else{ch=dedupe(ch);xch=dedupe(xch);const ok=m=>m.d<=M_NEAR&&!ch.concat(xch).some(c=>c.p.n.trim().toLowerCase()===m.p.n.trim().toLowerCase());
  near=ch.length?[]:pool.filter(m=>isMetT(m.p)===mt&&(mt||tyG(paintType(m.p))===ty)&&ok(m)).slice(0,1);xnear=xch.length?[]:pool.filter(m=>isMetT(m.p)!==mt&&ok(m)).slice(0,1)}
@@ -531,8 +533,8 @@ const mCount=md=>md.reduce((a,o)=>a+o.ch.length+o.near.length+o.xch.length+o.xne
 // Links from a selected paint to its own paint page (the Worker's /paints/find looks up the page by paint key) and to a conversion chart for its brand.
 const CONV_G={'Citadel / Warhammer':['guides','Conversion charts'],'Army Painter':['guides/army-painter-to-citadel','Army Painter to Citadel chart'],'Vallejo':['guides/vallejo-to-citadel','Vallejo to Citadel chart'],
  'Pro Acryl':['guides/pro-acryl-to-citadel','Pro Acryl to Citadel chart'],'AK Interactive':['guides/citadel-to-ak-interactive','Citadel to AK chart'],'Scale75':['guides/citadel-to-scale75','Citadel to Scale75 chart']};
-function guideLinks(p){if(p.g==='B'||p.mix)return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]],w=window.pdWantBtn?pdWantBtn(p):'';
- return`<p class="s glinks">${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
+function guideLinks(p){if(p.g==='B'||p.mix)return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]],o=window.pdOwnBtn?pdOwnBtn(p):'',w=window.pdWantBtn?pdWantBtn(p):'';
+ return`<p class="s glinks">${o?o+'<br>':''}${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
 function matchHTML(p){return guideLinks(p)+mixHTML(p)+mtHTML(p)}
 function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: chart ✓ matches within ΔE '+M_TICK+', otherwise the nearest paint of the same type within ΔE '+M_NEAR+'.</p>');
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
@@ -830,9 +832,11 @@ let ST={b:'',mine:0,t:''},PK={},CUR=null;try{Object.assign(ST,JSON.parse(localSt
 const save=()=>{try{localStorage.setItem('pd-pal',JSON.stringify(ST))}catch(e){}};
 const mine=()=>!!ST.mine&&!!OWN&&OWN.size>0;
 const pool=c=>P.filter(p=>!p.mix&&p.g!=='B'&&(c.m?paintType(p)==='met':paintType(p)==='op')&&(ST.b===''||BR_OF[p.g]===+ST.b));
-// Up to 4 nearest paints per colour; with "Use my paints" the owned paints come first, then the nearest others if fewer than 2 are owned.
+// Up to 4 nearest paints per colour; with "Use my paints" the owned paints within ΔE OWN_MAX come first, then the nearest others if fewer than 2.
+// An owned paint far from the colour (a red for a green) is never picked just because it is owned.
+const OWN_MAX=20;
 function near(c){const seen=new Set(),all=pool(c).map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).filter(m=>{const k=BR_OF[m.p.g]+'|'+m.p.n.trim().toLowerCase();return!seen.has(k)&&seen.add(k)});if(!mine())return all.slice(0,4);
- const o=all.filter(m=>own(m.p)).slice(0,4);return o.length>=2?o:[...o,...all.filter(m=>!own(m.p)).slice(0,4-o.length)]}
+ const o=all.filter(m=>own(m.p)&&m.d<=OWN_MAX).slice(0,4);return o.length>=2?o:[...o,...all.filter(m=>!own(m.p)).slice(0,4-o.length)]}
 function matchAll(x){const used=new Set();return x.c.map((c,ci)=>{const m=near(c),k=(PK[x.s]||{})[ci];let pick=m.find(q=>q.p.k===k)||m.find(q=>!used.has(q.p))||m[0]||null;
  if(pick)used.add(pick.p);return{c,m:pick&&!m.includes(pick)?[pick,...m]:m,pick}})}
 const strip=x=>`<div class="phpal">${x.c.map(c=>`<i style="background:${c.h};flex:1" title="${esc(c.r+': '+c.u)}"></i>`).join('')}</div>`;
@@ -854,7 +858,7 @@ function detail(el,x){const R=matchAll(x),hv=R.filter(r=>r.pick&&own(r.pick.p)).
  el.innerHTML=`${window.pdCommHead?pdCommHead('palette'):''}<p><a href="#/recipes/palette">← All palettes</a></p><h2 class="plh">${esc(x.n)}</h2>${strip(x)}<p class="lead">${esc(x.b)}</p><p><b>Tip:</b> ${esc(x.tip)}</p>`+bar()+
  `<div class="panel plrows">`+R.map((r,ci)=>`<div class="phr"><span class="phs" style="background:${r.c.h}" title="Target colour"></span><div class="plcol"><b>${esc(r.c.r)}</b> <span class="s">${esc(r.c.u)}${r.c.m?' (metallic)':''}</span><div class="chips">`+
   (r.m.length?r.m.map(m=>`<button type="button" class="chip${r.pick&&m.p===r.pick.p?' on':''}" data-c="${ci}" data-i="${m.p.i}" aria-pressed="${!!(r.pick&&m.p===r.pick.p)}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0].split(' / ')[0])} · ${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints of this kind here. Try All brands.</span>')+
-  `</div></div>${r.pick&&!r.c.m?`<button type="button" class="btn sm" data-bl="${ci}" title="Open a shadow, mid and highlight for this colour in Blends">Blend</button>`:''}</div>`).join('')+
+  `</div>${mine()&&r.m.length&&!r.m.some(m=>own(m.p))?'<p class="s">None of your paints is close to this colour, so these are the nearest paints to buy.</p>':''}</div>${r.pick&&!r.c.m?`<button type="button" class="btn sm" data-bl="${ci}" title="Open a shadow, mid and highlight for this colour in Blends">Blend</button>`:''}</div>`).join('')+
  `<p class="s">${OWN&&OWN.size?`You own ${hv} of the ${R.length} paints picked. `:''}Tap a paint to use it instead. ΔE is how far the paint is from the target colour: under about 6 is close. Swatches are estimates.</p></div>`+
  `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button><button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Community (needs an account)">Save as palette card</button><a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
  const B=$('plB');if(B)B.onchange=()=>{ST.b=B.value;save();detail(el,x)};const M=$('plMine');if(M)M.onchange=()=>{ST.mine=M.checked?1:0;save();detail(el,x)};
@@ -869,6 +873,8 @@ function detail(el,x){const R=matchAll(x),hv=R.filter(r=>r.pick&&own(r.pick.p)).
 window.pdPalettes=id=>{const el=$('v-palettes');if(!el)return;const x=id&&PL.find(p=>p.s===id);if(x)detail(el,x);else location.replace('#/recipes/palette')}}
 // Links from the paint pages (/paints/...) open the wheel at #/?paint=<paint key>: show that paint and select it.
 function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)return;let k='';try{k=decodeURIComponent(m[1])}catch(e){}
+ // &own=1 (the paint pages' Add to My paints button) also adds it to the collection once signed in (account.js pdOwnNow).
+ if(/[?&]own=1/.test(location.hash)){window.pdOwnAsk=k;window.pdOwnNow&&pdOwnNow()}
  history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
  if(CH.includes(p)){if(sel!==p)pick(p)}else neutralShow(p);document.getElementById('w').scrollIntoView({block:'start'})}
 paintLink();addEventListener('hashchange',paintLink);
