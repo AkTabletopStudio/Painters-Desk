@@ -111,6 +111,7 @@ function wheelSync(r){
  else if(loc){if(ok&&(!srv||loc.t>srv.t))api('/me/wheel',{method:'PUT',body:loc}).catch(()=>{})}
  else if(OWN.size){P.forEach(p=>p.on=OWN.has(p.k));boxes();refresh()}}
 
+function wheelReset(){try{localStorage.removeItem(WK)}catch(e){}P.forEach(p=>p.on=!!on[p.g]);boxes();refresh()}
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
  let got=false;try{INFO=await api('/me');ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
@@ -303,9 +304,10 @@ function renderAccount(){
   try{ME=(await api('/me/findable',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('pFindM').textContent=c.checked?'You\'re in the list.':'Hidden from the list. Your profile page is still public.'}
   catch(e){c.checked=!c.checked;$('pFindM').className='err';$('pFindM').textContent=e.message}c.disabled=false};
  commissionPanel();
- $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});await loadMe();location.hash='#/'};
+ // Signing out also puts the wheel back to the starting paints, so the next person on this browser doesn't see your collection.
+ $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});wheelReset();await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
- $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});await loadMe();location.hash='#/'}}
+ $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});wheelReset();await loadMe();location.hash='#/'}}
 
 // Admin: write an update email, send a test to yourself, then send it to everyone who opted in.
 async function annPanel(){let n=0;
@@ -369,7 +371,10 @@ function askBulk(keys,what,on){const d=$('remDlg'),n=keys.length,s=n===1?'':'s';
  $('remDlgT').textContent=on?'Add to your collection?':'Remove from your collection?';$('remOk').textContent=on?'Add paints':'Remove paints';$('remOk').className='btn '+(on?'pri':'dan');
  $('remDlgM').textContent=`This ${on?'adds':'removes'} ${n} paint${s}${what?' ('+what+')':''} ${on?'to':'from'} your collection.`;d.returnValue='';
  d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,on);undoBar(keys,on);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
-function undoBar(keys,on=false){if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`${on?'Added':'Removed'} ${n} paint${n===1?'':'s'} ${on?'to':'from'} your collection.`;$('undoT').hidden=false;
+// The Undo bar moves into whichever pop-up is open (a modal pop-up makes the rest of the page untappable), and back to the page when it closes.
+function undoHost(){const T=$('undoT'),d=[...document.querySelectorAll('dialog[open]')].filter(x=>x.matches(':modal')).pop()||document.body;if(T.parentNode===d)return;d.appendChild(T);
+ if(d!==document.body)d.addEventListener('close',()=>{if(T.parentNode===d)document.body.appendChild(T)},{once:true})}
+function undoBar(keys,on=false){undoHost();if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`${on?'Added':'Removed'} ${n} paint${n===1?'':'s'} ${on?'to':'from'} your collection.`;$('undoT').hidden=false;
  clearTimeout(undoTm);undoTm=setTimeout(()=>{$('undoT').hidden=true;undoK=[]},10000)}
 $('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
 let pend={add:new Set(),remove:new Set()},saveT=0;
@@ -922,6 +927,8 @@ async function commissionPanel(){
  <p><label><input type="checkbox" id="cmC"${c.contact?' checked':''}> Let people message me through the site</label></p>
  <p class="s">Messages are emailed to you with the sender's email as the reply address, so you can answer them straight from your inbox. They'll see your email once you reply.${d.contactIssue?' <b>'+esc(CM_ISSUE[d.contactIssue])+'</b>':''}</p>
  <div class="row"><button class="btn pri" id="cmSave" type="button">Save listing</button>${c.listed?'<a class="btn" href="#/u/'+esc(ME.id)+'">See it on your profile</a>':''}<span class="s" id="cmM"></span></div>`;
+ // 'Taking new commissions' only means something once you're listed, so it's greyed out until then.
+ {const L=$('cmL'),O=$('cmO'),dim=()=>{O.disabled=!L.checked;O.closest('label').style.opacity=L.checked?'':'.5'};L.addEventListener('change',dim);dim()}
  $('cmPi').value=c.pitch;$('cmS').value=c.styles;$('cmPr').value=c.price;$('cmT').value=c.turnaround;$('cmLk').value=c.links.join('\n');
  const msg=(t,err)=>{$('cmM').className=err?'err':'s';$('cmM').textContent=t};
  const draw=()=>{const ph=$('cmPh');
