@@ -1386,7 +1386,7 @@ function palettesPage(D) {
   const tags = [...new Set(PALS.flatMap(x => x.t))];
   const body = `<h1>Colour schemes for miniatures</h1>
 <div class="prose"><p>Stuck on a colour scheme? These ${PALS.length} palettes are our own ideas, made for The Painters Desk. Each one has five or six colours with a job each (main colour, second colour, accent, metal, skin or base) and the closest paint in every major brand.</p>
-<p>Open any palette in the <a href="/#/palettes">Palettes page</a> of the colour wheel to match it to the paints you own, show it on the wheel or build blends from it. Swatch colours are estimates, so check the real paints first.</p></div>
+<p>Open any palette in the <a href="/#/recipes/palette">Palettes tab</a> under Tutorials &amp; Community to match it to the paints you own, show it on the wheel or build blends from it. Swatch colours are estimates, so check the real paints first.</p></div>
 ${tags.map(t => `<section class="panel"><h2>${esc(t)}</h2><ul class="m gl">${PALS.filter(x => x.t[0] === t).map(x => `<li><a href="/guides/palettes/${x.s}"><b>${esc(x.n)}</b></a>${palChip(x)}<em>${esc(x.b)}</em></li>`).join('')}</ul></section>`).filter(h => h.includes('<li>')).join('\n')}
 ${guideLinks(null)}`;
   return page({ title, desc, path: '/guides/palettes', body, crumbs: [['Guides', '/guides'], ['Colour palettes', '/guides/palettes']], ld: [webPage('/guides/palettes', title, desc, 'CollectionPage')] });

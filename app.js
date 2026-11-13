@@ -806,7 +806,7 @@ cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.
  const c={lab:rgbLab(...s),h:hx(...s),w:0},C=cands();c.m=C.map(p=>({p,d:dE(c,p)})).sort((a,b)=>a.d-b.d).slice(0,4);const u=new Set(COLS.map(x=>x.pick)),f=c.m.find(m=>!u.has(m.p))||c.m[0];c.pick=f?f.p:null;COLS.unshift(c);render()};
 $('phFile').onchange=e=>load(e.target.files[0]);
 $('phK').onchange=run;$('phMine').onchange=match;
-$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=!(window.pdApi&&pdApi());if(!OWN)$('phMine').checked=false;dlg.showModal()};
+$('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=false;if(!OWN)$('phMine').checked=false;dlg.showModal()};
 $('phNo').onclick=()=>dlg.close();
 const bar=$('phUndo');
 // Save as palette card: opens the palette editor (account.js) filled with one colour per chosen paint. The photo is only uploaded if the painter adds it there.
@@ -819,7 +819,7 @@ window.pdShowSet=(ps,msg)=>{prev=P.filter(p=>p.on).map(p=>p.i);P.forEach(p=>p.on
 $('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))];if(!ps.length)return;dlg.close();
  pdShowSet(ps,`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`)};
 $('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const s=new Set(prev);P.forEach(p=>p.on=s.has(p.i));prev=null;sync()}}
-/* ---------- Inspiration palettes (#/palettes) ----------
+/* ---------- Inspiration palettes (Palettes tab of Tutorials & Community, #/palettes/<slug>) ----------
    Original themed palettes from palettes.js. Each colour is a target swatch with a job (main, accent, metal...), matched to the
    nearest opaque paints (metallic paints for a metal colour) by ΔE, from one brand or all, or only the painter's own paints.
    Picks can be changed per colour, shown on the wheel, opened in Blends or saved as a palette card. Swatches are estimates. */
@@ -839,19 +839,24 @@ const strip=x=>`<div class="phpal">${x.c.map(c=>`<i style="background:${c.h};fle
 function bar(){const o=BRANDS.map(([n],i)=>`<option value="${i}"${ST.b===String(i)?' selected':''}>${esc(n.split(' / ')[0])}</option>`).join('');
  return`<div class="row plbar"><label>Paints from <select id="plB" class="nsel"><option value="">All brands</option>${o}</select></label>`+
   (OWN&&OWN.size?`<label><input type="checkbox" id="plMine"${ST.mine?' checked':''}> Use my paints</label>`:'')+`</div>`}
-function gallery(el){const xs=PL.filter(x=>!ST.t||x.t.includes(ST.t));
- el.innerHTML=`<h1>Palettes</h1><p class="lead">Colour schemes to get you started. Pick one and every colour is matched to the nearest paints, from the brands you like or the paints you already own. Show it on the wheel, build blends from it or save it as a palette card.</p>
-<p class="s">These palettes are our own ideas, made for The Painters Desk. Paint matches come from swatch estimates, so check the real paints before you start. Want a palette from a picture instead? Use <a href="#/">From a photo</a> on the wheel.</p>`+
+// The gallery is a section of the Palettes tab in Tutorials & Community (#/recipes/palette, account.js), above the palette
+// cards painters have shared. Shows 8 cards until 'Show all' (or a theme filter) is used.
+let ALL=false;
+function gallery(el){const xs=PL.filter(x=>!ST.t||x.t.includes(ST.t)),sh=ALL||ST.t?xs:xs.slice(0,8);
+ el.innerHTML=`<h2>Inspiration palettes</h2><p class="s">${PL.length} colour schemes to get you started, our own ideas made for The Painters Desk. Pick one and every colour is matched to the nearest paints, from the brands you like or the paints you already own. Paint matches come from swatch estimates, so check the real paints first.</p>`+
  `<div class="chips pltags" role="group" aria-label="Filter by theme">${['',...TAGS].map(t=>`<button type="button" class="chip${ST.t===t?' on':''}" data-t="${esc(t)}" aria-pressed="${ST.t===t}">${t?esc(t):'All'}</button>`).join('')}</div>`+
- `<div class="plg">${xs.map(x=>`<a class="plc panel" href="#/palettes/${x.s}">${strip(x)}<h3>${esc(x.n)}</h3><p>${esc(x.b)}</p><span class="s">${x.t.map(esc).join(' · ')}</span></a>`).join('')}</div>`;
- el.querySelector('.pltags').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;ST.t=b.dataset.t;save();gallery(el)}}
-function detail(el,x){const R=matchAll(x),api=!!(window.pdApi&&pdApi()),hv=R.filter(r=>r.pick&&own(r.pick.p)).length;CUR={x,R};
- el.innerHTML=`<p><a href="#/palettes">← All palettes</a></p><h1>${esc(x.n)}</h1>${strip(x)}<p class="lead">${esc(x.b)}</p><p><b>Tip:</b> ${esc(x.tip)}</p>`+bar()+
+ `<div class="plg">${sh.map(x=>`<a class="plc panel" href="#/palettes/${x.s}">${strip(x)}<h3>${esc(x.n)}</h3><p>${esc(x.b)}</p><span class="s">${x.t.map(esc).join(' · ')}</span></a>`).join('')}</div>`+
+ (sh.length<xs.length?`<p><button type="button" class="btn" id="plAll">Show all ${xs.length} palettes</button></p>`:'');
+ el.querySelector('.pltags').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;ST.t=b.dataset.t;save();gallery(el)};
+ const A=el.querySelector('#plAll');if(A)A.onclick=()=>{ALL=true;gallery(el)}}
+window.pdPalGallery=gallery;
+function detail(el,x){const R=matchAll(x),hv=R.filter(r=>r.pick&&own(r.pick.p)).length;CUR={x,R};
+ el.innerHTML=`${window.pdCommHead?pdCommHead('palette'):''}<p><a href="#/recipes/palette">← All palettes</a></p><h2 class="plh">${esc(x.n)}</h2>${strip(x)}<p class="lead">${esc(x.b)}</p><p><b>Tip:</b> ${esc(x.tip)}</p>`+bar()+
  `<div class="panel plrows">`+R.map((r,ci)=>`<div class="phr"><span class="phs" style="background:${r.c.h}" title="Target colour"></span><div class="plcol"><b>${esc(r.c.r)}</b> <span class="s">${esc(r.c.u)}${r.c.m?' (metallic)':''}</span><div class="chips">`+
   (r.m.length?r.m.map(m=>`<button type="button" class="chip${r.pick&&m.p===r.pick.p?' on':''}" data-c="${ci}" data-i="${m.p.i}" aria-pressed="${!!(r.pick&&m.p===r.pick.p)}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0].split(' / ')[0])} · ${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints of this kind here. Try All brands.</span>')+
   `</div></div>${r.pick&&!r.c.m?`<button type="button" class="btn sm" data-bl="${ci}" title="Open a shadow, mid and highlight for this colour in Blends">Blend</button>`:''}</div>`).join('')+
  `<p class="s">${OWN&&OWN.size?`You own ${hv} of the ${R.length} paints picked. `:''}Tap a paint to use it instead. ΔE is how far the paint is from the target colour: under about 6 is close. Swatches are estimates.</p></div>`+
- `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button>${api?'<button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Community">Save as palette card</button>':''}<a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
+ `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button><button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Community (needs an account)">Save as palette card</button><a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
  const B=$('plB');if(B)B.onchange=()=>{ST.b=B.value;save();detail(el,x)};const M=$('plMine');if(M)M.onchange=()=>{ST.mine=M.checked?1:0;save();detail(el,x)};
  el.querySelector('.plrows').onclick=e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.bl!==undefined){const m=R[+b.dataset.bl].pick.p,band=pool({}).filter(p=>hd(p.H,m.H)<=20),bl=hBlend(m,band,p=>!mine()||own(p));
@@ -860,7 +865,8 @@ function detail(el,x){const R=matchAll(x),api=!!(window.pdApi&&pdApi()),hv=R.fil
  $('plShow').onclick=()=>{const ps=[...new Set(R.filter(r=>r.pick).map(r=>r.pick.p))],hid=ps.filter(p=>!shown(p)).length;location.hash='#/';
   setTimeout(()=>pdShowSet(ps,`Showing the ${x.n} palette (${ps.length} paints).`+(hid?` ${hid} hidden by Paint types.`:'')),60)};
  const S=$('plSave');if(S)S.onclick=()=>{NMM_DRAFT={kind:'palette',title:x.n,summary:x.b,steps:R.filter(r=>r.pick).map(r=>({title:r.c.r+': '+r.c.u,text:'',image:'',recipe:'',mix:[{k:r.pick.p.k,parts:1}]}))};location.hash='#/new/palette'}}
-window.pdPalettes=id=>{const el=$('v-palettes');if(!el)return;const x=id&&PL.find(p=>p.s===id);if(x)detail(el,x);else gallery(el)}}
+// #/palettes/<slug>: one palette, shown under the Tutorials & Community tabs. #/palettes alone goes to the Palettes tab (account.js).
+window.pdPalettes=id=>{const el=$('v-palettes');if(!el)return;const x=id&&PL.find(p=>p.s===id);if(x)detail(el,x);else location.replace('#/recipes/palette')}}
 // Links from the paint pages (/paints/...) open the wheel at #/?paint=<paint key>: show that paint and select it.
 function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)return;let k='';try{k=decodeURIComponent(m[1])}catch(e){}
  history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
