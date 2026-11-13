@@ -23,6 +23,18 @@ window.pdDelMix=async id=>{await api('/mixes/'+encodeURIComponent(id),{method:'D
 let WANT=new Set(),WANTOK=false,wantPend={add:new Set(),remove:new Set()},wantT=0;
 const wantBtn=p=>!WANTOK||!p||p.mix||p.g==='B'||(OWN&&OWN.has(p.k))?'':`<button type="button" class="lnk sgw${WANT.has(p.k)?' on':''}" data-want="${esc(p.k)}" aria-pressed="${WANT.has(p.k)}">${WANT.has(p.k)?'★ On shopping list':'☆ Add to shopping list'}</button>`;
 window.pdWantBtn=wantBtn;
+// Add to / remove from My paints straight from the wheel's selected paint (guideLinks in app.js). Signed out, a link to sign in.
+const ownTxt=o=>o?'★ In my paints':'＋ Add to my paints';
+const ownBtn=p=>!p||p.mix||p.g==='B'?'':OWN?`<button type="button" class="btn sm sgo${OWN.has(p.k)?' on':''}" data-own="${esc(p.k)}" aria-pressed="${OWN.has(p.k)}" title="${OWN.has(p.k)?'In your collection. Tap to remove it':'Add it to your collection'}">${ownTxt(OWN.has(p.k))}</button>`:API?'<a href="#/account">Sign in to add it to My paints</a>':'';
+window.pdOwnBtn=ownBtn;
+// Keeps every Add to my paints button (and the shopping list buttons, which hide for owned paints) in step with the collection.
+function ownSync(){if(!OWN)return;document.querySelectorAll('[data-own]').forEach(b=>{const o=OWN.has(b.dataset.own);b.classList.toggle('on',o);b.setAttribute('aria-pressed',o);b.textContent=ownTxt(o);b.title=o?'In your collection. Tap to remove it':'Add it to your collection'});
+ document.querySelectorAll('[data-want]').forEach(b=>b.hidden=OWN.has(b.dataset.want))}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-own]');if(!b||!OWN)return;e.preventDefault();const k=b.dataset.own,on=!OWN.has(k);setOwned([k],on);undoBar([k],on);if(paintsRedraw)paintsRedraw();
+ // On the wheel, redraw so the ★ marks in the selected paint's chips update too.
+ if(b.closest('#sel')&&typeof sel!=='undefined'&&sel&&sel.k===k)draw()});
+// Paint pages link here with &own=1 (app.js paintLink sets pdOwnAsk): add that paint once the account has loaded.
+window.pdOwnNow=()=>{const k=window.pdOwnAsk;if(!k||!ME||!OWN)return;window.pdOwnAsk=null;if(BYKEY.has(k)&&!OWN.has(k)){setOwned([k],true);undoBar([k],true)}};
 function setWant(keys,on){keys.forEach(k=>{if(on){WANT.add(k);wantPend.add.add(k);wantPend.remove.delete(k)}else{WANT.delete(k);wantPend.remove.add(k);wantPend.add.delete(k)}});
  document.querySelectorAll('[data-want]').forEach(b=>{const o=WANT.has(b.dataset.want);b.classList.toggle('on',o);b.setAttribute('aria-pressed',o);b.textContent=o?'★ On shopping list':'☆ Add to shopping list'});
  renderShop();clearTimeout(wantT);wantT=setTimeout(async()=>{const b={add:[...wantPend.add],remove:[...wantPend.remove]};wantPend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
@@ -47,9 +59,9 @@ window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card on
 // find their way back to them in Messages. It goes with every API call; the server only stores its hash.
 const FBT='pd-fbt',fbToken=()=>{try{return localStorage.getItem(FBT)||''}catch(e){return ''}};
 function newFbToken(){let t=fbToken();if(t)return t;const a=crypto.getRandomValues(new Uint8Array(24));t=btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');try{localStorage.setItem(FBT,t)}catch(e){}return t}
-async function api(path,{method='GET',body}={}){
+async function api(path,{method='GET',body,keepalive=false}={}){
  const h=body?{'Content-Type':'application/json'}:{},t=fbToken();if(t)h['X-Pd-Token']=t;
- const r=await fetch('/api'+path,{method,credentials:'same-origin',headers:h,body:body?JSON.stringify(body):undefined});
+ const r=await fetch('/api'+path,{method,credentials:'same-origin',headers:h,body:body?JSON.stringify(body):undefined,keepalive});
  const d=await r.json().catch(()=>({}));
  if(!r.ok){const e=new Error(d.error||'Something went wrong ('+r.status+')');e.status=r.status;throw e}
  return d}
@@ -91,8 +103,8 @@ function showOnWheel(keys){const s=new Set(keys);P.forEach(p=>p.on=s.has(p.k));s
 /* ---------- session ---------- */
 // The wheel opens on the newest of this browser's and the account's last selection; with neither, on the user's collection.
 let selTimer=null;
-async function wheelSync(){
- let srv=null,ok=true;try{const r=await api('/me/wheel');srv=r.wheel;ok=!r.unavailable}catch(e){ok=false}
+function wheelSync(r){
+ const srv=r?r.wheel:null,ok=!!r&&!r.unavailable;
  const loc=selLocal();
  onSelSave=ok?w=>{clearTimeout(selTimer);selTimer=setTimeout(()=>api('/me/wheel',{method:'PUT',body:w}).catch(()=>{}),1500)}:null;
  if(srv&&srv.t&&(!loc||srv.t>loc.t)){selApply(srv);try{localStorage.setItem(WK,JSON.stringify(srv))}catch(e){}boxes();refresh()}
@@ -101,11 +113,18 @@ async function wheelSync(){
 
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
- try{INFO=await api('/me');ME=INFO.user;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
- if(ME){try{const ks=(await api('/collection')).paints;OWN=ownSet(ks);const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}catch(e){OWN=new Set()}}else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false}
- if(ME)await wheelSync();else onSelSave=null;
- if(ME){try{const r=await api('/mixes');MIXOK=!r.unavailable;MIXES=r.mixes||[]}catch(e){MIXOK=false;MIXES=[]}}else{MIXOK=false;MIXES=[]}
- if(ME){try{const r=await api('/wants');WANTOK=!r.unavailable;WANT=new Set(r.paints||[])}catch(e){WANTOK=false;WANT=new Set()}}else{WANTOK=false;WANT=new Set()}
+ let got=false;try{INFO=await api('/me');ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
+ // Remember who is signed in (name and picture only) so the next page load shows it in the nav straight away (inline script in index.html).
+ if(got)try{if(ME)localStorage.setItem('pd-me',JSON.stringify({name:ME.name||'',avatar:ME.avatar||''}));else localStorage.removeItem('pd-me')}catch(e){}
+ if(ME){
+  // The account's collection, wheel, mixes and shopping list load side by side, so the page settles sooner.
+  const no=()=>null,[col,wh,mx,wn]=await Promise.all([api('/collection').catch(no),api('/me/wheel').catch(no),api('/mixes').catch(no),api('/wants').catch(no)]);
+  if(col){const ks=col.paints;OWN=ownSet(ks);const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}else OWN=new Set();
+  wheelSync(wh);
+  MIXOK=!!mx&&!mx.unavailable;MIXES=mx&&mx.mixes||[];
+  WANTOK=!!wn&&!wn.unavailable;WANT=new Set(wn&&wn.paints||[]);
+  meAt=Date.now()}
+ else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;MIXOK=false;MIXES=[];WANTOK=false;WANT=new Set()}
  window.pdSetMixes&&pdSetMixes(MIXES);
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
@@ -113,11 +132,20 @@ async function loadMe(){
  $('navForum').hidden=!INFO?.forum;
  chatStart();
  $('fbBtn').hidden=!API;
- // Feedback sent from this browser while signed out moves to the account on sign-in.
- if(ME&&INFO.messages&&fbToken()){try{await api('/inbox/claim',{method:'POST'});localStorage.removeItem(FBT)}catch(e){}}
+ // Feedback sent from this browser while signed out moves to the account on sign-in (in the background, so it doesn't hold up the page).
+ if(ME&&INFO.messages&&fbToken())api('/inbox/claim',{method:'POST'}).then(()=>{localStorage.removeItem(FBT);unread()}).catch(()=>{});
  unread();
  askUpdates();
+ window.pdOwnNow();
  renderNeu();draw()}
+// Collections edited on another device: when this tab comes back after a minute or more, fetch the collection again.
+// Leaving the tab (or closing it) sends any ticks still waiting to save, so they aren't lost.
+let meAt=0;
+document.addEventListener('visibilitychange',()=>{const busy=pend.add.size||pend.remove.size;
+ if(document.visibilityState==='hidden'){if(busy){clearTimeout(saveT);flush(true)}return}
+ if(!ME||busy||Date.now()-meAt<60000)return;meAt=Date.now();
+ api('/collection').then(r=>{if(!ME||pend.add.size||pend.remove.size)return;const n=ownSet(r.paints);if(n.size===OWN.size&&[...n].every(k=>OWN.has(k)))return;
+  OWN=n;ownSync();renderNeu();draw();if(!$('v-paints').hidden&&!$('colDlg')?.open)renderPaints()}).catch(()=>{})});
 
 /* ---------- router ---------- */
 // First-time visitors (nothing remembered in this browser) land on the welcome page and get the theme picker; everyone else on the wheel.
@@ -131,7 +159,7 @@ function route(){
  let view=v||'wheel';
  if(view==='recipe'&&sub==='edit')view='edit';else if(view==='new')view='edit';else if(view==='u')view='profile';
  if(!VIEWS.includes(view)||(!API&&view!=='wheel'&&view!=='welcome'&&view!=='changelog'&&view!=='palettes'&&view!=='recipes'))view='wheel';
- VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);
+ VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);delete document.documentElement.dataset.boot;
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
@@ -346,9 +374,9 @@ function undoBar(keys,on=false){if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new 
 $('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
 let pend={add:new Set(),remove:new Set()},saveT=0;
 function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);WANT.delete(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
- clearTimeout(saveT);saveT=setTimeout(flush,500)}
-async function flush(){const b={add:[...pend.add],remove:[...pend.remove]};pend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
- try{OWN=ownSet((await api('/collection',{method:'PUT',body:b})).paints);const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
+ ownSync();clearTimeout(saveT);saveT=setTimeout(flush,500)}
+async function flush(keepalive){const b={add:[...pend.add],remove:[...pend.remove]};pend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
+ try{OWN=ownSet((await api('/collection',{method:'PUT',body:b,keepalive})).paints);const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
 function renderMixes(){const el=$('mixP');if(!el)return;
  const wr=$('mixd')||el;if(!MIXOK){wr.hidden=true;return}wr.hidden=false;
  const ms=P.filter(p=>p.mix);if($('mixN'))$('mixN').textContent=ms.length?`(${ms.length})`:'';
@@ -406,6 +434,7 @@ function renderPaints(){
  <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
  <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button></div>
  <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
+ <details class="panel" id="ownd" hidden><summary><b>My paints list</b> <span class="s" id="ownN"></span></summary><div id="ownL"></div><div class="row"><button class="btn sm" type="button" id="ownCp">Copy list</button><span class="s" id="ownM"></span></div></details>
  <div class="panel ptip" id="ptip" hidden><b>Start by ticking the paints you own.</b> <span class="s">Open your collection, pick a brand and tick a whole range or single paints. Suggestions, plans and matches then work from them.</span><div class="row"><button class="btn pri" id="pTip" type="button">Tick my paints</button></div></div>
  <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>
  <details class="panel" id="plnd"><summary><b>Plan for a project</b> <span class="s">What you have, can mix or need to buy</span></summary><div id="pln"></div></details>
@@ -429,7 +458,18 @@ function renderPaints(){
   const by={};[...OWN].forEach(k=>{const p=BYKEY.get(k);if(p&&!p.mix)by[BR_OF[p.g]]=(by[BR_OF[p.g]]||0)+1});
   const bs=Object.entries(by).sort((a,b)=>b[1]-a[1]);$('pcnt').textContent+=bs.length?` from ${bs.length} brand${bs.length===1?'':'s'}`:'';
   $('pbr').innerHTML=bs.map(([i,n])=>`<button type="button" class="chip" data-bi="${i}" title="Edit your ${esc(BRANDS[i][0])} paints">${esc(BRANDS[i][0].split(' / ')[0])} <span class="s">${n}</span></button>`).join('');
-  $('ptip').hidden=OWN.size>0};
+  $('ptip').hidden=OWN.size>0;ownList()};
+ // My paints list: every owned paint by name, grouped by brand and range. Tap one for its quick look.
+ const ownList=()=>{const d=$('ownd'),box=$('ownL');if(!d)return;d.hidden=!OWN.size;$('ownN').textContent=OWN.size?'('+OWN.size+')':'';if(!d.open){box.innerHTML='';return}
+  const by=new Map();P.forEach(p=>{if(p.mix||!OWN.has(p.k))return;const b=BR_OF[p.g];if(!by.has(b))by.set(b,new Map());const g=by.get(b);if(!g.has(p.g))g.set(p.g,[]);g.get(p.g).push(p)});
+  box.innerHTML=[...by.keys()].sort((a,b)=>a-b).map(b=>{const gs=by.get(b),n=[...gs.values()].reduce((a,l)=>a+l.length,0);
+   return`<h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="s">${esc(GL[g])}</div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`).join('')}</div></div>`).join('')}).join('')};
+ {const d=$('ownd');try{const v=localStorage.getItem('pd-ownd');d.open=v==null?OWN.size<=40:v==='1'}catch(e){d.open=OWN.size<=40}
+  d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-ownd',d.open?'1':'0')}catch(e){}ownList()});
+  $('ownL').addEventListener('click',e=>{const c=e.target.closest('[data-ok]');const p=c&&BYKEY.get(c.dataset.ok);if(p)paintLook(p)});
+  $('ownCp').onclick=async()=>{const by={};P.filter(p=>!p.mix&&OWN.has(p.k)).forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
+   const t='My Painters Desk paints\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')').join('\n')).join('\n')+'\n';
+   try{await navigator.clipboard.writeText(t);$('ownM').textContent='Copied.'}catch(e){$('ownM').textContent='Copying isn\'t allowed here.'}}}
  const filt=()=>{const f=!!q()||only();tr.querySelectorAll('label.pi').forEach(l=>l.hidden=!vis(P[+l.dataset.i]));
   tr.querySelectorAll('.sub').forEach(d=>d.hidden=f&&!d.querySelector('label.pi:not([hidden])'));
   tr.querySelectorAll('details.rg').forEach(d=>{const v=!!d.querySelector('label.pi:not([hidden])');d.hidden=f&&!v;if(f)d.open=v});

@@ -531,8 +531,8 @@ const mCount=md=>md.reduce((a,o)=>a+o.ch.length+o.near.length+o.xch.length+o.xne
 // Links from a selected paint to its own paint page (the Worker's /paints/find looks up the page by paint key) and to a conversion chart for its brand.
 const CONV_G={'Citadel / Warhammer':['guides','Conversion charts'],'Army Painter':['guides/army-painter-to-citadel','Army Painter to Citadel chart'],'Vallejo':['guides/vallejo-to-citadel','Vallejo to Citadel chart'],
  'Pro Acryl':['guides/pro-acryl-to-citadel','Pro Acryl to Citadel chart'],'AK Interactive':['guides/citadel-to-ak-interactive','Citadel to AK chart'],'Scale75':['guides/citadel-to-scale75','Citadel to Scale75 chart']};
-function guideLinks(p){if(p.g==='B'||p.mix)return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]],w=window.pdWantBtn?pdWantBtn(p):'';
- return`<p class="s glinks">${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
+function guideLinks(p){if(p.g==='B'||p.mix)return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]],o=window.pdOwnBtn?pdOwnBtn(p):'',w=window.pdWantBtn?pdWantBtn(p):'';
+ return`<p class="s glinks">${o?o+'<br>':''}${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
 function matchHTML(p){return guideLinks(p)+mixHTML(p)+mtHTML(p)}
 function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: chart ✓ matches within ΔE '+M_TICK+', otherwise the nearest paint of the same type within ΔE '+M_NEAR+'.</p>');
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
@@ -869,6 +869,8 @@ function detail(el,x){const R=matchAll(x),hv=R.filter(r=>r.pick&&own(r.pick.p)).
 window.pdPalettes=id=>{const el=$('v-palettes');if(!el)return;const x=id&&PL.find(p=>p.s===id);if(x)detail(el,x);else location.replace('#/recipes/palette')}}
 // Links from the paint pages (/paints/...) open the wheel at #/?paint=<paint key>: show that paint and select it.
 function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)return;let k='';try{k=decodeURIComponent(m[1])}catch(e){}
+ // &own=1 (the paint pages' Add to My paints button) also adds it to the collection once signed in (account.js pdOwnNow).
+ if(/[?&]own=1/.test(location.hash)){window.pdOwnAsk=k;window.pdOwnNow&&pdOwnNow()}
  history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
  if(CH.includes(p)){if(sel!==p)pick(p)}else neutralShow(p);document.getElementById('w').scrollIntoView({block:'start'})}
 paintLink();addEventListener('hashchange',paintLink);
