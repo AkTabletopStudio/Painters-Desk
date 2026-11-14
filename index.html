@@ -152,6 +152,7 @@ nav.top a.inb{position:relative;display:inline-flex;align-items:center;gap:6px}n
 .convs{display:flex;flex-direction:column;gap:10px;margin:12px 0}.conv{display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--card);border:3px solid var(--ink);border-radius:16px;color:inherit;text-decoration:none}.conv:hover{box-shadow:4px 4px 0 var(--sh)}
 .conv .cv{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px}.conv .cv .s{flex-basis:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.conv .cvt{flex:none;font-size:12px}.conv.new{border-width:4px}.conv.new b{text-decoration:underline}
 .msgs{display:flex;flex-direction:column;gap:10px;margin:14px 0}.msg{max-width:min(80%,620px);padding:10px 14px;border:3px solid var(--ink);border-radius:16px 16px 16px 4px;background:var(--card);white-space:pre-wrap;overflow-wrap:anywhere;align-self:flex-start}
+.msg .mpg{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.msg .mpg img{width:140px;max-width:100%;aspect-ratio:1;object-fit:cover;border:2px solid var(--ink);border-radius:10px;display:block;background:var(--bg)}.mpics{display:flex;flex-wrap:wrap;margin:0 0 8px}.mpics:empty{display:none}.mpics img{width:72px;height:72px}
 .msg.me{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--yel);color:#1b1b1b}.msg .mtm{display:block;margin-top:6px;font-size:12px;opacity:.75;white-space:normal}.msg .mtm .lnk{font-size:12px;padding:0;color:inherit}
 .fth .fthumb{width:48px;height:48px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);flex:none;box-sizing:border-box}.fth>.av{width:48px;height:48px;flex:none;font-size:20px}
 .conv .cv .s.fhit{white-space:normal;font-style:italic}.fcrow .cvt{text-align:right}.tag.tpin{background:var(--yel)}.tag.fcat{background:var(--card);color:var(--fg)}
@@ -768,6 +769,9 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>14 November 2026</h2><ul>
+<li data-a="community"><span class="tg nw">New</span><b>Photos in Messages.</b> When you message another painter or reply about your feedback, press <b>📷 Add photo</b> to send up to 4 pictures with it, or a photo on its own. Tap a photo to see it large. Photos go through the same check as every other upload, and you need to be signed in to send them.</li>
+</ul></div>
 <div class="panel cl"><h2>13 November 2026</h2><ul>
 <li data-a="mypaints"><span class="tg nw">New</span><b>See your paints by name.</b> <b>My paints</b> has a new <b>My paints list</b> section with every paint you own by name, grouped by brand and range, with a <b>Copy list</b> button. Tap a paint for its quick look.</li>
 <li data-a="wheel"><span class="tg nw">New</span><b>Add to My paints from the wheel.</b> When you select a paint on the wheel there's now an <b>＋ Add to my paints</b> button above its matches (tap it again to take the paint back out), and every paint page has an <b>Add to My paints</b> button too.</li>
