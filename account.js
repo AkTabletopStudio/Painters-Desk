@@ -20,6 +20,8 @@ let MIXES=[],MIXOK=false;window.pdMixOK=()=>MIXOK;
 window.pdAddMix=async m=>{const r=await api('/mixes',{method:'POST',body:m});MIXES.push(r.mix);pdSetMixes(MIXES);if(location.hash==='#/paints')renderMixes()};
 window.pdDelMix=async id=>{await api('/mixes/'+encodeURIComponent(id),{method:'DELETE'});MIXES=MIXES.filter(x=>x.id!==id);pdSetMixes(MIXES);if(location.hash==='#/paints')renderMixes()};
 // Shopping list: paints the painter wants to buy (table wants, migration 0022). WANTOK is false until that is live, which hides every ☆ button.
+// DET: pots, SKU and colour per owned paint (from a CSV import or the count buttons); DETOK once the server has migration 0024.
+let DET=new Map(),DETOK=false;
 let WANT=new Set(),WANTOK=false,wantPend={add:new Set(),remove:new Set()},wantT=0;
 const wantBtn=p=>!WANTOK||!p||p.mix||p.g==='B'||(OWN&&OWN.has(p.k))?'':`<button type="button" class="lnk sgw${WANT.has(p.k)?' on':''}" data-want="${esc(p.k)}" aria-pressed="${WANT.has(p.k)}">${WANT.has(p.k)?'★ On shopping list':'☆ Add to shopping list'}</button>`;
 window.pdWantBtn=wantBtn;
@@ -120,12 +122,12 @@ async function loadMe(){
  if(ME){
   // The account's collection, wheel, mixes and shopping list load side by side, so the page settles sooner.
   const no=()=>null,[col,wh,mx,wn]=await Promise.all([api('/collection').catch(no),api('/me/wheel').catch(no),api('/mixes').catch(no),api('/wants').catch(no)]);
-  if(col){const ks=col.paints;OWN=ownSet(ks);const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}else OWN=new Set();
+  if(col){const ks=col.paints;OWN=ownSet(ks);DETOK=col.details!=null;DET=new Map(Object.entries(col.details||{}));const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}else OWN=new Set();
   wheelSync(wh);
   MIXOK=!!mx&&!mx.unavailable;MIXES=mx&&mx.mixes||[];
   WANTOK=!!wn&&!wn.unavailable;WANT=new Set(wn&&wn.paints||[]);
   meAt=Date.now()}
- else{OWN=null;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;MIXOK=false;MIXES=[];WANTOK=false;WANT=new Set()}
+ else{OWN=null;DET=new Map();DETOK=false;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;MIXOK=false;MIXES=[];WANTOK=false;WANT=new Set()}
  window.pdSetMixes&&pdSetMixes(MIXES);
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
@@ -142,10 +144,10 @@ async function loadMe(){
 // Collections edited on another device: when this tab comes back after a minute or more, fetch the collection again.
 // Leaving the tab (or closing it) sends any ticks still waiting to save, so they aren't lost.
 let meAt=0;
-document.addEventListener('visibilitychange',()=>{const busy=pend.add.size||pend.remove.size;
+document.addEventListener('visibilitychange',()=>{const busy=pend.add.size||pend.remove.size||pend.det.size;
  if(document.visibilityState==='hidden'){if(busy){clearTimeout(saveT);flush(true)}return}
  if(!ME||busy||Date.now()-meAt<60000)return;meAt=Date.now();
- api('/collection').then(r=>{if(!ME||pend.add.size||pend.remove.size)return;const n=ownSet(r.paints);if(n.size===OWN.size&&[...n].every(k=>OWN.has(k)))return;
+ api('/collection').then(r=>{if(!ME||pend.add.size||pend.remove.size||pend.det.size)return;const n=ownSet(r.paints),dd=JSON.stringify(r.details||{})!==JSON.stringify(Object.fromEntries(DET));if(r.details)DET=new Map(Object.entries(r.details));if(n.size===OWN.size&&[...n].every(k=>OWN.has(k))&&!dd)return;
   OWN=n;ownSync();renderNeu();draw();if(!$('v-paints').hidden&&!$('colDlg')?.open)renderPaints()}).catch(()=>{})});
 
 /* ---------- router ---------- */
@@ -367,21 +369,96 @@ async function renderProfile(id){
 /* ---------- my paints ---------- */
 // Guards against ticking or unticking lots of paints by accident: a confirm dialog for big range changes, and an Undo bar after them.
 const BULK=5;let paintsRedraw=null,undoK=[],undoOn=false,undoTm=0;
-function askBulk(keys,what,on){const d=$('remDlg'),n=keys.length,s=n===1?'':'s';
+function askBulk(keys,what,on,done){const d=$('remDlg'),n=keys.length,s=n===1?'':'s';
  $('remDlgT').textContent=on?'Add to your collection?':'Remove from your collection?';$('remOk').textContent=on?'Add paints':'Remove paints';$('remOk').className='btn '+(on?'pri':'dan');
  $('remDlgM').textContent=`This ${on?'adds':'removes'} ${n} paint${s}${what?' ('+what+')':''} ${on?'to':'from'} your collection.`;d.returnValue='';
- d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,on);undoBar(keys,on);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
+ d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,on);if(done)done();undoBar(keys,on);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
 // The Undo bar moves into whichever pop-up is open (a modal pop-up makes the rest of the page untappable), and back to the page when it closes.
 function undoHost(){const T=$('undoT'),d=[...document.querySelectorAll('dialog[open]')].filter(x=>x.matches(':modal')).pop()||document.body;if(T.parentNode===d)return;d.appendChild(T);
  if(d!==document.body)d.addEventListener('close',()=>{if(T.parentNode===d)document.body.appendChild(T)},{once:true})}
 function undoBar(keys,on=false){undoHost();if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`${on?'Added':'Removed'} ${n} paint${n===1?'':'s'} ${on?'to':'from'} your collection.`;$('undoT').hidden=false;
  clearTimeout(undoTm);undoTm=setTimeout(()=>{$('undoT').hidden=true;undoK=[]},10000)}
 $('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
-let pend={add:new Set(),remove:new Set()},saveT=0;
-function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);WANT.delete(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);pend.remove.add(k);pend.add.delete(k)}});
+// ---------- import paints from a CSV file ----------
+// Reads a spreadsheet export (Brand, Paint Name, SKU/code, optional Range; other columns are ignored), matches each row to a paint
+// in data.js, shows the matches to check, then adds the ticked ones you don't already own (the BULK confirm and Undo bar still apply).
+function csvParse(t){t=t.replace(/^\uFEFF/,'');const first=(t.split(/\r?\n/).find(l=>l.trim())||'');
+ const dl=[',',';','\t'].map(d=>[d,first.split(d).length]).sort((a,b)=>b[1]-a[1])[0][0];
+ const rows=[];let row=[],f='',q=false;
+ for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c;continue}
+  if(c==='"'&&!f.trim())q=true;else if(c===dl){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);f='';rows.push(row);row=[]}else f+=c}
+ if(f||row.length){row.push(f);rows.push(row)}
+ return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(x=>x))}
+const csvNorm=s=>' '+String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[’'`]/g,'').replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ')
+ .replace(/\bmatte\b/g,'matt').replace(/\bcolour/g,'color').replace(/\bgrey/g,'gray').replace(/\s+/g,' ')+' ';
+const csvCode=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+// Other names people use for each brand (matched against the Brand column, as well as the brand names on the site).
+const CSV_BR={'games workshop':1,'warhammer':1,'gw':1,'citadel':1,'monument':2,'monument hobbies':2,'ak':4,'ak 3rd gen':4,'duncan':5,'ttc':5,'scale 75':8,'gsw':9,'ammo':10,'mig':10,'ammo mig':10,'mig jimenez':10,'gsi creos':11,'mr color':11,'mr hobby':11,'gunze':11,'privateer press':13,'p3':13,'kimera':14,'nocturna':16,'the army painter':0,'ap':0,'warpaints':0};
+function csvBrand(s){const n=csvNorm(s).trim();if(!n)return null;if(n in CSV_BR)return CSV_BR[n];
+ let best=null;BRANDS.forEach(([bn],i)=>bn.split(' / ').forEach(x=>{const b=csvNorm(x).trim();if(n===b||(' '+n+' ').includes(' '+b+' ')||(' '+b+' ').includes(' '+n+' '))if(best==null)best=i}));
+ if(best==null)for(const[k,v]of Object.entries(CSV_BR))if((' '+n+' ').includes(' '+k+' ')){best=v;break}return best}
+// Which column holds what, from the header row. With no header the columns are read as Brand, Name, Code.
+const CSV_COLS={b:/^(brand|make|maker|manufacturer|company|mfr)$/,n:/^(name|paint|paint name|colou?r name|paint colou?r|title|product|product name|description)$/,c:/^(sku|code|ref|reference|product code|item|item code|item number|number|no|part number|id)$/,r:/^(range|line|series|product line|set|type|collection)$/,q:/^(count|qty|quantity|pots|owned|amount|how many|number owned)$/,h:/^(colou?r|hex|hex code|hex colou?r|swatch|rgb)$/};
+function csvCols(h){const m={},hs=h.map(x=>csvNorm(x).trim());hs.forEach((x,i)=>{for(const[k,rx]of Object.entries(CSV_COLS))if(m[k]==null&&rx.test(x)){m[k]=i;break}});
+ if(m.n==null){const i=hs.findIndex((x,i)=>/name|paint/.test(x)&&!Object.values(m).includes(i));if(i>=0)m.n=i}
+ return m.n!=null||m.c!=null?{m,head:true}:{m:{b:0,n:1,c:2},head:false}}
+const csvLev=(a,b)=>{if(Math.abs(a.length-b.length)>3)return 9;let p=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){const c=[i];for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[b.length]};
+let CSV_IX=null;
+function csvIndex(){if(CSV_IX)return CSV_IX;const nm=new Map(),cd=new Map(),ord=new Map();
+ BRANDS.forEach(([,gs])=>gs.forEach((g,i)=>ord.set(g,i)));
+ P.forEach(p=>{if(p.mix||p.g==='µ')return;const n=csvNorm(p.n);(nm.get(n)||nm.set(n,[]).get(n)).push(p);const c=csvCode(p.c);if(c.length>=2)(cd.get(c)||cd.set(c,[]).get(c)).push(p)});
+ return CSV_IX={nm,cd,ord}}
+// One row: brand narrows the search; a code that matches wins; otherwise the exact name (with matt/matte, grey/gray, colour/color
+// treated as the same); several exact names (e.g. Base and Air) are sorted with the Range column first, then the brand's main ranges.
+function csvMatch(b,n,c,r){const X=csvIndex(),bi=csvBrand(b),inB=p=>bi==null||BR_OF[p.g]===bi,rn=csvNorm(r).trim(),nn=csvNorm(n);
+ const rank=p=>(rn&&csvNorm(GL[p.g]).includes(' '+rn+' ')?0:1)*100+(X.ord.get(p.g)||0);
+ const by=l=>[...new Set(l)].filter(inB).sort((x,y)=>rank(x)-rank(y));
+ const cc=csvCode(c),byC=cc.length>=2?by(X.cd.get(cc)||[]):[],byN=nn.trim()?by(X.nm.get(nn)||[]):[];
+ // Code and name agree: that paint. Only a code: trust it. A code that points at a differently named paint loses to the name
+ // (product codes like Citadel's 21-18 aren't in the list), and with no name match it's shown as a close match to check.
+ const both=byC.filter(p=>byN.includes(p));if(both.length)return{s:both.length===1?'ok':'pick',l:[...both,...byN.filter(p=>!both.includes(p))],bi};
+ if(byN.length)return{s:byN.length===1?'ok':'pick',l:byN,bi};
+ if(byC.length&&!nn.trim())return{s:byC.length===1?'ok':'pick',l:byC,bi};
+ if(!nn.trim())return{s:'none',l:[],bi};
+ let l;
+ // Close names: one name inside the other, or a couple of letters out. Not ticked until you check them.
+ const t=nn.trim(),pool=P.filter(p=>!p.mix&&p.g!=='µ'&&inB(p)),sc=[];
+ pool.forEach(p=>{const q=csvNorm(p.n).trim();let d=csvLev(t,q);if(d>2&&q.length>3&&t.length>3&&(q.includes(t)||t.includes(q)))d=3;if(d<=3)sc.push([d,rank(p),p])});
+ sc.sort((x,y)=>x[0]-y[0]||x[1]-y[1]);l=[...byC,...sc.map(x=>x[2]).filter(p=>!byC.includes(p))].slice(0,8);return{s:l.length?'close':'none',l,bi}}
+const csvHex=v=>{let h=String(v||'').trim().replace(/^#/,'');if(/^[0-9a-f]{3}$/i.test(h))h=h.replace(/./g,x=>x+x);return/^[0-9a-f]{6}$/i.test(h)?'#'+h.toLowerCase():''};
+const csvQty=v=>{const n=parseInt(String(v||'').replace(/[^0-9]/g,''),10);return n>0?Math.min(999,n):1};
+function csvRead(text){const rows=csvParse(text);if(!rows.length)return[];const{m,head}=csvCols(rows[0]),body=head?rows.slice(1):rows,g=(r,k)=>m[k]==null?'':r[m[k]]||'';
+ return body.map(r=>{const o={b:g(r,'b'),n:g(r,'n'),c:g(r,'c'),r:g(r,'r'),q:csvQty(g(r,'q')),h:csvHex(g(r,'h'))};return Object.assign(o,csvMatch(o.b,o.n,o.c,o.r))}).filter(o=>o.n||o.c)}
+const csvCell=s=>/[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+const csvDown=(name,lines)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+lines.map(r=>r.map(x=>csvCell(String(x))).join(',')).join('\r\n')+'\r\n'],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)};
+const CSV_HEAD=['Brand','Paint Name','SKU','Range','Count','Color'];
+const csvTemplate=()=>csvDown('painters-desk-paints-template.csv',[CSV_HEAD,['Vallejo','Dead White','72.001','Game Color',1,'#FFFFFF'],['Citadel','Mephiston Red','21-18','Colour: Base',2,'#990000'],['Army Painter','Matt Black','WP1135','Warpaints Fanatic',1,'#1C1C1C']]);
+const csvMine=()=>csvDown('my-painters-desk-paints.csv',[CSV_HEAD,...P.filter(p=>!p.mix&&OWN.has(p.k)).map(p=>{const d=DET.get(p.k)||{};return[BRANDS[BR_OF[p.g]][0].split(' / ')[0],p.n.trim(),d.s||p.c||'',GL[p.g],d.q||1,d.c||'']})]);
+function csvOpen(){const d=$('csvDlg');$('csvFile').value='';$('csvTxt').value='';$('csvOut').innerHTML='';$('csvSum').textContent='';$('csvAdd').hidden=true;$('csvExp').hidden=!OWN.size;d.showModal()}
+let CSV_ROWS=[];
+function csvShow(text){const rows=CSV_ROWS=csvRead(text),out=$('csvOut');
+ if(!rows.length){out.innerHTML='<p class="s">No paint rows found. The file needs a column of paint names (and ideally the brand). Download the template to see the layout.</p>';$('csvSum').textContent='';$('csvAdd').hidden=true;return}
+ const opt=(p,sel)=>`<option value="${esc(p.k)}"${sel?' selected':''}>${esc(p.n.trim())}${p.c?' '+esc(p.c):''} · ${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} ${esc(GL[p.g])}${OWN.has(p.k)?' ★ owned':''}</option>`;
+ out.innerHTML=`<div class="csvt">`+rows.map((r,i)=>{const p=r.l[0],own=p&&OWN.has(p.k),src=[r.b,r.n,r.c].filter(Boolean).map(esc).join(' · ')+(r.q>1?' · ×'+r.q:'')+(r.h?` <i class="csvown" style="background:${r.h}" title="Colour in your file: ${r.h}"></i>`:'');
+  const tag=r.s==='none'?'<span class="csvs no">Not found</span>':own?'<span class="csvs ow">Already yours</span>':r.s==='ok'?'<span class="csvs ok">Match</span>':r.s==='pick'?'<span class="csvs pk">Check range</span>':'<span class="csvs cl">Close name?</span>';
+  const pick=!p?`<span class="s">${r.bi==null&&r.b?'Brand not recognised. ':''}No paint with that name${r.c?' or code':''}.</span>`:r.l.length>1?`<select data-csvp="${i}" aria-label="Which paint">${r.l.map((q,j)=>opt(q,!j)).join('')}</select>`:`<span class="csvp">${esc(p.n.trim())}${p.c?' <span class="s">'+esc(p.c)+'</span>':''} <span class="s">${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} · ${esc(GL[p.g])}</span></span>`;
+  return`<label class="csvr"><input type="checkbox" data-csvi="${i}"${p&&!own&&r.s!=='close'?' checked':''}${p?'':' disabled'}><i class="csvsw" style="background:${p?p.h:'transparent'}"></i><span class="csvm"><span class="csvsrc">${src} ${tag}</span>${pick}</span></label>`}).join('')+`</div>`;
+ csvSum()}
+// Ticked rows as {paint key: row}, new paints only (a paint listed twice keeps its first row).
+function csvPicked(){const m=new Map();$('csvOut').querySelectorAll('input[data-csvi]:checked').forEach(e=>{const i=+e.dataset.csvi,s=$('csvOut').querySelector(`select[data-csvp="${i}"]`),k=s?s.value:CSV_ROWS[i].l[0].k;if(!OWN.has(k)&&!m.has(k))m.set(k,CSV_ROWS[i])});return m}
+const csvKeys=()=>[...csvPicked().keys()];
+function csvSum(){const r=CSV_ROWS,n=r.length,f=r.filter(x=>x.s!=='none').length,ks=csvKeys();
+ $('csvSum').textContent=`${n} row${n===1?'':'s'}: ${f} matched, ${n-f} not found. ${ks.length} new paint${ks.length===1?'':'s'} ticked to add.`;
+ const b=$('csvAdd');b.hidden=false;b.disabled=!ks.length;b.textContent=ks.length?`Add ${ks.length} paint${ks.length===1?'':'s'}`:'Nothing new to add'}
+let pend={add:new Set(),remove:new Set(),det:new Map()},saveT=0;
+function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);WANT.delete(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);DET.delete(k);pend.det.delete(k);pend.remove.add(k);pend.add.delete(k)}});
  ownSync();clearTimeout(saveT);saveT=setTimeout(flush,500)}
-async function flush(keepalive){const b={add:[...pend.add],remove:[...pend.remove]};pend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
- try{OWN=ownSet((await api('/collection',{method:'PUT',body:b,keepalive})).paints);const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
+// Saves pots / SKU / colour for owned paints (sent with the next collection save). d = {key:{q,s,c}}, merged with what's there.
+function setDet(d){if(!DETOK)return;Object.entries(d).forEach(([k,v])=>{const o=Object.assign({q:1,s:'',c:''},DET.get(k),v);o.q=Math.min(999,Math.max(1,Math.round(+o.q)||1));DET.set(k,o);pend.det.set(k,o)});clearTimeout(saveT);saveT=setTimeout(flush,500)}
+const qtyOf=k=>(DET.get(k)||{}).q||1;
+async function flush(keepalive){const b={add:[...pend.add],remove:[...pend.remove],details:Object.fromEntries(pend.det)};pend={add:new Set(),remove:new Set(),det:new Map()};if(!b.add.length&&!b.remove.length&&!Object.keys(b.details).length)return;
+ try{const r=await api('/collection',{method:'PUT',body:b,keepalive});OWN=ownSet(r.paints);if(r.details){DETOK=true;DET=new Map(Object.entries(r.details))}const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
 function renderMixes(){const el=$('mixP');if(!el)return;
  const wr=$('mixd')||el;if(!MIXOK){wr.hidden=true;return}wr.hidden=false;
  const ms=P.filter(p=>p.mix);if($('mixN'))$('mixN').textContent=ms.length?`(${ms.length})`:'';
@@ -437,9 +514,9 @@ function renderPaints(){
  // Layout like the wheel page: a summary of the collection up top (editing happens in a pop-up), then the tools, most used first.
  el.innerHTML=`<h1>My paints</h1>
  <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
- <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button></div>
+ <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pCsv" type="button">Import from CSV</button></div>
  <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
- <details class="panel" id="ownd" hidden><summary><b>My paints list</b> <span class="s" id="ownN"></span></summary><div id="ownL"></div><div class="row"><button class="btn sm" type="button" id="ownCp">Copy list</button><span class="s" id="ownM"></span></div></details>
+ <details class="panel" id="ownd" hidden><summary><b>My paints list</b> <span class="s" id="ownN"></span></summary>${DETOK?'<label class="owqt"><input type="checkbox" id="ownQ"> Count pots <span class="s">(how many of each you have)</span></label>':''}<div id="ownL"></div><div class="row"><button class="btn sm" type="button" id="ownCp">Copy list</button><span class="s" id="ownM"></span></div></details>
  <div class="panel ptip" id="ptip" hidden><b>Start by ticking the paints you own.</b> <span class="s">Open your collection, pick a brand and tick a whole range or single paints. Suggestions, plans and matches then work from them.</span><div class="row"><button class="btn pri" id="pTip" type="button">Tick my paints</button></div></div>
  <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>
  <details class="panel" id="plnd"><summary><b>Plan for a project</b> <span class="s">What you have, can mix or need to buy</span></summary><div id="pln"></div></details>
@@ -447,11 +524,23 @@ function renderPaints(){
  <details class="panel" id="mixd" hidden><summary><b>My mixes</b> <span class="s" id="mixN"></span></summary><div id="mixP"></div></details>
  <dialog class="pd pickdlg" id="colDlg" aria-labelledby="colT"><div class="pkh"><h2 id="colT">My collection</h2><span class="s" id="pcnt2"></span></div>
  <div class="bar"><input id="pq" type="search" placeholder="Search paints (name or code)"><label style="align-self:center"><input type="checkbox" id="pOwned"> Only paints I own</label></div>
- <div id="ptree"></div><div class="row pkf"><button class="btn pri" type="button" id="colOk">Done</button></div></dialog>`;
+ <div id="ptree"></div><div class="row pkf"><button class="btn pri" type="button" id="colOk">Done</button></div></dialog>
+ <dialog class="pd pickdlg" id="csvDlg" aria-labelledby="csvT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div class="pkh"><h2 id="csvT">Import paints from a CSV</h2></div>
+ <p class="s">Columns: <b>Brand</b>, <b>Paint Name</b>, and if you have them <b>SKU</b>, <b>Range</b>, <b>Count</b> and <b>Color</b> (saved as your note; the wheel keeps its own swatch). You check each match before anything is added, and paints you already own are skipped.</p>
+ <div class="row csvin"><label class="btn pri" for="csvFile">Choose CSV file</label><input type="file" id="csvFile" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden><button class="btn" type="button" id="csvTpl">Download template</button><button class="btn" type="button" id="csvExp">Download my paints</button></div>
+ <details class="csvpaste"><summary class="s">Or paste the rows</summary><textarea id="csvTxt" rows="5" placeholder="Brand,Paint Name,SKU&#10;Vallejo,Dead White,72.001"></textarea><div class="row"><button class="btn sm" type="button" id="csvGo">Check these rows</button></div></details>
+ <div id="csvOut"></div><div class="pkft"><span class="s" id="csvSum" style="margin-right:auto"></span><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="button" id="csvAdd" hidden>Add paints</button></div></dialog>`;
  // Fold-away sections remember whether they were left open (Suggested paints and Plan keep their own keys).
  [['shopd','pd-shopd'],['mixd','pd-mixd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
  const colOpen=bi=>{const d=$('colDlg');d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
- $('pEdit').onclick=()=>colOpen();$('pTip').onclick=()=>colOpen();$('colOk').onclick=()=>$('colDlg').close();
+ $('pEdit').onclick=()=>colOpen();
+ $('pCsv').onclick=csvOpen;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
+ $('csvFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>csvShow(String(rd.result));rd.onerror=()=>{$('csvOut').innerHTML='<p class="s">That file could not be read.</p>'};rd.readAsText(f)};
+ $('csvGo').onclick=()=>csvShow($('csvTxt').value);$('csvOut').addEventListener('change',csvSum);
+ $('csvAdd').onclick=()=>{const pk=csvPicked(),ks=[...pk.keys()];if(!ks.length)return;$('csvDlg').close();
+  // Count, SKU and colour from the file are kept with each paint (the colour is your note; the wheel keeps its own swatch).
+  const det=()=>{const d={};pk.forEach((r,k)=>{if(r.q>1||r.c||r.h)d[k]={q:r.q,s:r.c,c:r.h}});setDet(d);if(paintsRedraw)paintsRedraw()};
+  if(ks.length>=BULK){askBulk(ks,'from your CSV',true,det);return}setOwned(ks,true);det();undoBar(ks,true);if(paintsRedraw)paintsRedraw()};$('pTip').onclick=()=>colOpen();$('colOk').onclick=()=>$('colDlg').close();
  $('pbr').addEventListener('click',e=>{const c=e.target.closest('[data-bi]');if(c)colOpen(+c.dataset.bi)});
  renderShop();renderMixes();renderPlan();loadPlanRecs();{const d=$('plnd');if(!d.open)try{d.open=localStorage.getItem('pd-plnd')==='1'}catch(e){}d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-plnd',d.open?'1':'0')}catch(e){}})}const tr=$('ptree');
  tr.innerHTML=treeHTML('data-pc','data-pb');
@@ -465,15 +554,21 @@ function renderPaints(){
   $('pbr').innerHTML=bs.map(([i,n])=>`<button type="button" class="chip" data-bi="${i}" title="Edit your ${esc(BRANDS[i][0])} paints">${esc(BRANDS[i][0].split(' / ')[0])} <span class="s">${n}</span></button>`).join('');
   $('ptip').hidden=OWN.size>0;ownList()};
  // My paints list: every owned paint by name, grouped by brand and range. Tap one for its quick look.
- const ownList=()=>{const d=$('ownd'),box=$('ownL');if(!d)return;d.hidden=!OWN.size;$('ownN').textContent=OWN.size?'('+OWN.size+')':'';if(!d.open){box.innerHTML='';return}
+ // Count pots (pd-qty on this device): each paint gets − n + buttons for how many pots you have.
+ const qOn=()=>DETOK&&!!$('ownQ')?.checked;
+ const ownList=()=>{const d=$('ownd'),box=$('ownL');if(!d)return;d.hidden=!OWN.size;let pots=0;if(qOn())OWN.forEach(k=>{if(BYKEY.has(k))pots+=qtyOf(k)});
+  $('ownN').textContent=OWN.size?'('+OWN.size+(qOn()?', '+pots+' pot'+(pots===1?'':'s'):'')+')':'';if(!d.open){box.innerHTML='';return}
   const by=new Map();P.forEach(p=>{if(p.mix||!OWN.has(p.k))return;const b=BR_OF[p.g];if(!by.has(b))by.set(b,new Map());const g=by.get(b);if(!g.has(p.g))g.set(p.g,[]);g.get(p.g).push(p)});
   box.innerHTML=[...by.keys()].sort((a,b)=>a-b).map(b=>{const gs=by.get(b),n=[...gs.values()].reduce((a,l)=>a+l.length,0);
-   return`<section class="owg"><h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="owl">${esc(GL[g])} <span class="owc">${ps.length}</span></div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`).join('')}</div></div>`).join('')+'</section>'}).join('')};
+   return`<section class="owg"><h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="owl">${esc(GL[g])} <span class="owc">${ps.length}</span></div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>{const ch=`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`,q=qtyOf(p.k);
+    return qOn()?`<span class="owq">${ch}<span class="qst"><button type="button" data-qd="${esc(p.k)}" aria-label="One less pot of ${esc(p.n)}"${q<=1?' disabled':''}>−</button><b aria-label="${q} pots">${q}</b><button type="button" data-qu="${esc(p.k)}" aria-label="One more pot of ${esc(p.n)}">+</button></span></span>`:ch}).join('')}</div></div>`).join('')+'</section>'}).join('')};
  {const d=$('ownd');try{const v=localStorage.getItem('pd-ownd');d.open=v==null?OWN.size<=40:v==='1'}catch(e){d.open=OWN.size<=40}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-ownd',d.open?'1':'0')}catch(e){}ownList()});
-  $('ownL').addEventListener('click',e=>{const c=e.target.closest('[data-ok]');const p=c&&BYKEY.get(c.dataset.ok);if(p)paintLook(p)});
+  {const qb=$('ownQ');if(qb){try{qb.checked=localStorage.getItem('pd-qty')==='1'}catch(e){}qb.onchange=()=>{try{localStorage.setItem('pd-qty',qb.checked?'1':'0')}catch(e){}ownList()}}}
+  $('ownL').addEventListener('click',e=>{const u=e.target.closest('[data-qu],[data-qd]');if(u){const k=u.dataset.qu||u.dataset.qd;setDet({[k]:{q:qtyOf(k)+(u.dataset.qu?1:-1)}});$('pmsg').textContent='Saving…';ownList();return}
+   const c=e.target.closest('[data-ok]');const p=c&&BYKEY.get(c.dataset.ok);if(p)paintLook(p)});
   $('ownCp').onclick=async()=>{const by={};P.filter(p=>!p.mix&&OWN.has(p.k)).forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
-   const t='My Painters Desk paints\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')').join('\n')).join('\n')+'\n';
+   const t='My Painters Desk paints\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+(qOn()&&qtyOf(p.k)>1?qtyOf(p.k)+'× ':'')+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')').join('\n')).join('\n')+'\n';
    try{await navigator.clipboard.writeText(t);$('ownM').textContent='Copied.'}catch(e){$('ownM').textContent='Copying isn\'t allowed here.'}}}
  const filt=()=>{const f=!!q()||only();tr.querySelectorAll('label.pi').forEach(l=>l.hidden=!vis(P[+l.dataset.i]));
   tr.querySelectorAll('.sub').forEach(d=>d.hidden=f&&!d.querySelector('label.pi:not([hidden])'));
