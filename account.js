@@ -395,61 +395,78 @@ const csvNorm=s=>' '+String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,
 const csvCode=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 // Other names people use for each brand (matched against the Brand column, as well as the brand names on the site).
 const CSV_BR={'games workshop':1,'warhammer':1,'gw':1,'citadel':1,'monument':2,'monument hobbies':2,'ak':4,'ak 3rd gen':4,'duncan':5,'ttc':5,'scale 75':8,'gsw':9,'ammo':10,'mig':10,'ammo mig':10,'mig jimenez':10,'gsi creos':11,'mr color':11,'mr hobby':11,'gunze':11,'privateer press':13,'p3':13,'kimera':14,'nocturna':16,'the army painter':0,'ap':0,'warpaints':0};
-function csvBrand(s){const n=csvNorm(s).trim();if(!n)return null;if(n in CSV_BR)return CSV_BR[n];
+function csvBrand(s){const n=csvNorm(s).trim();if(!n)return null;if(n in CSV_BR)return CSV_BR[n];if(window.CSV_AL&&n in CSV_AL.b)return CSV_AL.b[n];
  let best=null;BRANDS.forEach(([bn],i)=>bn.split(' / ').forEach(x=>{const b=csvNorm(x).trim();if(n===b||(' '+n+' ').includes(' '+b+' ')||(' '+b+' ').includes(' '+n+' '))if(best==null)best=i}));
  if(best==null)for(const[k,v]of Object.entries(CSV_BR))if((' '+n+' ').includes(' '+k+' ')){best=v;break}return best}
 // Which column holds what, from the header row. With no header the columns are read as Brand, Name, Code.
-const CSV_COLS={b:/^(brand|make|maker|manufacturer|company|mfr)$/,n:/^(name|paint|paint name|colou?r name|paint colou?r|title|product|product name|description)$/,c:/^(sku|code|ref|reference|product code|item|item code|item number|number|no|part number|id)$/,r:/^(range|line|series|product line|set|type|collection)$/,q:/^(count|qty|quantity|pots|owned|amount|how many|number owned)$/,h:/^(colou?r|hex|hex code|hex colou?r|swatch|rgb)$/};
+const CSV_COLS={b:/^(brand|brand name|paint brand|make|maker|manufacturer|company|mfr|provider|vendor)$/,n:/^(name|paint|paint name|colou?r name|paint colou?r|title|product|product name|description)$/,c:/^(sku|code|ref|reference|product code|item|item code|item number|number|no|part number|id)$/,r:/^(range|line|series|product line|set|type|collection)$/,q:/^(count|qty|quantity|pots|owned|amount|how many|number owned)$/,h:/^(colou?r|hex|hex code|hex colou?r|swatch|rgb)$/,R:/^(r|red)$/,G:/^(g|green)$/,B:/^(b|blue)$/};
 function csvCols(h){const m={},hs=h.map(x=>csvNorm(x).trim());hs.forEach((x,i)=>{for(const[k,rx]of Object.entries(CSV_COLS))if(m[k]==null&&rx.test(x)){m[k]=i;break}});
  if(m.n==null){const i=hs.findIndex((x,i)=>/name|paint/.test(x)&&!Object.values(m).includes(i));if(i>=0)m.n=i}
  return m.n!=null||m.c!=null?{m,head:true}:{m:{b:0,n:1,c:2},head:false}}
 const csvLev=(a,b)=>{if(Math.abs(a.length-b.length)>3)return 9;let p=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){const c=[i];for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[b.length]};
-let CSV_IX=null;
+let CSV_IX=null,CSV_ALP=null;
+// Background lookup (import-aliases.js, loaded the first time the import opens): other sites' names, codes and SKUs for our paints,
+// and paints we don't list yet. Without it (offline, first visit) the import still works on our own names and codes.
+function csvAlLoad(){return CSV_ALP||(CSV_ALP=new Promise(ok=>{if(window.CSV_AL)return ok();const s=document.createElement('script');s.src='import-aliases.js';s.onload=()=>{CSV_IX=null;ok()};s.onerror=()=>{CSV_ALP=null;ok()};document.head.appendChild(s)}))}
 function csvIndex(){if(CSV_IX)return CSV_IX;const nm=new Map(),cd=new Map(),ord=new Map();
  BRANDS.forEach(([,gs])=>gs.forEach((g,i)=>ord.set(g,i)));
  P.forEach(p=>{if(p.mix||p.g==='µ')return;const n=csvNorm(p.n);(nm.get(n)||nm.set(n,[]).get(n)).push(p);const c=csvCode(p.c);if(c.length>=2)(cd.get(c)||cd.set(c,[]).get(c)).push(p)});
- return CSV_IX={nm,cd,ord}}
+ const ac=new Map(),an=new Map(),ak=new Map(),kx=new Map(),kc=new Map(),A=window.CSV_AL;
+ if(A){const put=(m,src)=>Object.entries(src).forEach(([k,v])=>{const j=k.indexOf('|'),bi=+k.slice(0,j),t=k.slice(j+1);(m.get(t)||m.set(t,[]).get(t)).push(...v.map(i=>P[i]).filter(Boolean).filter(p=>BR_OF[p.g]===bi))});
+  put(ac,A.c);put(an,A.n);put(ak,A.k);
+  A.x.forEach(x=>{const o={bi:typeof x[0]==='number'?x[0]:null,bn:typeof x[0]==='number'?BRANDS[x[0]][0].split(' / ')[0]:x[0],n:x[1],c:x[2],r:x[3],h:x[4]},t=csvNorm(x[1]).trim(),c=csvCode(x[2]);
+   (kx.get(t)||kx.set(t,[]).get(t)).push(o);if(c.length>=3)(kc.get(c)||kc.set(c,[]).get(c)).push(o)})}
+ return CSV_IX={nm,cd,ord,ac,an,ak,kx,kc}}
 // One row: brand narrows the search; a code that matches wins; otherwise the exact name (with matt/matte, grey/gray, colour/color
 // treated as the same); several exact names (e.g. Base and Air) are sorted with the Range column first, then the brand's main ranges.
-function csvMatch(b,n,c,r){const X=csvIndex(),bi=csvBrand(b),inB=p=>bi==null||BR_OF[p.g]===bi,rn=csvNorm(r).trim(),nn=csvNorm(n);
+function csvMatch(b,n,c,r){const X=csvIndex(),b0=csvBrand(b),xb=typeof b0==='string'?b0:null,bi=xb?null:b0,inB=p=>!xb&&(bi==null||BR_OF[p.g]===bi),rn=csvNorm(r).trim(),nn=csvNorm(n);
  const rank=p=>(rn&&csvNorm(GL[p.g]).includes(' '+rn+' ')?0:1)*100+(X.ord.get(p.g)||0);
  const by=l=>[...new Set(l)].filter(inB).sort((x,y)=>rank(x)-rank(y));
- const cc=csvCode(c),byC=cc.length>=2?by(X.cd.get(cc)||[]):[],byN=nn.trim()?by(X.nm.get(nn)||[]):[];
+ const cc=csvCode(c),byC=cc.length>=2?by([...(X.cd.get(cc)||[]),...(X.ac.get(cc)||[])]):[],byN=nn.trim()?by([...(X.nm.get(nn)||[]),...(X.an.get(nn.trim())||[])]):[];
  // Code and name agree: that paint. Only a code: trust it. A code that points at a differently named paint loses to the name
  // (product codes like Citadel's 21-18 aren't in the list), and with no name match it's shown as a close match to check.
  const both=byC.filter(p=>byN.includes(p));if(both.length)return{s:both.length===1?'ok':'pick',l:[...both,...byN.filter(p=>!both.includes(p))],bi};
  if(byN.length)return{s:byN.length===1?'ok':'pick',l:byN,bi};
  if(byC.length&&!nn.trim())return{s:byC.length===1?'ok':'pick',l:byC,bi};
- if(!nn.trim())return{s:'none',l:[],bi};
+ if(!nn.trim())return csvKnown(X,xb,bi,'',cc);
  let l;
  // Close names: one name inside the other, or a couple of letters out. Not ticked until you check them.
  const t=nn.trim(),pool=P.filter(p=>!p.mix&&p.g!=='µ'&&inB(p)),sc=[];
  pool.forEach(p=>{const q=csvNorm(p.n).trim();let d=csvLev(t,q);if(d>2&&q.length>3&&t.length>3&&(q.includes(t)||t.includes(q)))d=3;if(d<=3)sc.push([d,rank(p),p])});
- sc.sort((x,y)=>x[0]-y[0]||x[1]-y[1]);l=[...byC,...sc.map(x=>x[2]).filter(p=>!byC.includes(p))].slice(0,8);return{s:l.length?'close':'none',l,bi}}
+ const ck=by(X.ak.get(t)||[]);
+ // A paint other sites list under exactly this name or code (e.g. Vallejo Mecha Color 69.001) beats a merely similar name of ours.
+ const kn=!ck.length&&!byC.length&&csvKnown(X,xb,bi,t,cc);if(kn&&kn.k)return kn;
+ sc.sort((x,y)=>x[0]-y[0]||x[1]-y[1]);l=[...new Set([...ck,...byC,...sc.map(x=>x[2])])].slice(0,8);return l.length?{s:'close',l,bi}:csvKnown(X,xb,bi,t,cc)}
+// No paint of ours: is it one other sites list (an old range, or a brand we don't carry yet)? Shown so, with their reference colour.
+function csvKnown(X,xb,bi,t,cc){const ok=o=>xb?o.bn===xb:bi==null||o.bi===bi;
+ const k=(t&&(X.kx.get(t)||[]).find(ok))||(cc.length>=3&&(X.kc.get(cc)||[]).find(ok));
+ return k?{s:'known',l:[],bi,k}:{s:'none',l:[],bi,xb}}
 const csvHex=v=>{let h=String(v||'').trim().replace(/^#/,'');if(/^[0-9a-f]{3}$/i.test(h))h=h.replace(/./g,x=>x+x);return/^[0-9a-f]{6}$/i.test(h)?'#'+h.toLowerCase():''};
+const csvRGB=(r,g,b)=>[r,g,b].every(v=>/^\d{1,3}$/.test(String(v).trim())&&+v<256)?'#'+[r,g,b].map(v=>(+v).toString(16).padStart(2,'0')).join(''):'';
 const csvQty=v=>{const n=parseInt(String(v||'').replace(/[^0-9]/g,''),10);return n>0?Math.min(999,n):1};
 function csvRead(text){const rows=csvParse(text);if(!rows.length)return[];const{m,head}=csvCols(rows[0]),body=head?rows.slice(1):rows,g=(r,k)=>m[k]==null?'':r[m[k]]||'';
- return body.map(r=>{const o={b:g(r,'b'),n:g(r,'n'),c:g(r,'c'),r:g(r,'r'),q:csvQty(g(r,'q')),h:csvHex(g(r,'h'))};return Object.assign(o,csvMatch(o.b,o.n,o.c,o.r))}).filter(o=>o.n||o.c)}
+ return body.map(r=>{const o={b:g(r,'b'),n:g(r,'n'),c:g(r,'c'),r:g(r,'r'),q:csvQty(g(r,'q')),h:csvHex(g(r,'h'))||csvRGB(g(r,'R'),g(r,'G'),g(r,'B'))};return Object.assign(o,csvMatch(o.b,o.n,o.c,o.r))}).filter(o=>o.n||o.c)}
 const csvCell=s=>/[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 const csvDown=(name,lines)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+lines.map(r=>r.map(x=>csvCell(String(x))).join(',')).join('\r\n')+'\r\n'],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)};
 const CSV_HEAD=['Brand','Paint Name','SKU','Range','Count','Color'];
 const csvTemplate=()=>csvDown('painters-desk-paints-template.csv',[CSV_HEAD,['Vallejo','Dead White','72.001','Game Color',1,'#FFFFFF'],['Citadel','Mephiston Red','21-18','Colour: Base',2,'#990000'],['Army Painter','Matt Black','WP1135','Warpaints Fanatic',1,'#1C1C1C']]);
 const csvMine=()=>csvDown('my-painters-desk-paints.csv',[CSV_HEAD,...P.filter(p=>!p.mix&&OWN.has(p.k)).map(p=>{const d=DET.get(p.k)||{};return[BRANDS[BR_OF[p.g]][0].split(' / ')[0],p.n.trim(),d.s||p.c||'',GL[p.g],d.q||1,d.c||'']})]);
-function csvOpen(){const d=$('csvDlg');$('csvFile').value='';$('csvTxt').value='';$('csvOut').innerHTML='';$('csvSum').textContent='';$('csvAdd').hidden=true;$('csvExp').hidden=!OWN.size;d.showModal()}
+function csvOpen(){csvAlLoad();const d=$('csvDlg');$('csvFile').value='';$('csvTxt').value='';$('csvOut').innerHTML='';$('csvSum').textContent='';$('csvAdd').hidden=true;$('csvExp').hidden=!OWN.size;d.showModal()}
 let CSV_ROWS=[];
-function csvShow(text){const rows=CSV_ROWS=csvRead(text),out=$('csvOut');
+function csvShow(text){$('csvOut').innerHTML='<p class="s">Reading…</p>';csvAlLoad().then(()=>csvShow2(text))}
+function csvShow2(text){const rows=CSV_ROWS=csvRead(text),out=$('csvOut');
  if(!rows.length){out.innerHTML='<p class="s">No paint rows found. The file needs a column of paint names (and ideally the brand). Download the template to see the layout.</p>';$('csvSum').textContent='';$('csvAdd').hidden=true;return}
  const opt=(p,sel)=>`<option value="${esc(p.k)}"${sel?' selected':''}>${esc(p.n.trim())}${p.c?' '+esc(p.c):''} · ${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} ${esc(GL[p.g])}${OWN.has(p.k)?' ★ owned':''}</option>`;
  out.innerHTML=`<div class="csvt">`+rows.map((r,i)=>{const p=r.l[0],own=p&&OWN.has(p.k),src=[r.b,r.n,r.c].filter(Boolean).map(esc).join(' · ')+(r.q>1?' · ×'+r.q:'')+(r.h?` <i class="csvown" style="background:${r.h}" title="Colour in your file: ${r.h}"></i>`:'');
-  const tag=r.s==='none'?'<span class="csvs no">Not found</span>':own?'<span class="csvs ow">Already yours</span>':r.s==='ok'?'<span class="csvs ok">Match</span>':r.s==='pick'?'<span class="csvs pk">Check range</span>':'<span class="csvs cl">Close name?</span>';
-  const pick=!p?`<span class="s">${r.bi==null&&r.b?'Brand not recognised. ':''}No paint with that name${r.c?' or code':''}.</span>`:r.l.length>1?`<select data-csvp="${i}" aria-label="Which paint">${r.l.map((q,j)=>opt(q,!j)).join('')}</select>`:`<span class="csvp">${esc(p.n.trim())}${p.c?' <span class="s">'+esc(p.c)+'</span>':''} <span class="s">${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} · ${esc(GL[p.g])}</span></span>`;
-  return`<label class="csvr"><input type="checkbox" data-csvi="${i}"${p&&!own&&r.s!=='close'?' checked':''}${p?'':' disabled'}><i class="csvsw" style="background:${p?p.h:'transparent'}"></i><span class="csvm"><span class="csvsrc">${src} ${tag}</span>${pick}</span></label>`}).join('')+`</div>`;
+  const tag=r.s==='known'?'<span class="csvs kn">Not on the site yet</span>':r.s==='none'?'<span class="csvs no">Not found</span>':own?'<span class="csvs ow">Already yours</span>':r.s==='ok'?'<span class="csvs ok">Match</span>':r.s==='pick'?'<span class="csvs pk">Check range</span>':'<span class="csvs cl">Close name?</span>';
+  const kn=r.k,pick=kn?`<span class="s">${esc(kn.bn)}${kn.r?' · '+esc(kn.r):''}: we don't list this paint yet, so it can't be added. Other sites' colour shown.</span>`:!p?`<span class="s">${r.xb?esc(r.xb)+' isn\'t on the site yet. ':r.bi==null&&r.b?'Brand not recognised. ':''}No paint with that name${r.c?' or code':''}.</span>`:r.l.length>1?`<select data-csvp="${i}" aria-label="Which paint">${r.l.map((q,j)=>opt(q,!j)).join('')}</select>`:`<span class="csvp">${esc(p.n.trim())}${p.c?' <span class="s">'+esc(p.c)+'</span>':''} <span class="s">${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} · ${esc(GL[p.g])}</span></span>`;
+  return`<label class="csvr"><input type="checkbox" data-csvi="${i}"${p&&!own&&r.s!=='close'?' checked':''}${p?'':' disabled'}><i class="csvsw${kn&&kn.h?' kn':''}" style="background:${p?p.h:kn&&kn.h||'transparent'}"${kn&&kn.h?' title="Colour from other sites, an estimate"':''}></i><span class="csvm"><span class="csvsrc">${src} ${tag}</span>${pick}</span></label>`}).join('')+`</div>`;
  csvSum()}
 // Ticked rows as {paint key: row}, new paints only (a paint listed twice keeps its first row).
 function csvPicked(){const m=new Map();$('csvOut').querySelectorAll('input[data-csvi]:checked').forEach(e=>{const i=+e.dataset.csvi,s=$('csvOut').querySelector(`select[data-csvp="${i}"]`),k=s?s.value:CSV_ROWS[i].l[0].k;if(!OWN.has(k)&&!m.has(k))m.set(k,CSV_ROWS[i])});return m}
 const csvKeys=()=>[...csvPicked().keys()];
-function csvSum(){const r=CSV_ROWS,n=r.length,f=r.filter(x=>x.s!=='none').length,ks=csvKeys();
- $('csvSum').textContent=`${n} row${n===1?'':'s'}: ${f} matched, ${n-f} not found. ${ks.length} new paint${ks.length===1?'':'s'} ticked to add.`;
+function csvSum(){const r=CSV_ROWS,n=r.length,f=r.filter(x=>x.l.length).length,kn=r.filter(x=>x.s==='known').length,ks=csvKeys();
+ $('csvSum').textContent=`${n} row${n===1?'':'s'}: ${f} matched, ${kn?kn+' not on the site yet, ':''}${n-f-kn} not found. ${ks.length} new paint${ks.length===1?'':'s'} ticked to add.`;
  const b=$('csvAdd');b.hidden=false;b.disabled=!ks.length;b.textContent=ks.length?`Add ${ks.length} paint${ks.length===1?'':'s'}`:'Nothing new to add'}
 let pend={add:new Set(),remove:new Set(),det:new Map()},saveT=0;
 function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);WANT.delete(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);DET.delete(k);pend.det.delete(k);pend.remove.add(k);pend.add.delete(k)}});
