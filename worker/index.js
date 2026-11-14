@@ -350,10 +350,11 @@ async function me(request, env) {
   // messages: the Messages pages work (migration 0015).
   // forum: the Forum pages work (migration 0018). chat: the Chat page works (migration 0019).
   // forum is only on for admins until FORUM_OPEN is set to 1 (the owner paused it 2026-10-31 to focus on chat).
-  const messages = await hasMessages(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
+  // msgPhotos: photos can be sent in Messages (migration 0023).
+  const messages = await hasMessages(env), msgPhotos = messages && await hasMsgPhotos(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, follows, forum, chat, devLogin: env.DEV_LOGIN === '1' });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: env.DEV_LOGIN === '1' });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -1311,6 +1312,8 @@ async function moderation(request, env) {
   const chat = await hasChat(env);
   if (chat) for (const m of (await env.DB.prepare("SELECT m.id, m.room_id, m.images, r.name FROM chat_messages m JOIN chat_rooms r ON r.id = m.room_id WHERE m.images != '[]'").all()).results)
     for (const img of JSON.parse(m.images)) add(img, { type: 'chat', id: m.room_id, msg: m.id, title: m.name });
+  if (await hasMsgPhotos(env)) for (const m of (await env.DB.prepare("SELECT m.id, m.images, c.id AS conv, c.kind FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE m.images != '[]'").all()).results)
+    for (const img of JSON.parse(m.images)) add(img, { type: 'message', id: m.conv, kind: m.kind });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -1325,10 +1328,10 @@ async function moderation(request, env) {
       o.user = rec ? person(rec.user_id) : null;
       o.images = rec ? await imgById([...new Set(usedImages(rec))]) : [];
     } else if (r.kind === 'message') {
-      const m = await env.DB.prepare('SELECT user_id, body, created_at FROM messages WHERE id = ?').bind(r.target_id).first();
+      const m = await env.DB.prepare(`SELECT user_id, body, ${await hasMsgPhotos(env) ? 'images' : "'[]' AS images"}, created_at FROM messages WHERE id = ?`).bind(r.target_id).first();
       o.message = m ? { body: m.body, created_at: m.created_at } : null;
       o.user = m?.user_id ? person(m.user_id) : null;
-      o.images = [];
+      o.images = m ? await imgById(JSON.parse(m.images || '[]')) : [];
     } else if (r.kind === 'forum') {
       const p = forum && await env.DB.prepare('SELECT p.id, p.user_id, p.body, p.images, p.first, p.hidden, p.deleted, p.created_at, t.id AS thread_id, t.title FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.id = ?').bind(r.target_id).first();
       o.post = p && !p.deleted ? { id: p.id, body: p.body, first: !!p.first, hidden: !!p.hidden, created_at: p.created_at, thread: { id: p.thread_id, title: p.title } } : null;
@@ -1371,6 +1374,8 @@ async function adminDeleteImage(request, env, id) {
     stmts.push(env.DB.prepare('UPDATE forum_posts SET images = ? WHERE id = ?').bind(JSON.stringify(JSON.parse(p.images).filter(i => i !== id)), p.id));
   if (await hasChat(env)) for (const m of (await env.DB.prepare('SELECT id, images FROM chat_messages WHERE images LIKE ?').bind(`%"${id}"%`).all()).results)
     stmts.push(env.DB.prepare('UPDATE chat_messages SET images = ? WHERE id = ?').bind(JSON.stringify(JSON.parse(m.images).filter(i => i !== id)), m.id));
+  if (await hasMsgPhotos(env)) for (const m of (await env.DB.prepare('SELECT id, images FROM messages WHERE images LIKE ?').bind(`%"${id}"%`).all()).results)
+    stmts.push(env.DB.prepare('UPDATE messages SET images = ? WHERE id = ?').bind(JSON.stringify(JSON.parse(m.images).filter(i => i !== id)), m.id));
   await env.DB.batch(stmts);
   await deleteImages(env, [id]);
   return json({ ok: true });
@@ -1684,12 +1689,18 @@ async function setFindable(request, env) {
 // MSG_MAX characters a message. Painters can send DM_PER_HOUR / DM_PER_DAY messages and start NEW_CHATS_PER_DAY
 // conversations a day, and only UNANSWERED messages to someone who hasn't replied yet, so nobody can be flooded.
 // Anonymous feedback senders can write ANON_PER_HOUR follow-ups an hour (by IP).
-const MSG_MAX = 2000, DM_PER_HOUR = 30, DM_PER_DAY = 200, NEW_CHATS_PER_DAY = 10, UNANSWERED = 3, ANON_PER_HOUR = 10;
+const MSG_MAX = 2000, MSG_PHOTOS = 4, DM_PER_HOUR = 30, DM_PER_DAY = 200, NEW_CHATS_PER_DAY = 10, UNANSWERED = 3, ANON_PER_HOUR = 10;
 const TEAM = { id: null, name: 'The Painters Desk team', avatar: '/icons/icon-192.png', team: true };
 let messagesReady = false;
 async function hasMessages(env) {
   if (!messagesReady) messagesReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversations'").first());
   return messagesReady;
+}
+// Photos in messages (migration 0023 adds messages.images). Until it is applied, messages are text only.
+let msgPhotosReady = false;
+async function hasMsgPhotos(env) {
+  if (!msgPhotosReady) msgPhotosReady = !!(await env.DB.prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name = 'images'").first().catch(() => null));
+  return msgPhotosReady;
 }
 async function needMessages(env) {
   if (!await hasMessages(env)) throw new HttpError(503, 'Messages are not set up on this server yet');
@@ -1735,7 +1746,7 @@ function convOut(c, side) {
   else who = personOf(c, other);
   const out = {
     id: c.id, kind: c.kind, other: who, status: c.status, updated_at: c.updated_at,
-    last: c.last_body == null ? null : { body: c.last_body.slice(0, 140), mine: c.last_side === side },
+    last: c.last_body == null ? null : { body: c.last_body.slice(0, 140) || '📷 Photo', mine: c.last_side === side },
     unread: c[other + '_last'] > c[side + '_read'],
   };
   if (c.kind === 'feedback') {
@@ -1819,19 +1830,22 @@ async function getConversation(request, env, url, id) {
   const u = await currentUser(request, env), token = await anonToken(request);
   const c = await loadConversation(env, id), side = sideOf(c, u, token, url.searchParams.get('team') === '1');
   if (!side) throw new HttpError(404, 'Conversation not found');
-  const rows = (await env.DB.prepare('SELECT id, side, body, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 300').bind(id).all()).results.reverse();
+  const pics = await hasMsgPhotos(env);
+  const rows = (await env.DB.prepare(`SELECT id, side, body, ${pics ? 'images' : "'[]' AS images"}, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 300`).bind(id).all()).results.reverse();
   await env.DB.prepare(`UPDATE conversations SET ${side}_read = ? WHERE id = ?`).bind(now(), id).run();
   const why = await replyIssue(env, c, side, u);
   let blockedByMe = false;
   if (c.kind === 'direct') blockedByMe = !!(await env.DB.prepare('SELECT 1 FROM user_blocks WHERE user_id = ? AND blocked_id = ?').bind(u.id, c[(side === 'a' ? 'b' : 'a') + '_id']).first());
   const out = convOut(c, side);
   out.unread = false;
-  return json({ conversation: out, side, why, blockedByMe, messages: rows.map(m => ({ id: m.id, mine: m.side === side, body: m.body, created_at: m.created_at })) });
+  return json({ conversation: out, side, why, blockedByMe, photos: pics, messages: rows.map(m => ({ id: m.id, mine: m.side === side, body: m.body, images: JSON.parse(m.images || '[]'), created_at: m.created_at })) });
 }
 
 // Add a message from `side`, after the limits for that kind of sender, then email the other side if they want that.
 async function addMessage(request, env, url, c, side, u, b) {
-  const text = str(b.message, MSG_MAX, 'Message', { required: true }), t = now(), other = side === 'a' ? 'b' : 'a';
+  const t = now(), other = side === 'a' ? 'b' : 'a';
+  const images = await messagePhotos(env, u, b);
+  const text = str(b.message, MSG_MAX, 'Message', { required: !images.length });
   const why = await replyIssue(env, c, side, u);
   if (why) throw new HttpError(403, why);
   let ip = '';
@@ -1850,24 +1864,40 @@ async function addMessage(request, env, url, c, side, u, b) {
   // A feedback sender writing again reopens it for the team.
   const status = c.kind === 'feedback' && side === 'a' ? 'open' : c.status;
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO messages (id, conversation_id, side, user_id, body, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), c.id, side, u?.id || null, text, ip, t),
+    images.length
+      ? env.DB.prepare('INSERT INTO messages (id, conversation_id, side, user_id, body, images, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), c.id, side, u.id, text, JSON.stringify(images), ip, t)
+      : env.DB.prepare('INSERT INTO messages (id, conversation_id, side, user_id, body, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), c.id, side, u?.id || null, text, ip, t),
     env.DB.prepare(`UPDATE conversations SET ${side}_last = ?1, ${side}_read = ?1, ${side}_hidden = 0, ${other}_hidden = 0, status = ?2, updated_at = ?1 WHERE id = ?3`).bind(t, status, c.id),
   ]);
-  await notify(env, url, c, side, u, text, t);
+  await notify(env, url, c, side, u, text, images, t);
   return json({ ok: true, id: c.id });
+}
+
+// The photos sent with a message: up to MSG_PHOTOS, uploaded by this (signed-in) sender. Uploading already needs an
+// account in good standing with a confirmed email, and every photo goes through the automatic check (uploadImage).
+async function messagePhotos(env, u, b) {
+  const images = [...new Set((Array.isArray(b.images) ? b.images : []).filter(i => typeof i === 'string' && IMAGE_ID.test(i)))];
+  if (!images.length) return images;
+  if (!u) throw new HttpError(403, 'Sign in to send photos');
+  if (!await hasMsgPhotos(env)) throw new HttpError(503, "Photos in messages aren't switched on yet");
+  if (u.blocked) throw new HttpError(403, 'This account has been blocked from sending photos');
+  if (images.length > MSG_PHOTOS) throw new HttpError(400, `Too many photos (max ${MSG_PHOTOS})`);
+  await checkImagesOwned(env, u, images);
+  return images;
 }
 
 // Emails about new messages. To keep inboxes quiet, someone gets one email per conversation until they open it again
 // (except a reply to an anonymous feedback sender, which can only reach them by email, so each reply is sent).
-async function notify(env, url, c, side, u, text, t) {
+async function notify(env, url, c, side, u, text, images, t) {
   if (!mailReady(env)) return;
   const other = side === 'a' ? 'b' : 'a', link = `${url.origin}/#/inbox/${c.id}`;
   const fresh = c[other + '_mailed'] <= c[other + '_read'];
+  const n = images.length, said = (text || '') + (n ? `${text ? '\n\n' : ''}(${n === 1 ? 'a photo, see it' : n + ' photos, see them'} on the site)` : '');
   let to = '', subject, body, button = 'Read it', always = false;
   if (c.kind === 'feedback' && side === 'a') {
     to = env.FEEDBACK_TO || adminEmails(env)[0];
     subject = `[Painters Desk] Reply to feedback from ${u ? u.name : 'someone not signed in'}`;
-    body = `${u ? u.name : 'Someone who isn\'t signed in'} answered on their feedback:\n\n${text}`;
+    body = `${u ? u.name : 'Someone who isn\'t signed in'} answered on their feedback:\n\n${said}`;
     button = 'Reply on the site';
   } else {
     const r = c[other + '_id'] ? await env.DB.prepare('SELECT name, email, email_verified, dm_mail FROM users WHERE id = ?').bind(c[other + '_id']).first() : null;
@@ -1878,7 +1908,9 @@ async function notify(env, url, c, side, u, text, t) {
       else if (c.fb_email && (!r || !r.email_verified)) {
         // They gave this address for a reply, so the reply itself goes in the email.
         to = c.fb_email; always = true;
-        body = `Thanks for your feedback. Here is our reply:\n\n${text}\n\nYou can also answer on the site, in Messages, from the browser you sent your feedback with.`;
+        // Photo links go in too, since this email may be the only way the reply reaches them.
+        const links = images.map(id => `${url.origin}/api/images/${id}`).join('\n');
+        body = `Thanks for your feedback. Here is our reply:\n\n${text}${n ? `${text ? '\n\n' : ''}${n === 1 ? 'Photo' : 'Photos'}:\n${links}` : ''}\n\nYou can also answer on the site, in Messages, from the browser you sent your feedback with.`;
         button = 'Open The Painters Desk';
       }
     } else {
@@ -2050,11 +2082,11 @@ async function cleanPost(env, u, b) {
 
 // Delete photos no recipe, profile, portfolio, chat message or other post still uses (a photo can be reused across them).
 async function dropUnusedImages(env, ids) {
-  const cm = await hasCommissions(env), ch = await hasChat(env), gone = [];
+  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), gone = [];
   for (const id of new Set(ids)) {
     const like = `%"${id}"%`;
     const used = await env.DB.prepare(`SELECT 1 FROM recipes WHERE cover = ?1 OR steps LIKE ?2 UNION ALL SELECT 1 FROM users WHERE avatar_image = ?1
-      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
+      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
     if (!used) gone.push(id);
   }
   await deleteImages(env, gone);
