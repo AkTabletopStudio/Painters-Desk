@@ -816,17 +816,41 @@ async function deleteAccount(request, env) {
 
 async function getCollection(request, env) {
   const u = await requireUser(request, env);
-  const rows = (await env.DB.prepare('SELECT paint_key FROM collection WHERE user_id = ?').bind(u.id).all()).results;
-  return json({ paints: rows.map(r => r.paint_key) });
+  if (!await hasCollDetails(env)) {
+    const rows = (await env.DB.prepare('SELECT paint_key FROM collection WHERE user_id = ?').bind(u.id).all()).results;
+    return json({ paints: rows.map(r => r.paint_key), details: null });
+  }
+  const rows = (await env.DB.prepare('SELECT paint_key, qty, sku, color FROM collection WHERE user_id = ?').bind(u.id).all()).results;
+  // details only lists paints with something beyond the defaults (1 pot, no SKU or colour), to keep the reply small.
+  const details = {};
+  for (const r of rows) if (r.qty !== 1 || r.sku || r.color) details[r.paint_key] = { q: r.qty, s: r.sku || '', c: r.color || '' };
+  return json({ paints: rows.map(r => r.paint_key), details });
+}
+
+// Pots, SKU and colour per paint (migration 0024). Until it is applied the site hides the count and imports keys only.
+let collDetailsReady = false;
+async function hasCollDetails(env) {
+  if (!collDetailsReady) collDetailsReady = !!(await env.DB.prepare("SELECT 1 FROM pragma_table_info('collection') WHERE name = 'qty'").first().catch(() => null));
+  return collDetailsReady;
+}
+function collDetails(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return [];
+  return Object.entries(v).slice(0, 3000).flatMap(([k, d]) => {
+    if (!paintKeys([k], 1).length || !d || typeof d !== 'object') return [];
+    const q = Math.round(Number(d.q));
+    return [[k, Number.isFinite(q) ? Math.min(999, Math.max(1, q)) : 1, String(d.s || '').trim().slice(0, 40) || null, /^#[0-9a-f]{6}$/i.test(String(d.c || '').trim()) ? String(d.c).trim().toLowerCase() : null]];
+  });
 }
 
 async function putCollection(request, env) {
   const u = await requireUser(request, env);
   const b = await body(request);
   const add = paintKeys(b.add, 3000), remove = paintKeys(b.remove, 3000), t = now();
+  const det = await hasCollDetails(env) ? collDetails(b.details) : [];
   const stmts = [
     ...add.map(k => env.DB.prepare('INSERT OR IGNORE INTO collection (user_id, paint_key, added_at) VALUES (?, ?, ?)').bind(u.id, k, t)),
     ...remove.map(k => env.DB.prepare('DELETE FROM collection WHERE user_id = ? AND paint_key = ?').bind(u.id, k)),
+    ...det.map(([k, q, s, c]) => env.DB.prepare('UPDATE collection SET qty = ?, sku = ?, color = ? WHERE user_id = ? AND paint_key = ?').bind(q, s, c, u.id, k)),
   ];
   for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
   // Paints just added to the collection come off the shopping list (skipped until migration 0022 adds the table).
