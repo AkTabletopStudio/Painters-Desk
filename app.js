@@ -669,10 +669,6 @@ function openPick(){pickDlg.showModal();document.getElementById('q').focus()}
 document.getElementById('pickBtn').onclick=openPick;
 document.getElementById('pickOk').onclick=()=>pickDlg.close();
 
-// More tools menu: closes after a tool is used, or on a tap outside it.
-const mTools=document.getElementById('mTools');
-mTools.addEventListener('click',e=>{if(e.target.closest('.mtpop button'))mTools.open=false});
-document.addEventListener('click',e=>{if(mTools.open&&!mTools.contains(e.target))mTools.open=false});
 // One-time tip pointing at the wheel, until the first paint is tapped or the tip is closed.
 (()=>{let seen=false;try{seen=!!localStorage.getItem('pd-tip')}catch(e){}if(seen)return;
  const st=document.querySelector('#v-wheel .stage'),t=document.createElement('div');t.className='wtip';t.setAttribute('role','note');
