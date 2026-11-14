@@ -84,10 +84,10 @@ const avHTML=(u,cls='av')=>u.avatar?`<img class="${cls}" src="${esc(u.avatar)}" 
 const who=a=>`<a class="plink" href="#/u/${esc(a.id)}">${avHTML(a)}${esc(a.name)}</a>`;
 // Quick look pop-up for one paint (My paints suggestions, recipes, tutorials, profiles, forum and chat chips):
 // the closest paints you own and its matches, with buttons to add it, show it on the wheel (added to what's showing, nothing cleared) or open its paint page.
-function paintLook(p,o={}){const d=$('pqDlg'),ql=x=>x.d<6?'close':x.d<12?'fair':'loose',
+function paintLook(p,o={}){const d=$('pqDlg'),ql=x=>mq(x.d)[0],
   mine=OWN?P.filter(q=>!q.mix&&q.g!=='B'&&q.k!==p.k&&OWN.has(q.k)).map(q=>({q,d:d76(q.lab,p.lab)})).sort((a,b)=>a.d-b.d).slice(0,3):null;
  $('pqH').innerHTML=`<div class="pqh"><span class="pqs" style="background:${p.h}"></span><div><h2 id="pqT">${esc(p.n)}</h2><p class="s">${esc(BRANDS[BR_OF[p.g]][0])} · ${esc(GL[p.g])}${p.c?' · '+esc(p.c):''}</p></div></div>`;
- $('pqB').innerHTML=`${o.top||''}${mine?`<h3>Closest paints you own</h3>${mine.length?`<div class="pqm">${mine.map(x=>`<span class="chip"><i style="background:${x.q.h}"></i>${esc(x.q.n)} <span style="color:var(--mut)">${esc(GL[x.q.g])}</span> <span class="nq ${ql(x)}">ΔE ${x.d.toFixed(0)}</span></span>`).join('')}</div>`:'<p class="s">Nothing yet.</p>'}`:''}
+ $('pqB').innerHTML=`${o.top||''}${mine?`<h3>Closest paints you own</h3>${mine.length?`<div class="pqm">${mine.map(x=>`<span class="chip"><i style="background:${x.q.h}"></i>${esc(x.q.n)} <span style="color:var(--mut)">${esc(GL[x.q.g])}</span> <span class="nq ${ql(x)}" title="${mq(x.d)[1]} match">ΔE ${x.d.toFixed(0)}</span></span>`).join('')}</div>`:'<p class="s">Nothing yet.</p>'}`:''}
   ${mtHTML(p).replace('Matches in other ranges</h2>','Matches in other ranges</h2><p class="s pqn">✓ = listed in a conversion chart, ≈ = closest swatch colour.</p>')}<p class="s">Swatch colours are estimates, so check the paint in person.</p>`;
  const ad=$('pqAdd'),can=!!OWN&&!p.mix&&p.g!=='B',own=can&&OWN.has(p.k);ad.hidden=!can;ad.disabled=own;ad.textContent=own?'In your collection':'Add to my paints';
  ad.onclick=()=>{setOwned([p.k],true);if(o.onAdd)o.onAdd();d.close()};
@@ -468,7 +468,7 @@ function renderPaints(){
  const ownList=()=>{const d=$('ownd'),box=$('ownL');if(!d)return;d.hidden=!OWN.size;$('ownN').textContent=OWN.size?'('+OWN.size+')':'';if(!d.open){box.innerHTML='';return}
   const by=new Map();P.forEach(p=>{if(p.mix||!OWN.has(p.k))return;const b=BR_OF[p.g];if(!by.has(b))by.set(b,new Map());const g=by.get(b);if(!g.has(p.g))g.set(p.g,[]);g.get(p.g).push(p)});
   box.innerHTML=[...by.keys()].sort((a,b)=>a-b).map(b=>{const gs=by.get(b),n=[...gs.values()].reduce((a,l)=>a+l.length,0);
-   return`<h3 class="owb">${esc(BRANDS[b][0])} <span class="s">· ${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="s">${esc(GL[g])}</div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`).join('')}</div></div>`).join('')}).join('')};
+   return`<section class="owg"><h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="owl">${esc(GL[g])} <span class="owc">${ps.length}</span></div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`).join('')}</div></div>`).join('')+'</section>'}).join('')};
  {const d=$('ownd');try{const v=localStorage.getItem('pd-ownd');d.open=v==null?OWN.size<=40:v==='1'}catch(e){d.open=OWN.size<=40}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-ownd',d.open?'1':'0')}catch(e){}ownList()});
   $('ownL').addEventListener('click',e=>{const c=e.target.closest('[data-ok]');const p=c&&BYKEY.get(c.dataset.ok);if(p)paintLook(p)});
@@ -542,7 +542,7 @@ function renderPaints(){
  const sgOpen=(title,html)=>{const d=$('sgDlg');$('sgDT').textContent=title;$('sgDB').innerHTML=html;d.showModal();d.querySelector('.pqx').focus()};
  const rampD=x=>{const gq={good:'Good fit',fair:'Fair fit',weak:'Weak fit'},lk=`#/?ramp=${x.q}${x.own?'&base='+encodeURIComponent(x.b.k):''}`;
   sgOpen(x.tech.name+' · '+x.n,`<p class="s">${gq[x.grade]}: each step is the colour the ${esc(x.tech.full||x.tech.name)} ramp needs, next to your closest paint. Steps with nothing close (ΔE 12+) list paints that would fill them.</p>`+
-  x.R.map(st=>{const ok=st.d<12,cls=st.d<6?'close':st.d<12?'fair':'loose';return`<div class="sgds"><span class="sgdt" style="background:${labHex(st.t)}" title="Colour this step needs"></span><div class="nnm"><b>${esc(st.r)}</b>${st.p?`<span>Yours: <i class="sgdi" style="background:${st.p.h}"></i>${esc(st.p.n)} <em>${esc(GL[st.p.g])}</em> <span class="nq ${cls}">ΔE ${st.d.toFixed(0)}</span></span>`:'<span>Nothing in your collection</span>'}</div></div>`+
+  x.R.map(st=>{const ok=st.d<12,cls=mq(st.d)[0];return`<div class="sgds"><span class="sgdt" style="background:${labHex(st.t)}" title="Colour this step needs"></span><div class="nnm"><b>${esc(st.r)}</b>${st.p?`<span>Yours: <i class="sgdi" style="background:${st.p.h}"></i>${esc(st.p.n)} <em>${esc(GL[st.p.g])}</em> <span class="nq ${cls}" title="${mq(st.d)[1]} match">ΔE ${st.d.toFixed(0)}</span></span>`:'<span>Nothing in your collection</span>'}</div></div>`+
    (ok?'':`<div class="sgdg">${sgPick(st.t,null,2,st.d).map(m=>sgP(m)).join('')||'<p class="s">No paint in the list gets close.</p>'}${sgMix(st.t)}</div>`)}).join('')+
   `<div class="row"><a class="btn pri" href="${lk}">Open in Ramps on the wheel</a>${TQ_GUIDE[x.q]?`<a class="btn" href="guides/${TQ_GUIDE[x.q]}">How to paint it</a>`:''}</div>`)};
  const cellD=c=>{const x=sugLast&&sugLast.cells[c];if(!x)return;const own=x.own.slice().sort((a,b)=>d76(a.lab,x.t)-d76(b.lab,x.t));
@@ -975,7 +975,7 @@ async function renderAdmin(){
  let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
  const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
  const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
- const where=w=>w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const where=w=>w.type==='message'?(w.kind==='feedback'?`<a href="#/inbox/${esc(w.id)}/team">feedback conversation</a>`:'private message'):w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
  const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
   <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
   <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
@@ -1082,13 +1082,29 @@ async function inboxWith(uid){
  if(d.id){history.replaceState(null,'','#/inbox/'+d.id);return inboxConv(d.id)}
  el.innerHTML=`<p><a href="#/inbox">← All messages</a></p><div class="prof">${avHTML(d.other,'av big')}<div><h1>${esc(d.other.name)}</h1><p><a href="#/u/${esc(d.other.id)}">See their profile</a></p></div></div>
  ${d.why?`<p class="s">${esc(d.why)}</p>`:composeHTML(`Your first message to ${d.other.name}. Be kind, and keep to the <a href="terms" target="_blank">site rules</a>: they can block or report you.`)}`;
- wireCompose(async text=>{const r=await api('/conversations/with/'+encodeURIComponent(uid),{method:'POST',body:{message:text,website:$('mWeb').value}});history.replaceState(null,'','#/inbox/'+r.id);inboxConv(r.id)})}
-const composeHTML=hint=>`<form id="mForm" class="panel"><label class="f"><span>Message</span><textarea id="mText" maxlength="2000" required></textarea></label>
+ wireCompose(async(text,images)=>{const r=await api('/conversations/with/'+encodeURIComponent(uid),{method:'POST',body:{message:text,images,website:$('mWeb').value}});history.replaceState(null,'','#/inbox/'+r.id);inboxConv(r.id)})}
+// Photos can go with a message once the server has them switched on (msgPhotos) and the writer is signed in,
+// since uploads need an account. Up to M_PHOTOS a message, shrunk and checked like every other upload.
+const M_PHOTOS=4,msgPhotosOn=()=>!!(INFO&&INFO.msgPhotos&&ME);
+const composeHTML=hint=>`<form id="mForm" class="panel"><label class="f"><span>Message</span><textarea id="mText" maxlength="2000"></textarea></label>
  <label class="fbhp" aria-hidden="true">Website<input type="text" id="mWeb" tabindex="-1" autocomplete="off"></label>
- <div class="row"><button class="btn pri" type="submit" id="mSend">Send</button><span class="err" id="mErr" role="alert"></span></div>${hint?`<p class="s">${hint}</p>`:''}</form>`;
+ ${msgPhotosOn()?'<div class="pgal ed mpics" id="mImgs"></div>':''}
+ <div class="row"><button class="btn pri" type="submit" id="mSend">Send</button>${msgPhotosOn()?'<label class="btn" title="Add photos (up to 4)">📷 Add photo<input type="file" accept="image/*" multiple hidden id="mFile"></label>':''}<span class="err" id="mErr" role="alert"></span></div>${hint?`<p class="s">${hint}</p>`:''}</form>`;
 function wireCompose(send){const F=$('mForm');if(!F)return;
- F.onsubmit=async e=>{e.preventDefault();$('mErr').textContent='';$('mSend').disabled=true;
-  try{await send($('mText').value)}catch(err){$('mErr').textContent=err.message;$('mSend').disabled=false}};
+ const imgs=[],E=$('mErr');let busy=0;
+ const draw=()=>{const G=$('mImgs');if(!G)return;
+  G.innerHTML=imgs.map((id,i)=>`<div><img src="${imgURL(id)}" alt="Photo ${i+1}"><button class="x" type="button" data-xi="${i}" title="Remove photo" aria-label="Remove photo">×</button></div>`).join('');
+  G.querySelectorAll('[data-xi]').forEach(b=>b.onclick=()=>{imgs.splice(+b.dataset.xi,1);draw()})};
+ if($('mFile'))$('mFile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';
+  for(const f of fs){if(imgs.length>=M_PHOTOS){E.className='err';E.textContent=`Up to ${M_PHOTOS} photos a message.`;break}
+   busy++;E.className='s';E.textContent='Uploading photo…';$('mSend').disabled=true;
+   try{imgs.push(await uploadPhoto(f));draw();E.textContent=''}catch(err){E.className='err';E.textContent=err.message}
+   busy--;$('mSend').disabled=!!busy}};
+ F.onsubmit=async e=>{e.preventDefault();E.className='err';E.textContent='';
+  if(busy){E.className='s';E.textContent='Wait for the photo to finish uploading.';return}
+  if(!$('mText').value.trim()&&!imgs.length){E.textContent=msgPhotosOn()?'Write a message or add a photo.':'Write a message.';$('mText').focus();return}
+  $('mSend').disabled=true;
+  try{await send($('mText').value,imgs.slice())}catch(err){E.className='err';E.textContent=err.message;$('mSend').disabled=false}};
  $('mText').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))F.requestSubmit()}}
 // asTeam: an admin opened this from the feedback list, so they act as the team (even on feedback they sent).
 async function inboxConv(id,asTeam){
@@ -1100,7 +1116,8 @@ async function inboxConv(id,asTeam){
  const info=team?`<p class="s">${esc(c.feedback.kind)}${c.feedback.page?' · sent from '+esc(c.feedback.page):''}${c.other.id&&!c.other.gone?` · <a href="#/u/${esc(c.other.id)}">profile</a>`:''}${c.feedback.email?' · email: '+esc(c.feedback.email):''}</p>
   <p class="s">${c.other.id?'They see your reply in Messages when they visit, signed as The Painters Desk team.':c.feedback.onSite?'Sent without signing in. They see your reply in Messages on the browser they used.':'Sent without signing in.'}${c.feedback.email?' Each reply is also emailed to them'+(c.other.id?' if they have no confirmed account email':'')+'.':''}</p>`
   :fb?'<p class="s">You sent this with the Feedback button. Replies come from The Painters Desk team.</p>':direct&&w.id&&!w.gone?`<p><a href="#/u/${esc(w.id)}">See their profile</a></p>`:'';
- const msg=m=>`<div class="msg ${m.mine?'me':'them'}">${esc(m.body)}<span class="mtm">${m.mine?'You':esc(fb&&!team?'The Painters Desk team':w.name)} · ${ago(m.created_at)}${direct&&!m.mine?` · <button class="lnk" type="button" data-rep="${esc(m.id)}">Report</button>`:''}</span></div>`;
+ const pics=m=>m.images&&m.images.length?`<div class="mpg">${m.images.map((id,i)=>`<a href="${imgURL(id)}" target="_blank" rel="noopener" data-big="${esc(id)}"><img src="${imgURL(id)}" alt="Photo ${i+1}" loading="lazy"></a>`).join('')}</div>`:'';
+ const msg=m=>`<div class="msg ${m.mine?'me':'them'}">${esc(m.body)}${pics(m)}<span class="mtm">${m.mine?'You':esc(fb&&!team?'The Painters Desk team':w.name)} · ${ago(m.created_at)}${direct&&!m.mine?` · <button class="lnk" type="button" data-rep="${esc(m.id)}">Report</button>`:''}</span></div>`;
  el.innerHTML=`<p><a href="${back}">← ${team?'All feedback':'All messages'}</a></p><div class="prof">${avHTML(w,'av big')}<div><h1>${esc(title)}</h1>${team?(c.status==='done'?'<span class="tag">dealt with</span>':'<span class="tag warn">open</span>'):''}</div></div>${info}
  <div class="msgs" id="mList">${d.messages.map(msg).join('')}</div>
  ${d.why?`<p class="s">${esc(d.why)}</p>`:composeHTML('')}
@@ -1109,7 +1126,7 @@ async function inboxConv(id,asTeam){
  ${team?'':'<button class="btn" type="button" id="mHide">Delete conversation</button>'}<span class="s" id="mAct"></span></div>`;
  const L=$('mList');L.lastElementChild?.scrollIntoView({block:'nearest'});
  unread();
- wireCompose(async text=>{await api('/conversations/'+encodeURIComponent(id)+q,{method:'POST',body:{message:text,website:$('mWeb').value}});inboxConv(id,asTeam)});
+ wireCompose(async(text,images)=>{await api('/conversations/'+encodeURIComponent(id)+q,{method:'POST',body:{message:text,images,website:$('mWeb').value}});inboxConv(id,asTeam)});
  L.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>openReport('message',b.dataset.rep,w.name));
  const act=async(fn,after)=>{try{await fn();after()}catch(e){$('mAct').className='err';$('mAct').textContent=e.message}};
  if($('mDone'))$('mDone').onclick=()=>act(()=>api('/conversations/'+id+q,{method:'PUT',body:{status:c.status==='done'?'open':'done'}}),()=>c.status==='done'?inboxConv(id,asTeam):(location.hash='#/inbox?team'));
