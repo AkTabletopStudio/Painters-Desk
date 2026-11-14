@@ -1,17 +1,142 @@
-// Text for the painting-basics guides (/guides/<slug>): thinning and wet palettes, priming and varnishing, airbrushing,
+// Text for the painting-basics guides (/guides/<slug>): paint types explained, thinning and wet palettes, priming and varnishing, airbrushing,
 // contrast and speed paints, black and white, basing and weathering. The pages are built in seo.js (craftPage).
 // HTML is allowed (it's our own text). [[brand/paint-slug]] becomes a link to that paint's page with its swatch, and the
 // build fails (tools/check_seo.mjs) if the paint doesn't exist, so a renamed paint can't leave a dead link.
 // A section's body is a list of blocks: a string is a paragraph; {h3}, {ul}, {ol}, {table: [head, rows]} are what they say;
 // {picks: {steps: [[name, hex, nameRegex?]], pool}} is a table of the nearest real paint in each brand for each target colour
 // (pool 'op' opaque paints, 'con' contrast/speed paints); {ranges: 'air' | 'con'} is a table of those ranges, counted from data.js.
+// {typeTable: [[type, name, anchor, what it is]]} is the overview table with a count of each paint type from data.js;
+// {types: 'wash'} lists the ranges with paints of that type (seo.js typeOf, the same rules as the wheel's Paint types).
 // basic orders the guides in the Painting basics list on /guides.
 
 export const CRAFT_DATE = '2026-11-03';
 
 export const CRAFT = [
   {
-    slug: 'thinning-paints-and-wet-palettes', basic: 1, label: 'Thinning paints and wet palettes',
+    slug: 'miniature-paint-types', basic: 1, label: 'Paint types explained', date: '2026-11-14',
+    title: 'Miniature paint types explained: base, layer, shade, contrast, metallic, colour-shift and more',
+    blurb: 'What base, layer, shade, contrast, speedpaint, dry, air, ink, glaze, metallic, colour-shift and fluo paints are, and when to use each.',
+    desc: 'Every kind of miniature paint explained in plain words: base and layer paints, shades and washes, contrast and speed paints, inks and glazes, dry paints, air paints, metallics, colour-shift and pearl paints, fluorescents, technical paints, primers, mediums and varnish, with the ranges of each on The Painters Desk.',
+    intro: [
+      'Walk into a hobby shop and the paint rack is split into base, layer, shade, contrast, dry, air, technical and more, and every brand uses its own names for the same ideas. This guide explains what each kind of paint is, how it behaves on the model and when to reach for it, in plain words and without taking sides between brands.',
+      'The short version: most of a model is painted with <b>opaque paints</b> (base and layer), shaded with <b>transparent paints</b> (washes, inks, glazes, contrast), and finished with <b>special paints</b> (metallics, effects, fluorescents) where the model calls for them. Everything else on the rack is a variation on those three, or a product that helps them along (primer, medium, varnish).',
+    ],
+    sections: [
+      { h: 'All the types at a glance', body: [
+        'The counts are how many paints of each kind are on The Painters Desk today. On the <a href="/">colour wheel</a> the <b>Paint types</b> button lets you show or hide each group.',
+        { typeTable: [
+          ['op', 'Base and layer paints', 'base-paints', 'Opaque colour. Covers what is under it. The bulk of every collection.'],
+          ['wash', 'Shades and washes', 'shades-and-washes', 'Thin, dark, flowing paint that runs into recesses to add shadow.'],
+          ['con', 'Contrast and speed paints', 'contrast-and-speed-paints', 'One-coat paints that shade and colour at once over a light primer.'],
+          ['ink', 'Inks, glazes and transparents', 'inks-glazes-and-transparents', 'Strong, see-through colour for tinting, glazing and filters.'],
+          ['met', 'Metallics and colour-shift', 'metallic-paints', 'Paint with metal or mica flakes that catches the light; shifts change colour with the angle.'],
+          ['pearl', 'Pearls', 'pearl-and-iridescent-paints', 'A soft pearly sheen over the colour.'],
+          ['fx', 'Fluorescents and effects', 'fluorescent-paints', 'Neon brights that glow under UV, plus blood, rust and other effects.'],
+          ['tech', 'Technical, primers and mediums', 'technical-paints', 'Textures, crackle, gemstone and other special finishes, plus primers, mediums and varnish.'],
+        ] },
+        'Dry paints and air paints are not separate types here: they are opaque paints made thicker or thinner for one job, so they count as base and layer paints above.',
+      ] },
+      { h: 'Base paints', body: [
+        'A base paint is an opaque, heavily pigmented paint made to cover in one or two coats, even over a black or dark primer. It is the first colour on each area of the model: armour, cloth, skin, leather. Base paints tend to sit at the darker, richer end of a colour, because the shading and highlights are built from there.',
+        'Citadel splits its opaque paints into Base and Layer ranges, so a Citadel base paint like [[citadel/mephiston-red]] or [[citadel/macragge-blue]] covers better than the layer paints next to it on the rack. Most other brands make one opaque range that does both jobs (Army Painter Warpaints Fanatic, Vallejo Game Color and Model Color, Pro Acryl, AK 3rd Gen, Scale75, Two Thin Coats and more), and simply make the darker colours a little more opaque.',
+        'How to use it: thin it slightly (cream consistency) and put on <b>two thin coats</b> rather than one thick one. See <a href="/guides/thinning-paints-and-wet-palettes">thinning paints</a> for the consistencies.',
+      ] },
+      { h: 'Layer paints', body: [
+        'A layer paint is still opaque, but made a little thinner and smoother, with a finer pigment, so it can be built up in thin coats without hiding detail. Layer paints are for the steps after the basecoat: highlights, blends and fine details. A layer range usually has lighter, brighter versions of each base colour, such as [[citadel/evil-sunz-scarlet]] over Mephiston Red.',
+        'Can you basecoat with a layer paint? Yes, it just takes a coat or two more, especially over a dark primer. Can you highlight with a base paint? Yes too, thinned with a little water or medium. The labels are a guide to how the paint is made, not a rule.',
+        'Two Thin Coats goes a step further and sells its opaque colours as triads (a shadow, a midtone and a highlight of each colour), and Tone Pro from Citadel has a range of tones for each colour; both are ways of handing you a ready-made ramp of layer paints.',
+      ] },
+      { h: 'Dry paints', body: [
+        'Dry paints are made thick, almost like a paste, for <a href="/guides/drybrushing">drybrushing</a>: you wipe most of the paint off a stiff brush and dust it over raised edges and texture. Thick paint stays on the bristles as a dry film and catches the edges instead of flowing into the recesses, which is exactly what drybrushing needs.',
+        'On the site that is Citadel Colour: Dry (such as [[citadel/ryza-rust]] and [[citadel/necron-compound]]) and AMMO Dio Drybrush. You don\'t need them to drybrush: any opaque paint straight from the pot works, a dry paint is just quicker and smoother. Don\'t use dry paints for normal brush painting; they are too thick to flow.',
+      ] },
+      { h: 'Air paints', body: [
+        'Air paints are opaque paints already thinned to flow through an airbrush, with a finer pigment so they don\'t clog the needle. They also work with a brush for glazes and very smooth layers, and some painters use them for everything because they are pre-thinned. Shake them hard; the pigment settles. See <a href="/guides/airbrushing-miniatures">airbrushing basics</a> for how to spray them.',
+        { ranges: 'air' },
+      ] },
+      { h: 'Shades and washes', body: [
+        'A shade or wash is a very thin, dark, flowing paint. Brushed over a basecoat, it runs into the recesses and dries darker there, and leaves only a faint tint on the raised areas. It is the quickest way to add shadow and definition to a model, and the classic beginner method is basecoat, wash, then highlight the raised areas back up.',
+        'Shades are mostly made with a medium that breaks the surface tension, so they flow into every crease. Many dry with a slight satin sheen, which a matt varnish takes away. Black and brown shades like [[citadel/nuln-oil]] and [[citadel/agrax-earthshade]] are the most used paints in many collections, because they work over almost any colour.',
+        'How to use it: load the brush well, flow it into the recesses, and soak up any big puddles with a clean, damp brush so they don\'t dry as tide marks. For more control, paint it only into the lines (a <b>pin wash</b> or recess shade). Washes and shades are hidden on the wheel by default, because their swatch colour is what they add over a basecoat, not a colour they make on their own.',
+        { types: 'wash' },
+      ] },
+      { h: 'Contrast and speed paints', body: [
+        'Contrast and speed paints sit between a wash and a basecoat: thin, flowing, but heavily pigmented, so one coat over a light primer gives you a base colour with the shading already in the recesses. Citadel calls them Contrast, Army Painter calls them Speedpaint, Vallejo calls them Xpress Color, Scale75 calls them Instant Colors and Pro Acryl calls them 1-Step; the idea is the same.',
+        'The primer matters most: over white or a light grey they are bright, over black they barely show. They are best on textured areas (cloth, fur, scales, skin), and harder to get smooth on big flat panels. Thin them with their own medium, not water. The full guide is <a href="/guides/contrast-and-speed-paints">contrast and speed paints</a>, with every range compared colour by colour.',
+        { types: 'con' },
+      ] },
+      { h: 'Inks, glazes and transparents', body: [
+        'These are transparent colours. Where a wash is mostly about shadow, an ink or glaze is about colour: it tints whatever is under it without hiding it.',
+        { ul: [
+          '<b>Inks</b> are intensely pigmented and very fluid. A drop or two tints a mix, brightens a dull colour or makes a strong wash. Thinned right down, they make glazes and filters. Some dry glossy.',
+          '<b>Glazes and transparents</b> are made ready to use: thin, see-through colour for building up a smooth blend, deepening a shadow or shifting a colour slightly warmer or cooler. See <a href="/guides/glazing">glazing</a> for the method.',
+          '<b>Shaders and filters</b> (common in scale modelling) are very thin tints laid over a whole area to unify the colours or add a weathered tone.',
+        ] },
+        'Tip: if a model looks patchy or the blends are rough, one thin glaze of the middle colour over everything pulls it together.',
+        { types: 'ink' },
+      ] },
+      { h: 'Metallic paints', body: [
+        'Metallic paints carry fine metal or mica flakes, so they catch the light and look like metal. Silvers, steels, golds, brasses, bronzes and coppers make up most of them, plus coloured metallics for candy-bright armour. A wash over a metallic gives it shadow and age; a brighter metallic on the edges gives it a shine.',
+        'Metallic paint behaves differently from normal paint: the flakes settle fast (stir or shake often), they can travel and leave a sparkle in other colours, so keep a separate water pot, and they look best over a smooth, dark basecoat. Thinning too much with water spreads the flakes out and the metal looks grainy; a little medium is better.',
+        'Painting metal <em>without</em> metallic paint, using normal paints to paint the reflections, is called <b>non-metallic metal</b> (NMM). It is a different technique with opaque paints; see <a href="/guides/best-paints-for-nmm">NMM</a>.',
+        'Vallejo True Metallic Metal and Scale75 Metal n\' Alchemy are whole metal ranges built in light, base and shade steps, and most opaque ranges include a few metallics too. Metallics are split from normal paints in matches on the site, so a gold is only ever matched with other golds.',
+        { types: 'met' },
+      ] },
+      { h: 'Colour-shift paints', body: [
+        'Colour-shift paints (also called chameleon or chromashift paints) look like one colour from one angle and another colour as the model turns, for example green to purple or gold to red. They use special interference pigments that split the light like an oil film or a beetle\'s shell. They are a kind of metallic, and the site counts them as metallics.',
+        'They work best <b>over gloss black</b> or a dark basecoat, which makes the shift strongest. Over white or a light colour the effect mostly disappears. Use them on large smooth areas where the light can roll across the surface (armour panels, vehicle hulls, crystals, beetle shells, magical weapons), and seal with a gloss or satin varnish, because matt varnish dulls the shift.',
+        'On the site that is Turbo Dork TurboShift and ZeniShift (each with its recommended basecoat as its code), Green Stuff World Metallic &amp; Colorshift and Scale75 Prism Effect. Our swatches can only show one colour, so a colour-shift paint shows its main colour on the wheel; check the maker\'s photos to see the full shift.',
+      ] },
+      { h: 'Pearl and iridescent paints', body: [
+        'Pearl and iridescent paints add a soft, milky sheen, or a faint second colour, over what is under them, like the inside of a shell. They are often semi-transparent and used over a basecoat for silk, gems, ghosts, insect wings and a magical glow. Pearls are hidden on the wheel by default, because their sheen doesn\'t show on a swatch.',
+      ] },
+      { h: 'Fluorescent paints', body: [
+        'Fluorescent (fluo) paints are the neon brights: pinks, greens, oranges and yellows that look brighter than any normal paint and glow under UV light. They are fairly transparent, so they need a <b>white basecoat</b> underneath to look bright, and several thin coats. Use them for glowing eyes, plasma, warning stripes, mushrooms and light sources (see <a href="/guides/best-paints-for-osl">OSL</a>).',
+        'Fluorescent pigment fades in strong sunlight over time, so keep finished models out of direct sun, and a UV-protective varnish helps.',
+        { types: 'fx' },
+      ] },
+      { h: 'Technical paints', body: [
+        'Technical and effect paints do one special job, and each one is a little different, so read the pot. The common kinds:',
+        { ul: [
+          '<b>Texture paints</b> contain grit or a crackle medium, for bases: brush on, let dry, then drybrush. [[citadel/stirland-mud]] and [[citadel/astrogranite]] are two. See <a href="/guides/basing-miniatures">basing</a>.',
+          '<b>Effect paints</b> for rust, corrosion, verdigris, blood, slime, frost and ice, made to look like the real thing in one coat: [[citadel/typhus-corrosion]], [[citadel/nihilakh-oxide]] and [[citadel/blood-for-the-blood-god]], for example. See <a href="/guides/weathering-miniatures-and-models">weathering</a>.',
+          '<b>Gemstone paints</b> are thick, glossy, tinted paints that pool on a silver basecoat and dry like a jewel, such as [[citadel/spiritstone-red]]. See <a href="/guides/best-paints-for-gems">gems</a>.',
+          '<b>Pigments</b> are loose powders for dust, mud and rust, fixed with a fixer or thinner.',
+        ] },
+      ] },
+      { h: 'Primers, mediums and varnish', body: [
+        'These aren\'t colours, but they hold the paint job together.',
+        { ul: [
+          '<b>Primer</b> is the first coat on bare plastic, resin or metal. It grips the model and gives paint something to stick to. Spray primers are the quickest; brush-on primers (Pro Acryl has a range on the site) and airbrush primers work too. The colour of the primer sets the tone of everything on top, so see <a href="/guides/priming-and-varnishing-miniatures">priming</a> for which colour to pick.',
+          '<b>Mediums</b> change how paint behaves without adding colour: thinning mediums, glaze mediums, flow improvers, drying retarders, and contrast or speedpaint medium for thinning those paints. See <a href="/guides/thinning-paints-and-wet-palettes">thinning</a>.',
+          '<b>Varnish</b> is the last coat. It protects the paint from handling and evens out the sheen: matt for most models, satin for a slight sheen, gloss for wet effects, gems and eyes.',
+        ] },
+      ] },
+      { h: 'Oils, enamels and lacquers', body: [
+        'Almost every paint on the site is water-based acrylic, which cleans up with water and dries fast. A few ranges use other binders, mostly for scale models:',
+        { ul: [
+          '<b>Oil paints</b> (like AMMO Oilbrushers) stay wet for hours, so they blend very smoothly and are popular for weathering, streaks and filters on vehicles. Thin and clean with odourless thinner, and work over varnished acrylic so the thinner doesn\'t lift the paint.',
+          '<b>Enamels</b> are solvent-based washes and effects for weathering; the solvent lets you wipe them back after they dry.',
+          '<b>Lacquers</b> (like Mr. Color, and Tamiya\'s spray cans) are solvent-based paints that spray thin, dry fast and very hard. Use them with good ventilation and a mask, and clean with their own thinner.',
+        ] },
+      ] },
+      { h: 'Which types do I need to start?', body: [
+        'You can paint a whole army with three kinds: a set of <b>opaque base and layer paints</b> in the colours of your scheme, a <b>black or dark brown shade</b> for shadows, and one <b>silver and one gold</b> metallic. Add contrast or speed paints if you want to paint faster, a few inks or glazes when you start blending, and the special paints as each model calls for them.',
+        'When you look for an equivalent of a paint on the site, pick one of the same type: a Citadel Shade is best swapped for another brand\'s wash, not an opaque paint of the same colour. The matches on each paint page say when two paints are different types.',
+      ] },
+    ],
+    faq: [
+      ['What is the difference between base and layer paint?', 'Base paints are more heavily pigmented, so they cover in one or two coats over a dark primer. Layer paints are thinner and smoother, for building up highlights and blends in thin coats. Most brands make one opaque range that does both.'],
+      ['What is the difference between a shade, a wash and an ink?', 'Shades and washes are thin, dark paints that run into recesses to add shadow. Inks are more intense, transparent colours for tinting, glazing and strong washes. The names overlap between brands, and you can thin an ink into a wash.'],
+      ['Are speed paints and contrast paints the same thing?', 'They are the same kind of paint from different brands: Contrast is Citadel\'s range and Speedpaint is Army Painter\'s. Both are one-coat paints that shade and colour at once over a light primer.'],
+      ['What are colour-shift paints?', 'Paints with interference pigments that change colour as the viewing angle changes, such as green to purple. They work best over gloss black and on large smooth areas, and should be sealed with gloss or satin varnish rather than matt.'],
+      ['Do I need dry paints to drybrush?', 'No. Any opaque paint straight from the pot will drybrush. Dry paints are made thick so they drybrush more smoothly and quickly.'],
+      ['Can I use air paints with a brush?', 'Yes. Air paints are opaque paints that are already thinned, so they work well with a brush for smooth layers and glazes, though they need more coats to cover.'],
+    ],
+  },
+
+  {
+    slug: 'thinning-paints-and-wet-palettes', basic: 2, label: 'Thinning paints and wet palettes',
     title: 'How to thin miniature paints, and how to make a wet palette',
     blurb: 'How thin is thin enough for each job, and a wet palette you can make in five minutes.',
     desc: 'How to thin acrylic paints for miniatures: the right consistency for basecoats, layers, glazes, washes and airbrushing, water vs medium, two thin coats, and how to make and look after a wet palette.',
@@ -80,7 +205,7 @@ export const CRAFT = [
   },
 
   {
-    slug: 'priming-and-varnishing-miniatures', basic: 2, label: 'Priming and varnishing',
+    slug: 'priming-and-varnishing-miniatures', basic: 3, label: 'Priming and varnishing',
     title: 'How to prime and varnish miniatures (and fix frosting)',
     blurb: 'Black, grey, white or zenithal priming, gloss versus matt varnish, and how to fix a frosted model.',
     desc: 'How to prime miniatures with spray, brush-on or airbrush primer, choosing black, grey or white, zenithal priming, how to varnish miniatures with gloss, satin and matt varnish, and what causes frosting and how to fix it.',
@@ -164,7 +289,7 @@ export const CRAFT = [
   },
 
   {
-    slug: 'airbrushing-miniatures', basic: 3, label: 'Airbrushing basics',
+    slug: 'airbrushing-miniatures', basic: 4, label: 'Airbrushing basics',
     title: 'Airbrushing miniatures and models: a beginner\'s guide',
     blurb: 'Thinning ratios, air pressure (PSI), needles and cleaning, for figures and scale models.',
     desc: 'Airbrushing basics for miniatures and scale models: what you need, gravity vs siphon feed and needle sizes, how to thin paint for an airbrush, what PSI to use, how to prime, basecoat and zenithal highlight, cleaning, and fixing tip dry, spidering and grainy paint.',
@@ -262,7 +387,7 @@ export const CRAFT = [
   },
 
   {
-    slug: 'contrast-and-speed-paints', basic: 4, label: 'Contrast and speed paints',
+    slug: 'contrast-and-speed-paints', basic: 5, label: 'Contrast and speed paints',
     title: 'Contrast and speed paints: how to use them, and how the brands compare',
     blurb: 'One-coat paints that shade and highlight at once: priming, technique, mediums, and the brands side by side.',
     desc: 'How to use contrast and speed paints on miniatures: what they are, the right primer, how to apply them without pooling, thinning with medium, and Citadel Contrast, Army Painter Speedpaint, Vallejo Xpress Color, Scale75 Instant Colors and other ranges compared colour by colour.',
@@ -314,7 +439,7 @@ export const CRAFT = [
   },
 
   {
-    slug: 'how-to-paint-black-and-white', basic: 5, label: 'Painting black and white',
+    slug: 'how-to-paint-black-and-white', basic: 6, label: 'Painting black and white',
     title: 'How to paint black and white on miniatures',
     blurb: 'Highlighting black without turning it grey, and shading white without making it dirty, with paints in every brand.',
     desc: 'How to paint black and white on miniatures: highlighting black armour and cloth with grey ramps, cool vs warm black, how to paint white that stays white, shading white with grey or warm tones, and the closest paints in every brand for each step.',
@@ -370,7 +495,7 @@ export const CRAFT = [
   },
 
   {
-    slug: 'basing-miniatures', basic: 6, label: 'Basing miniatures',
+    slug: 'basing-miniatures', basic: 7, label: 'Basing miniatures',
     title: 'How to base miniatures: texture, tufts and simple scenic bases',
     blurb: 'Texture paint or sand, a drybrushed earth ramp, tufts and rims: a finished base in an evening.',
     desc: 'How to base miniatures: sand and PVA vs texture paints, painting and drybrushing earth, mud, sand, stone and snow, adding static grass and tufts, painting the base rim, simple scenic bases, and the closest paints in every brand.',
@@ -429,7 +554,7 @@ export const CRAFT = [
   },
 
   {
-    slug: 'weathering-miniatures-and-models', basic: 7, label: 'Weathering',
+    slug: 'weathering-miniatures-and-models', basic: 8, label: 'Weathering',
     title: 'Weathering miniatures and models: rust, mud, chipping and pigments',
     blurb: 'Rust, mud, paint chips, washes and pigments for tanks, terrain and gritty figures.',
     desc: 'How to weather miniatures, tanks and terrain: paint chipping with a sponge, hairspray and chipping medium, rust in layers, mud and dust with pigments, oil and enamel washes and filters, streaking, and the closest paints in every brand for rust, mud and dust.',

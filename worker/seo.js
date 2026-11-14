@@ -403,7 +403,7 @@ function paintPage(D, p, rs) {
   const nAll = mCount(mdAll), allHTML = nAll > mCount(md) ? `<details class="allm"><summary>Show all ${nAll} matches, including loose ones</summary><p class="s">Every paint a conversion chart lists, however far its swatch is from ${esc(p.n)}'s, plus the 2 or 3 nearest swatches in every brand.</p>${grid('ch', 'near', mdAll)}${grid('xch', 'xnear', mdAll) ? `<h3>${mt ? 'Non-metallic colours' : 'Metallic matches'}</h3>${grid('xch', 'xnear', mdAll)}` : ''}</details>` : '';
   const body = `<h1>${esc(p.n)} equivalent and alternatives</h1>
 <div class="panel hero"><div class="big" style="background:${p.h}" role="img" aria-label="Estimated swatch colour ${p.h}"></div>
-<dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
+<dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Type</dt><dd><a href="/guides/miniature-paint-types#${TYPE_SEC[p.t]}">${esc(TYPE_ONE[p.t])}</a></dd><dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
 <p>Looking for a substitute for ${esc(brandName)} ${esc(p.n)}? These are the closest paints in each other brand on The Painters Desk.
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
 ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Swatches are estimates, so check the real paints before you commit.</p>
@@ -430,6 +430,8 @@ ${usedInHTML(p, rs)}`;
 // The pair's address puts the two paints in a fixed order, so each pair has one page.
 const vsUrl = (a, b) => a.url < b.url ? `${a.url}/vs/${b.url.slice(8)}` : `${b.url}/vs/${a.url.slice(8)}`;
 const hdS2 = (a, b) => (b - a + 540) % 360 - 180;
+// Section of the paint types guide that explains each type (the paint page links its Type to it).
+const TYPE_SEC = { op: 'base-paints', met: 'metallic-paints', pearl: 'pearl-and-iridescent-paints', con: 'contrast-and-speed-paints', wash: 'shades-and-washes', ink: 'inks-glazes-and-transparents', fx: 'fluorescent-paints', tech: 'technical-paints' };
 const TYPE_ONE = { op: 'an opaque base/layer paint', met: 'a metallic', pearl: 'a pearl paint', con: 'a one-coat contrast-style paint', wash: 'a wash/shade', ink: 'an ink, glaze or transparent paint', fx: 'a fluorescent or effect paint', tech: 'a technical paint or medium' };
 
 // The pairs the site links to and lists in the sitemap: for each paint, its nearest same-type paint in its own brand
@@ -497,7 +499,7 @@ function comparePage(D, a, b) {
   const desc = `${who(a)} vs ${who(b)}: ΔE ${d.toFixed(0)} (${closeness(d)})${words.length ? `; ${b.n} is ${words.join(', ')}` : ''}${chart ? '; listed as equivalents in a conversion chart' : ''}. Swatches side by side, plus closer alternatives. Swatch colours are estimates.`;
   const ans = `${closeness(d)[0].toUpperCase() + closeness(d).slice(1)} match (ΔE ${d.toFixed(0)}).` + (words.length ? ` ${b.n} is ${words.join(', ')} than ${a.n}.` : ` The swatches are almost the same.`) + (a.t !== b.t ? ' They are different kinds of paint.' : '');
   const side = p => `<div class="panel"><div class="big" style="background:${p.h};width:100%;height:140px;border-radius:12px" role="img" aria-label="Estimated swatch colour ${p.h}"></div>
-<h2><a href="${p.url}">${esc(p.n)}</a></h2><dl><dt>Brand</dt><dd><a href="/paints/${D.brands[p.b].slug}">${esc(D.brands[p.b].name)}</a></dd><dt>Range</dt><dd>${esc(D.GL[p.g])}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Type</dt><dd>${esc(TYPE_ONE[p.t])}</dd><dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>`;
+<h2><a href="${p.url}">${esc(p.n)}</a></h2><dl><dt>Brand</dt><dd><a href="/paints/${D.brands[p.b].slug}">${esc(D.brands[p.b].name)}</a></dd><dt>Range</dt><dd>${esc(D.GL[p.g])}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Type</dt><dd><a href="/guides/miniature-paint-types#${TYPE_SEC[p.t]}">${esc(TYPE_ONE[p.t])}</a></dd><dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>`;
   const alts = (p, q) => {
     const bi = q.b, pool = D.brands[bi].paints.filter(x => x !== p && x !== q && isMetT(x) === isMetT(p) && (x.g !== 'p' || p.g === 'p')), sameT = pool.filter(x => x.t === p.t);
     const xs = (sameT.length ? sameT : pool).map(x => ({ p: x, d: dE(p, x) })).sort((u, v) => u.d - v.d).slice(0, 3);
@@ -810,7 +812,7 @@ const GUIDES = [
     blurb: 'Hair, shapes and sizes, which brush for which job, and how to keep a point.' },
   { slug: 'best-brushes-for-miniature-painting', page: bestBrushesPage, brush: 2, title: 'The best brushes for miniature painting', label: 'The best brushes',
     blurb: 'Well-known brushes for each job, from cheap synthetics to kolinsky sable.' },
-  // Painting basics (thinning, priming and varnishing, airbrushing, contrast paints, black and white, basing, weathering):
+  // Painting basics (paint types, thinning, priming and varnishing, airbrushing, contrast paints, black and white, basing, weathering):
   // the words are in craft-guides.js, the page is craftPage.
   ...CRAFT.map(t => ({ ...t, page: craftPage })),
 ];
@@ -1259,6 +1261,19 @@ function rangesTable(D, kind) {
   return table(['Brand', 'Range', kind === 'air' ? 'Paints on the site' : 'Colours on the site'], rows);
 }
 
+// Ranges with at least 3 paints of one type (wash, con, ink, met, fx...), most first, capped at 14 rows.
+function typeRanges(D, t) {
+  const rows = [];
+  D.brands.forEach(br => br.groups.forEach(g => { const n = br.paints.filter(p => p.g === g && p.t === t).length; if (n >= 3) rows.push([n, br, g]) }));
+  rows.sort((a, b) => b[0] - a[0] || popRank(a[1]) - popRank(b[1]));
+  return table(['Brand', 'Range', 'Paints of this type'], rows.slice(0, 14).map(([n, br, g]) => [`<a href="/paints/${br.slug}">${esc(short(br))}</a>`, esc(D.GL[g]), String(n)]));
+}
+// The overview table of paint types, with how many paints of each type are on the site.
+function typeTable(D, rows) {
+  const c = {}; D.P.forEach(p => { if (p.url) c[p.t] = (c[p.t] || 0) + 1 });
+  return table(['Type', 'What it is', 'On the site'], rows.map(([t, n, a, w]) => [`<a href="#${a}">${esc(n)}</a>`, w, (c[t] || 0).toLocaleString('en-GB')]));
+}
+
 function craftBlock(D, b) {
   const t = x => refs(D, x);
   if (typeof b === 'string') return `<p>${t(b)}</p>`;
@@ -1268,6 +1283,8 @@ function craftBlock(D, b) {
   if (b.table) return table(b.table[0], b.table[1].map(r => r.map(t)));
   if (b.picks) return picksTable(D, b.picks);
   if (b.ranges) return rangesTable(D, b.ranges);
+  if (b.types) return typeRanges(D, b.types);
+  if (b.typeTable) return typeTable(D, b.typeTable);
   if (b.paints) return `<ul class="m sr">${b.paints.map(k => { const p = bySlugPath(D, k); if (!p) throw new Error('Unknown paint in guide: ' + k);
     return `<li><i class="sw" style="background:${p.h}"></i><span><a href="${p.url}">${esc(p.n)}</a><em>${esc(short(D.brands[p.b]))} · ${esc(D.GL[p.g])}</em></span></li>` }).join('')}</ul>`;
   throw new Error('Unknown guide block');
@@ -1282,7 +1299,7 @@ function craftPage(D, g) {
 ${secs}
 ${g.faq ? `<section class="panel prose faq" id="questions"><h2>Questions</h2>${g.faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}</section>` : ''}
 ${guideLinks(g)}`;
-  const ld = [article(path, title, desc, CRAFT_DATE)];
+  const ld = [article(path, title, desc, g.date || CRAFT_DATE)];
   if (g.faq) ld.push({ '@type': 'FAQPage', '@id': SITE + path + '#questions', mainEntity: g.faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld });
 }
@@ -1318,7 +1335,7 @@ function guidesPage(D) {
 <p class="prose">Guides to colour, painting basics, techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
 ${PALS.length ? `<section class="panel"><h2>Colour palettes</h2><p class="s">${PALS.length} themed colour schemes, each with the closest paint in every major brand.</p><ul class="m gl">${PALS.slice(0, 6).map(x => `<li><a href="/guides/palettes/${x.s}"><b>${esc(x.n)}</b></a><span class="chip">${x.c.map(c => `<i style="background:${c.h}"></i>`).join('')}</span><em>${esc(x.b)}</em></li>`).join('')}</ul><p><a class="btn" href="/guides/palettes">All ${PALS.length} palettes</a></p></section>` : ''}
-<section class="panel"><h2>Painting basics</h2><p class="s">The groundwork every model needs: thinning, priming and varnishing, airbrushing, contrast paints, black and white, bases and weathering.</p><ul class="m gl">${guideOrder().filter(g => g.basic).map(card).join('')}</ul></section>
+<section class="panel"><h2>Painting basics</h2><p class="s">The groundwork every model needs: what each paint type is, thinning, priming and varnishing, airbrushing, contrast paints, black and white, bases and weathering.</p><ul class="m gl">${guideOrder().filter(g => g.basic).map(card).join('')}</ul></section>
 <section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
 <section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
 <section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}<div><h3>Other charts</h3><ul class="m">${GUIDES.filter(g => g.conv && !g.conv.slice(0, 2).includes('citadel')).map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div></div></section>
