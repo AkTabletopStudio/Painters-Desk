@@ -809,6 +809,8 @@ cv.onclick=e=>{if(!PX)return;const r=cv.getBoundingClientRect(),x=Math.floor((e.
 $('phFile').onchange=e=>load(e.target.files[0]);
 $('phK').onchange=run;$('phMine').onchange=match;
 $('phBtn').onclick=()=>{$('phMineL').hidden=!OWN||!OWN.size;$('phSave').hidden=false;if(!OWN)$('phMine').checked=false;dlg.showModal()};
+// The Palettes tab of Tutorials & Community opens the same pop-up in place, without going to the wheel.
+window.pdPhotoPalette=()=>$('phBtn').onclick();
 $('phNo').onclick=()=>dlg.close();
 const bar=$('phUndo');
 // Save as palette card: opens the palette editor (account.js) filled with one colour per chosen paint. The photo is only uploaded if the painter adds it there.
@@ -819,7 +821,8 @@ window.pdShowSet=(ps,msg)=>{prev=P.filter(p=>p.on).map(p=>p.i);P.forEach(p=>p.on
  $('phUndoM').textContent=msg;bar.hidden=false;clearTimeout(tm);tm=setTimeout(()=>bar.hidden=true,15000);
  document.getElementById('w').scrollIntoView({behavior:'smooth',block:'start'})};
 $('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))];if(!ps.length)return;dlg.close();
- pdShowSet(ps,`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`)};
+ const go=()=>pdShowSet(ps,`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`);
+ if($('v-wheel').hidden){location.hash='#/';setTimeout(go,60)}else go()};
 $('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const s=new Set(prev);P.forEach(p=>p.on=s.has(p.i));prev=null;sync()}}
 /* ---------- Inspiration palettes (Palettes tab of Tutorials & Community, #/palettes/<slug>) ----------
    Original themed palettes from palettes.js. Each colour is a target swatch with a job (main, accent, metal...), matched to the
