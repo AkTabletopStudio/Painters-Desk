@@ -291,14 +291,14 @@ if(T.prev==='rocks'){const rk=[[50,66,42,30],[128,58,40,40],[206,70,36,26],[262,
  return`<svg class="blade" viewBox="0 0 300 110" role="img" aria-label="Ramp preview as drybrush layers on rocks"><defs>${rk.map(([x,y,rx,ry],i)=>`<clipPath id="nr${i}"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}"/></clipPath>`).join('')}</defs><rect x="4" y="80" width="292" height="26" rx="6" fill="${st[0].p.h}" stroke="#1b1b1b" stroke-width="3"/>${rk.map(([x,y,rx,ry],i)=>`<g clip-path="url(#nr${i})">${st.map((s,k)=>`<ellipse cx="${x-k*rx*.12}" cy="${y-k*ry*.42}" rx="${rx}" ry="${ry}" fill="${s.p.h}"/>`).join('')}</g><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="none" stroke="#1b1b1b" stroke-width="3"/>`).join('')}</svg>`}
 const w=292/st.length;return`<svg class="blade" viewBox="0 0 300 60" role="img" aria-label="Ramp preview as stepped bands">${st.map((x,i)=>`<rect x="${(4+i*w).toFixed(1)}" y="6" width="${w.toFixed(1)}" height="48" fill="${x.p.h}"/>`).join('')}<rect x="4" y="6" width="292" height="48" rx="6" fill="none" stroke="#1b1b1b" stroke-width="3"/></svg>`}
 function nmmPanel(b,R){const el=document.getElementById('sel'),T=TQN(),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const q=d=>d<6?['close','Close']:d<12?['fair','Fair']:['loose','Loose'],metal=!nmmOK(b),wt=x=>T.glaze&&x.w?`<span class="nwt" title="Paint to water">1:${x.w} 💧</span>`:'';
+const q=mq,metal=!nmmOK(b),wt=x=>T.glaze&&x.w?`<span class="nwt" title="Paint to water">1:${x.w} 💧</span>`:'';
 const rows=R.map((x,i)=>{const role=x.r+(x.tint?' · tinted':'');if(!x.p)return`<div class="nrow"><div class="nrole">${role}</div><span class="nsw" style="background:${labHex(x.t)}"></span><div class="nnm"><b>No ticked paint left</b><span>Tick more ranges to fill this step</span></div></div>`;
 const [qc,ql]=x.pick?['pick','Your pick']:q(x.d);
 return`<div class="nrow${x.base?' nbase':''}"><div class="nrole">${role}</div><span class="nsw" style="background:${x.p.h}" title="Paint"><i style="background:${labHex(x.t)}" title="Ramp target"></i></span><div class="nnm"><b>${star(x.p)}${esc(x.p.n)}</b><span>${esc(GL[x.p.g])}${x.p.c?' · '+esc(x.p.c):''}</span>${wt(x)}</div><span class="nq ${qc}" title="${x.pick?'':'ΔE '+x.d.toFixed(1)+' from the ramp target'}">${ql}</span>${x.alt?`<button type="button" class="nsk" data-sk="${i}" title="Try the next nearest paint" aria-label="Swap ${esc(x.r)} paint">↻</button>`:'<span></span>'}</div>`}).join('');
 el.innerHTML=`<b>${esc(T.full)} ramp from:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${esc(b.n)} <span style="color:var(--mut)">${esc(b.c)}</span></span></div>`+
 (metal?'<p class="s">That\'s a metallic or effect paint, so the base uses the nearest opaque paint instead.</p>':'')+
 `<div class="nrows">${rows}</div><div id="nPrev">${rampPrev(R,T)}</div>
-<p class="s">Small dot = the colour the ramp asks for; big dot = the nearest of your ticked paints (${ONLY_MINE?'from your collection only':'tick more ranges for closer matches'}). Close / Fair / Loose = ΔE under 6, under 12, above that. ↻ swaps a step for the next nearest paint.${T.glaze?' 1:4 💧 = one part paint to four parts water; thinner glazes need more coats.':''} Swatches are estimates, so check the ramp on the model.</p>
+<p class="s">Small dot = the colour the ramp asks for; big dot = the nearest of your ticked paints (${ONLY_MINE?'from your collection only':'tick more ranges for closer matches'}). ${MQ_TXT}. ↻ swaps a step for the next nearest paint.${T.glaze?' 1:4 💧 = one part paint to four parts water; thinner glazes need more coats.':''} Swatches are estimates, so check the ramp on the model.</p>
 <div class="row"><button class="btn" type="button" id="nmmTut">Save as recipe</button></div>`;
 el.querySelector('#nPrev').onclick=e=>{const k=e.target.closest('[data-nv]');if(!k)return;NMO.v[NMO.q]=k.dataset.nv;nmmSave();e.currentTarget.innerHTML=rampPrev(R,T)};
 el.querySelectorAll('[data-sk]').forEach(e=>e.onclick=()=>{const i=+e.dataset.sk;nmmSkip[i]=(nmmSkip[i]||0)+1;draw()});
@@ -510,6 +510,9 @@ let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.119
 return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
 P.forEach(p=>p.lab=hexLab(p.h));
 const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
+// Match closeness scale (ΔE between two swatch estimates), shared by every tag on the site; worker/seo.js closeness() uses the same cut-offs.
+const MQS=[[2,'perfect','Perfect'],[6,'vclose','Very close'],[10,'close','Close'],[15,'fair','Fair'],[20,'loose','Loose'],[30,'vloose','Very loose'],[1/0,'poor','Poor']],
+ mq=d=>{const r=MQS.find(x=>d<x[0]);return[r[1],r[2]]},MQ_TXT='Perfect = ΔE under 2, Very close under 6, Close under 10, Fair under 15, Loose under 20, Very loose under 30, Poor 30 or more';
 const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart',w:'Army Painter Historical to Fanatic chart',L:'Army Painter Warpaints Fanatic conversion chart'};
 // Metallic and pearl paints only match each other, and other paints only match other paints: a gold is never a yellow's match.
 // The other finish is listed apart (Metallic matches / Non-metallic colours), one nearest per brand plus any chart pairs.
@@ -536,8 +539,8 @@ const CONV_G={'Citadel / Warhammer':['guides','Conversion charts'],'Army Painter
 function guideLinks(p){if(p.g==='B'||p.mix)return'';const cv=CONV_G[BRANDS[BR_OF[p.g]][0]],o=window.pdOwnBtn?pdOwnBtn(p):'',w=window.pdWantBtn?pdWantBtn(p):'';
  return`<p class="s glinks">${o?o+'<br>':''}${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
 function matchHTML(p){return guideLinks(p)+mixHTML(p)+mtHTML(p)}
-function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour (ΔE shown; under ~6 is a close match, over ~15 is a loose one). Matches are close, never exact. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: chart ✓ matches within ΔE '+M_TICK+', otherwise the nearest paint of the same type within ΔE '+M_NEAR+'.</p>');
-const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
+function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour, with its ΔE (colour difference: '+MQ_TXT+'). Swatches are estimates, so even a Perfect match is worth checking in person. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: chart ✓ matches within ΔE '+M_TICK+', otherwise the nearest paint of the same type within ΔE '+M_NEAR+'.</p>');
+const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)} · ${mq(m.d)[1]} match"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
 const rows=(a,b)=>md.map(o=>!o[a].length&&!o[b].length?'':`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o[a].map(m=>c(m,1)).join('')}${o[b].map(m=>c(m,0)).join('')}</div></div>`).join('');
 // Warpaints Historical paints that the Historical to Fanatic chart says are the same paint under another name (MT source 'w').
 const same=(MT[p.i]||[]).filter(([j,s])=>s==='w').map(([j,s])=>({p:P[j],s,d:dE(p,P[j])}));if(same.length)h+=`<div class="br2"><div class="bl">Same paint as</div><div class="chips">${same.map(m=>c(m,1)).join('')}</div></div>`;
@@ -555,7 +558,7 @@ const ksLab=ks=>rgbLab(...ks.map(k=>{let v=1+k-Math.sqrt(k*k+2*k);v=v>.0031308?1
 const gcd=(a,b)=>b?gcd(b,a%b):a,MX2=[],MX3=[];
 for(let a=1;a<=5;a++)for(let b=1;b<=5;b++)if(a+b<=6&&gcd(a,b)===1)MX2.push([a,b]);
 for(let a=1;a<=4;a++)for(let b=1;b<=4;b++)for(let c=1;c<=4;c++)if(a+b+c<=7&&gcd(gcd(a,b),c)===1)MX3.push([a,b,c]);
-const mixRate=d=>d<6?'Close':d<12?'Fair':'Loose';
+const mixRate=d=>mq(d)[1];
 let MIXC=null;
 function mixFor(p){if(MIXC&&MIXC.p===p&&MIXC.o===OWN)return MIXC.r;
 const t=p.lab,pool=P.filter(q=>own(q)&&!q.mix&&q!==p&&q.g!=='B'&&nmmOK(q));pool.forEach(q=>{if(!q.ks)q.ks=KSv(q.h)});
