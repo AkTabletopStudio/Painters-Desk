@@ -84,10 +84,10 @@ const avHTML=(u,cls='av')=>u.avatar?`<img class="${cls}" src="${esc(u.avatar)}" 
 const who=a=>`<a class="plink" href="#/u/${esc(a.id)}">${avHTML(a)}${esc(a.name)}</a>`;
 // Quick look pop-up for one paint (My paints suggestions, recipes, tutorials, profiles, forum and chat chips):
 // the closest paints you own and its matches, with buttons to add it, show it on the wheel (added to what's showing, nothing cleared) or open its paint page.
-function paintLook(p,o={}){const d=$('pqDlg'),ql=x=>x.d<6?'close':x.d<12?'fair':'loose',
+function paintLook(p,o={}){const d=$('pqDlg'),ql=x=>mq(x.d)[0],
   mine=OWN?P.filter(q=>!q.mix&&q.g!=='B'&&q.k!==p.k&&OWN.has(q.k)).map(q=>({q,d:d76(q.lab,p.lab)})).sort((a,b)=>a.d-b.d).slice(0,3):null;
  $('pqH').innerHTML=`<div class="pqh"><span class="pqs" style="background:${p.h}"></span><div><h2 id="pqT">${esc(p.n)}</h2><p class="s">${esc(BRANDS[BR_OF[p.g]][0])} · ${esc(GL[p.g])}${p.c?' · '+esc(p.c):''}</p></div></div>`;
- $('pqB').innerHTML=`${o.top||''}${mine?`<h3>Closest paints you own</h3>${mine.length?`<div class="pqm">${mine.map(x=>`<span class="chip"><i style="background:${x.q.h}"></i>${esc(x.q.n)} <span style="color:var(--mut)">${esc(GL[x.q.g])}</span> <span class="nq ${ql(x)}">ΔE ${x.d.toFixed(0)}</span></span>`).join('')}</div>`:'<p class="s">Nothing yet.</p>'}`:''}
+ $('pqB').innerHTML=`${o.top||''}${mine?`<h3>Closest paints you own</h3>${mine.length?`<div class="pqm">${mine.map(x=>`<span class="chip"><i style="background:${x.q.h}"></i>${esc(x.q.n)} <span style="color:var(--mut)">${esc(GL[x.q.g])}</span> <span class="nq ${ql(x)}" title="${mq(x.d)[1]} match">ΔE ${x.d.toFixed(0)}</span></span>`).join('')}</div>`:'<p class="s">Nothing yet.</p>'}`:''}
   ${mtHTML(p).replace('Matches in other ranges</h2>','Matches in other ranges</h2><p class="s pqn">✓ = listed in a conversion chart, ≈ = closest swatch colour.</p>')}<p class="s">Swatch colours are estimates, so check the paint in person.</p>`;
  const ad=$('pqAdd'),can=!!OWN&&!p.mix&&p.g!=='B',own=can&&OWN.has(p.k);ad.hidden=!can;ad.disabled=own;ad.textContent=own?'In your collection':'Add to my paints';
  ad.onclick=()=>{setOwned([p.k],true);if(o.onAdd)o.onAdd();d.close()};
@@ -468,7 +468,7 @@ function renderPaints(){
  const ownList=()=>{const d=$('ownd'),box=$('ownL');if(!d)return;d.hidden=!OWN.size;$('ownN').textContent=OWN.size?'('+OWN.size+')':'';if(!d.open){box.innerHTML='';return}
   const by=new Map();P.forEach(p=>{if(p.mix||!OWN.has(p.k))return;const b=BR_OF[p.g];if(!by.has(b))by.set(b,new Map());const g=by.get(b);if(!g.has(p.g))g.set(p.g,[]);g.get(p.g).push(p)});
   box.innerHTML=[...by.keys()].sort((a,b)=>a-b).map(b=>{const gs=by.get(b),n=[...gs.values()].reduce((a,l)=>a+l.length,0);
-   return`<h3 class="owb">${esc(BRANDS[b][0])} <span class="s">· ${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="s">${esc(GL[g])}</div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`).join('')}</div></div>`).join('')}).join('')};
+   return`<section class="owg"><h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="owl">${esc(GL[g])} <span class="owc">${ps.length}</span></div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`).join('')}</div></div>`).join('')+'</section>'}).join('')};
  {const d=$('ownd');try{const v=localStorage.getItem('pd-ownd');d.open=v==null?OWN.size<=40:v==='1'}catch(e){d.open=OWN.size<=40}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-ownd',d.open?'1':'0')}catch(e){}ownList()});
   $('ownL').addEventListener('click',e=>{const c=e.target.closest('[data-ok]');const p=c&&BYKEY.get(c.dataset.ok);if(p)paintLook(p)});
@@ -542,7 +542,7 @@ function renderPaints(){
  const sgOpen=(title,html)=>{const d=$('sgDlg');$('sgDT').textContent=title;$('sgDB').innerHTML=html;d.showModal();d.querySelector('.pqx').focus()};
  const rampD=x=>{const gq={good:'Good fit',fair:'Fair fit',weak:'Weak fit'},lk=`#/?ramp=${x.q}${x.own?'&base='+encodeURIComponent(x.b.k):''}`;
   sgOpen(x.tech.name+' · '+x.n,`<p class="s">${gq[x.grade]}: each step is the colour the ${esc(x.tech.full||x.tech.name)} ramp needs, next to your closest paint. Steps with nothing close (ΔE 12+) list paints that would fill them.</p>`+
-  x.R.map(st=>{const ok=st.d<12,cls=st.d<6?'close':st.d<12?'fair':'loose';return`<div class="sgds"><span class="sgdt" style="background:${labHex(st.t)}" title="Colour this step needs"></span><div class="nnm"><b>${esc(st.r)}</b>${st.p?`<span>Yours: <i class="sgdi" style="background:${st.p.h}"></i>${esc(st.p.n)} <em>${esc(GL[st.p.g])}</em> <span class="nq ${cls}">ΔE ${st.d.toFixed(0)}</span></span>`:'<span>Nothing in your collection</span>'}</div></div>`+
+  x.R.map(st=>{const ok=st.d<12,cls=mq(st.d)[0];return`<div class="sgds"><span class="sgdt" style="background:${labHex(st.t)}" title="Colour this step needs"></span><div class="nnm"><b>${esc(st.r)}</b>${st.p?`<span>Yours: <i class="sgdi" style="background:${st.p.h}"></i>${esc(st.p.n)} <em>${esc(GL[st.p.g])}</em> <span class="nq ${cls}" title="${mq(st.d)[1]} match">ΔE ${st.d.toFixed(0)}</span></span>`:'<span>Nothing in your collection</span>'}</div></div>`+
    (ok?'':`<div class="sgdg">${sgPick(st.t,null,2,st.d).map(m=>sgP(m)).join('')||'<p class="s">No paint in the list gets close.</p>'}${sgMix(st.t)}</div>`)}).join('')+
   `<div class="row"><a class="btn pri" href="${lk}">Open in Ramps on the wheel</a>${TQ_GUIDE[x.q]?`<a class="btn" href="guides/${TQ_GUIDE[x.q]}">How to paint it</a>`:''}</div>`)};
  const cellD=c=>{const x=sugLast&&sugLast.cells[c];if(!x)return;const own=x.own.slice().sort((a,b)=>d76(a.lab,x.t)-d76(b.lab,x.t));
