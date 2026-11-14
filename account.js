@@ -591,18 +591,21 @@ async function renderRecipes(k){
  if(['tutorial','recipe','palette'].includes(k))rKind=k;else if(!rKind)rKind='tutorial';
  if(!ME)rScope='public';
  // Accounts unreachable (e.g. a preview build with no database): keep the tabs and the Inspiration palettes, ask to sign in for the rest.
- if(!API){const el=$('v-recipes');el.innerHTML=commHead(rKind)+signInLink('Tutorials, recipes and shared palettes load from painters\' accounts.')+(rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':'');if($('rInsp'))pdPalGallery($('rInsp'));return}
+ if(!API){const el=$('v-recipes');el.innerHTML=commHead(rKind)+signInLink('Tutorials, recipes and shared palettes load from painters\' accounts.')+(rKind==='palette'&&window.pdPhotoPalette?'<div class="row"><button class="btn" id="rPhoto" type="button">📷 From a photo</button></div>':'')+(rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':'');if($('rInsp'))pdPalGallery($('rInsp'));if($('rPhoto'))$('rPhoto').onclick=()=>pdPhotoPalette();return}
  const el=$('v-recipes'),pp=rPaint&&BYKEY.get(rPaint);
  const T={tutorial:['tutorials','A whole model, step by step with photos and video. Steps can use recipes.','<a class="btn pri" href="#/new">+ New tutorial</a>'],
   recipe:['recipes','One colour, layer by layer from base to highlight: bone, purple robes, rusty metal and so on.','<a class="btn pri" href="#/new/recipe">+ New recipe</a>'],
-  palette:['palettes','Palette cards painters have shared, then our themed Inspiration palettes matched to your paints. Make your own from a photo with From a photo under More tools on the colour wheel.','<a class="btn pri" href="#/">Make one from a photo</a>']}[rKind];
+  palette:['palettes','Palette cards painters have shared, then our themed Inspiration palettes matched to your paints. Make your own with + New palette, or let From a photo pick the paints from a picture.','<a class="btn pri" href="#/new/palette">+ New palette</a>']}[rKind];
+ // From a photo works signed out too (saving the card asks to sign in), so it shows for everyone on the Palettes tab.
+ const phB=rKind==='palette'&&window.pdPhotoPalette?'<button class="btn" id="rPhoto" type="button" title="Pick the main colours out of a photo and find the closest paints">📷 From a photo</button>':'';
  el.innerHTML=`${commHead(rKind)}<p class="s ctl">${T[1]}</p>
  ${rKind==='palette'?'<h2 class="rsh">Shared by painters</h2>':''}
- <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${ME?T[2]:'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
+ <div class="row"><button class="btn${rScope==='public'?' pri':''}" data-s="public" type="button">Public</button>${ME?`<button class="btn${rScope==='mine'?' pri':''}" data-s="mine" type="button">Mine</button><button class="btn${rScope==='saved'?' pri':''}" data-s="saved" type="button">☆ Saved</button>${INFO.follows?`<button class="btn${rScope==='following'?' pri':''}" data-s="following" type="button">Following</button>`:''}`:''}<span class="sp" style="flex:1"></span>${phB}${ME?T[2]:'<a class="btn" href="#/account">Sign in to add yours</a>'}</div>
  ${pp?`<div class="row"><span class="chip" id="rPaintC"><i style="background:${pp.h}"></i>Using ${esc(pp.n)} <span class="x" title="Show all">×</span></span></div>`:''}
  <div class="bar"><input id="rq" type="search" placeholder="Search ${T[0]}" aria-label="Search ${T[0]}"></div><div id="rlist" class="cards"><p class="s">Loading…</p></div>
  ${rKind==='palette'&&window.pdPalGallery?'<section id="rInsp" class="plv"></section>':''}`;
  if($('rInsp'))pdPalGallery($('rInsp'));
+ if($('rPhoto'))$('rPhoto').onclick=()=>pdPhotoPalette();
  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{rScope=b.dataset.s;renderRecipes()});
  if($('rPaintC'))$('rPaintC').onclick=()=>{rPaint='';renderRecipes()};
  let t=0;$('rq').oninput=()=>{clearTimeout(t);t=setTimeout(load,250)};
