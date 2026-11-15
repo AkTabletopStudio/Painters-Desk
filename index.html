@@ -79,6 +79,77 @@ dialog.pd.pickdlg{background:linear-gradient(var(--card),var(--card)),var(--bg)}
 .wtips{display:grid;gap:10px;margin:10px 0 0;padding:0;list-style:none;counter-reset:wt}
 .wtips li{display:flex;gap:10px;align-items:flex-start;counter-increment:wt}
 .wtips li:before{content:counter(wt);flex:0 0 26px;height:26px;display:grid;place-items:center;border-radius:50%;background:var(--tea);color:#111;font-weight:700;font-size:14px}
+/* Wheel tour (app.js pdTour): animated walkthrough on a mock of the wheel page, drawn at a fixed size and scaled to fit. */
+.tourb{padding:4px 12px;font-size:14px;margin-left:6px;vertical-align:1px}
+dialog.pd.tourdlg{width:720px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);overflow:auto;padding:14px 16px 16px;background:linear-gradient(var(--card),var(--card)),var(--bg)}
+.tourdlg .tux{position:absolute;top:8px;right:8px;z-index:3}
+.tubox{position:relative;overflow:hidden;margin:30px 0 10px;border-radius:14px}
+.tust{position:absolute;left:0;top:0;transform-origin:0 0;font:600 13px/1.25 Rubik,system-ui,sans-serif;color:var(--fg);user-select:none;pointer-events:none}
+.tust[data-lay=wide]{width:640px;height:400px}.tust[data-lay=tall]{width:380px;height:560px}
+.tust .tub{display:inline-block;padding:5px 11px;border:2px solid var(--ink);border-radius:999px;background:var(--card);color:var(--fg);font-weight:700;font-size:12px;white-space:nowrap;transition:background .2s,color .2s}
+.tust .tub.pri,.tust .tub.on{background:var(--yel);color:#1b1b1b}
+.tubar{position:absolute;left:0;top:0;right:0;height:44px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 10px;border:2px solid var(--ink);border-radius:14px;background:var(--card);overflow:hidden}
+.tuchips{display:flex;gap:6px;min-width:0;overflow:hidden}.tuwc{padding:2px 9px;border:2px solid var(--ink);border-radius:999px;background:var(--soft);font-size:11px;white-space:nowrap;animation:tuIn .35s}
+.tucnt{color:var(--mut);font-size:12px;white-space:nowrap}
+.tumodes{position:absolute;left:0;top:52px;display:flex;gap:6px;flex-wrap:nowrap}
+.tuwh{position:absolute;left:0;top:92px;width:300px;height:300px;overflow:visible}
+.tust[data-lay=tall] .tuwh{left:40px}.tust[data-lay=tall] .tubar .tucnt,.tust[data-lay=tall] .tubar>b{display:none}
+.turing{fill:var(--soft);stroke:var(--ink);stroke-width:2.5}
+.tudisc{fill:var(--card);stroke:var(--ink);stroke-width:2;transition:fill .4s}
+.tudots2 circle{stroke:rgba(0,0,0,.35);stroke-width:1;opacity:0;transform-box:fill-box;transform-origin:center;transform:scale(.2);transition:opacity .35s,transform .35s}
+.tust.tuon .tudots2 circle{opacity:1;transform:none}.tust.tuin .tudots2 circle{transition-delay:var(--d)}
+.tust.tuon .tudots2 circle.dim{opacity:.22}.tudots2 circle.sel{stroke:var(--fg);stroke-width:3.5}
+.tuwd{fill:var(--fg);opacity:.09;stroke:var(--fg);stroke-opacity:.6;stroke-width:1;stroke-dasharray:4 3}.tuw0{opacity:.14}
+.tushape{fill:none;stroke:var(--fg);stroke-width:2;opacity:.75}
+.tuln .tubg{fill:var(--card);stroke:var(--fg);stroke-width:1.5}.tuln text{font:700 9px Rubik,sans-serif;fill:var(--fg);text-anchor:middle}
+.tupl2{fill:none;stroke:var(--fg);stroke-width:2;opacity:.7}.tursp{stroke:#111;stroke-width:1.2;animation:tuIn .3s}.tursp.tusel{stroke:var(--fg);stroke-width:3}
+.tuside{position:absolute;left:316px;top:92px;width:324px;height:300px;box-sizing:border-box;padding:10px 12px;border:2px solid var(--ink);border-radius:14px;background:linear-gradient(var(--card),var(--card)),var(--bg);overflow:hidden}
+.tust[data-lay=tall] .tuside{left:0;top:400px;width:380px;height:160px;columns:2;column-gap:12px}
+.tuside b{display:block;margin:0 0 6px}.tuside h4{margin:8px 0 4px;font:700 11px/1.2 Rubik,sans-serif;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+.tuside ol{margin:6px 0 0;padding-left:18px;color:var(--mut);display:grid;gap:6px}
+.tuside>div,.tuside>b,.tuside>h4,.tuside>span{animation:tuIn .35s both}
+.tuchip{display:inline-flex;align-items:center;gap:5px;margin:0 5px 4px 0;padding:2px 8px 2px 3px;border:2px solid var(--ink);border-radius:999px;background:var(--soft);font-size:11px;white-space:nowrap}
+.tuchip i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--ink);display:block;box-sizing:border-box}
+.tuchip em{font-style:normal;font-size:10px;padding:0 5px;border-radius:6px;background:var(--tea);color:#111}
+.tuhf{font-family:var(--hf);font-weight:400;font-size:15px}
+.tupal{display:flex;height:30px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;break-inside:avoid}.tupal i{display:flex;align-items:flex-end;padding:2px 4px;font:700 10px Rubik,sans-serif;font-style:normal;color:#fff;text-shadow:0 1px 2px #000}
+.tubl{display:flex;align-items:center;gap:4px;margin:0 0 5px;break-inside:avoid}.tubl span{width:18px;font-weight:700;font-size:11px}.tubl i{flex:1;height:20px;border:1.5px solid var(--ink);border-radius:5px}
+.turl{display:grid;gap:3px;margin-top:4px}
+.turr{display:grid;grid-template-columns:96px 20px minmax(0,1fr) 16px;align-items:center;gap:6px;font-size:11px;opacity:0;transform:translateX(10px);transition:opacity .3s,transform .3s;break-inside:avoid}
+.turr.in{opacity:1;transform:none}.turr small{color:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.3px}.turr i{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ink);box-sizing:border-box;display:block;transition:background .4s}
+.turr em{justify-self:start;font-style:normal;font-size:10px;padding:0 6px;border-radius:6px;background:var(--soft);border:1px solid var(--ink)}.turr u{text-decoration:none;font-size:13px}
+.turr.sw{animation:tuFl .9s}
+.tusword{display:block;width:100%;height:30px;margin-top:6px;transition:opacity .5s}
+.tust[data-lay=tall] .turr{grid-template-columns:62px 16px minmax(0,1fr) 12px;gap:4px}.tust[data-lay=tall] .turr small{font-size:8.5px}.tust[data-lay=tall] .turr em{white-space:nowrap;font-size:9px;padding:0 4px}.tust[data-lay=tall] .turr i{width:16px;height:16px}.turr small{min-width:0;overflow:hidden}.turr u{grid-column:4;justify-self:end}.tust[data-lay=tall] .tusword{height:22px}
+.tupop{position:absolute;left:316px;top:92px;width:324px;box-sizing:border-box;padding:12px;border:2px solid var(--ink);border-radius:14px;background:linear-gradient(var(--card),var(--card)),var(--bg);box-shadow:4px 4px 0 var(--sh);opacity:0;transform:translateY(10px) scale(.97);transition:opacity .25s,transform .25s;z-index:2}
+.tust[data-lay=tall] .tupop{left:20px;top:372px;width:340px}
+.tupop.show{opacity:1;transform:none}
+.tuh{display:block;font-family:var(--hf);font-weight:400;font-size:14px;margin-bottom:8px}
+.tuck{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;font-weight:600}.tuck span{margin-left:auto;color:var(--mut);font-size:11px}
+.tuck i{width:16px;height:16px;border:2px solid var(--ink);border-radius:4px;background:var(--soft);display:grid;place-items:center;font:700 11px/1 sans-serif;font-style:normal;color:#fff;transition:background .15s}
+.tuck.on i{background:var(--pur)}.tuck.on i::after{content:'✓'}
+.tupf{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin-top:8px;padding-top:8px;border-top:2px solid var(--line)}
+.tuadd.ok{background:var(--tea);color:#111}
+.tusl{display:grid;gap:4px}.tusi{padding:4px 8px;border:2px solid transparent;border-radius:8px;font-size:12px;font-weight:600;transition:background .2s}.tusi.on{border-color:var(--ink);background:var(--yel);color:#1b1b1b}
+.tutol{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin-top:8px;font-size:12px}.tutol b{margin:0}
+.tutr{position:relative;height:6px;border-radius:3px;background:var(--line);margin:0 8px}.tutk{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:var(--pur);border:2px solid var(--card);box-shadow:0 0 0 1px var(--ink)}
+.tutv{min-width:34px;font-weight:700}
+.tutoast{position:absolute;left:50%;bottom:14px;transform:translate(-50%,10px);padding:7px 14px;border:2px solid var(--ink);border-radius:12px;background:var(--tea);color:#111;font-weight:700;font-size:12px;opacity:0;transition:opacity .25s,transform .25s;z-index:3}
+.tutoast.show{opacity:1;transform:translate(-50%,0)}
+.tucur{position:absolute;left:300px;top:200px;width:26px;height:26px;margin:-3px 0 0 -6px;z-index:5;opacity:0;transition:left .7s cubic-bezier(.5,0,.25,1),top .7s cubic-bezier(.5,0,.25,1),opacity .3s,transform .15s;filter:drop-shadow(1px 2px 1px rgba(0,0,0,.45))}
+.tucur path{fill:#fff;stroke:#111;stroke-width:1.6;stroke-linejoin:round}.tucur.dn{transform:scale(.82)}
+.turip{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid var(--yel);opacity:0;z-index:4;pointer-events:none}
+.turip.go{animation:tuRp .55s ease-out}
+@keyframes tuRp{from{opacity:1;transform:scale(.3)}to{opacity:0;transform:scale(1.3)}}
+@keyframes tuIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes tuFl{0%,100%{background:transparent}30%{background:color-mix(in srgb,var(--yel) 45%,transparent)}}
+.tucap{min-height:96px}@media(max-width:520px){.tucap{min-height:150px}}.tucap .tun{display:block;margin:0 0 2px}.tourdlg .tucap h2{margin:0 0 4px}.tourdlg .tucap p{margin:0;color:var(--fg);font-size:15px}
+.tupg{height:4px;border-radius:2px;background:var(--line);opacity:.6;margin:10px 0 0;overflow:hidden}.tupg i{display:block;height:100%;width:0;background:var(--yel)}
+.tourdlg .tuctl{display:flex;align-items:center;gap:8px;margin-top:12px}.tuctl .tunx{margin-left:auto}.tuctl .btn{padding:6px 14px;font-size:14px}
+.tudots{display:flex;gap:5px;flex-wrap:wrap}.tudots button{width:11px;height:11px;padding:0;border-radius:50%;border:2px solid var(--ink);background:transparent;cursor:pointer}.tudots button.on{background:var(--yel)}
+@media(max-width:420px){.tuctl .btn{padding:6px 10px}.tudots{gap:3px}.tudots button{width:9px;height:9px}}
+@media(prefers-reduced-motion:reduce){.tust *,.tust{transition:none!important;animation:none!important}}
+:root[data-look^=classic] .tust :is(.tub,.tubar,.tuside,.tupop,.tuchip,.tuwc){border-width:1px}:root[data-look^=classic] .tupop{box-shadow:0 8px 24px rgba(0,0,0,.25)}
 @media(max-width:700px){#v-wheel>h1{font-size:22px;margin:0}#v-wheel>p.s{font-size:14px;margin:4px 0}.wshow{padding:8px 10px;gap:6px 8px;margin:8px 0 4px}.wsl,#cnt2{display:none}#v-wheel .nmode{gap:8px}.wtip{max-width:220px;font-size:13px}}
 #neud>summary{padding:2px 0}#neud>summary b{font:400 17px/1.2 var(--hf)}
 .bar{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}.bar input{flex:1 1 220px;min-width:0;font:inherit;padding:11px 14px;border:3px solid var(--ink);border-radius:14px;background:var(--bg);color:var(--fg)}
@@ -810,6 +881,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>14 November 2026</h2><ul>
+<li data-a="wheel"><span class="tg nw">New</span><b>Colour wheel tour.</b> A short animated walkthrough shows how to choose paints, save them to My paints, tap a paint, change the colour scheme and its hue width, and build a ramp. It opens once on your first visit to the wheel, and <b>▶ Watch the tour</b> above the wheel replays it any time.</li>
 <li data-a="themes"><span class="tg nw">New</span><b>Classic theme.</b> A plain look with no backdrop art: your device's own font, flat greys, thin borders and one blue accent. <b>Classic</b> follows your light or dark setting and <b>Classic Dark</b> is always charcoal. The wheel sits on neutral grey, so swatches read cleanly. Pick either from the Theme button.</li>
 <li data-a="guides"><span class="tg nw">New</span><b>Paint types explained.</b> A new guide, <a href="/guides/miniature-paint-types">Paint types explained</a>, covers what base, layer, shade, contrast and speed paints, inks, glazes, dry and air paints, metallics, colour-shift, pearl and fluorescent paints, technical paints, primers and varnish are, and when to use each, with the ranges of each type on the site. The <b>Paint types</b> pop-up on the wheel links to it, and the Type on every paint page now links to the part of the guide for that type.</li>
 <li data-a="wheel"><span class="tg up">Better</span><b>Wheel tools in plain sight.</b> The <b>More tools</b> menu on the colour wheel is gone. <b>Paint types</b>, <b>From a photo</b> and <b>Show labels</b> now sit on the page next to the Scheme button, one tap away.</li>
@@ -1014,7 +1086,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 </section>
 <section id="v-wheel">
 <h1>Paint colour wheel</h1>
-<p class="s">Tap any paint on the wheel to see its complement, neighbours and matches from every brand. <a href="guides/colour-theory">How to read the wheel</a></p>
+<p class="s">Tap any paint on the wheel to see its complement, neighbours and matches from every brand. <a href="guides/colour-theory">How to read the wheel</a> <button class="btn tourb" type="button" id="tourBtn">▶ Watch the tour</button></p>
 <div class="panel wshow" id="wshow"><b class="wsl">Showing:</b><span class="wchips" id="wchips"></span><button class="btn pri" type="button" id="pickBtn" aria-haspopup="dialog">＋ Change paints</button><button class="btn" type="button" id="mineBtn" hidden>My collection</button><span class="s" id="cnt2"></span></div>
 <dialog class="pd pickdlg" id="pickDlg" aria-labelledby="pickT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div id="pickd"><div class="pkh"><h2 id="pickT">Choose paints for the wheel</h2><span class="s" id="cnt"></span></div>
 <div class="bar"><input id="q" type="search" placeholder="Search paints (name or code)"> <button id="clr" type="button">Clear all</button></div>
