@@ -194,13 +194,16 @@ function renderWelcome(){
 $('footMore').onclick=()=>setTimeout(()=>$('foot').scrollIntoView({block:'end'}),50);
 
 /* ---------- account ---------- */
-const LOGIN_NAMES={email:'Email and password',google:'Google',discord:'Discord',github:'GitHub',dev:'Dev sign-in'};
+const LOGIN_NAMES={email:'Email and password',google:'Google',discord:'Discord',github:'GitHub',apple:'Apple',dev:'Dev sign-in'};
+// Apple's sign-in button rules: black, with the Apple logo.
+const APPLE_LOGO='<svg viewBox="0 0 17 20" width="14" height="16" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><path fill="currentColor" d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9C3.6 4.8 2 5.8 1.1 7.4c-1.8 3.2-.5 7.9 1.3 10.5.9 1.3 1.9 2.7 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.4.8c1.4 0 2.3-1.3 3.1-2.6 1-1.5 1.4-2.9 1.4-3-.1 0-2.7-1-2.7-4.3zM11.6 3c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5z"/></svg>';
+const provBtn=(p,ret,label)=>p.id==='apple'?`<a class="btn" style="background:#000;color:#fff;border-color:#000" href="/api/auth/login/apple?return=${ret}">${APPLE_LOGO}${esc(label)}</a>`:`<a class="btn" href="/api/auth/login/${p.id}?return=${ret}">${esc(label)}</a>`;
 let authMode='in';
 function renderAccount(){
  const el=$('v-account'),ret=encodeURIComponent('/#/');
  const err=/error=/.test(location.hash)?'<p class="err">Sign-in was cancelled or failed. Please try again.</p>':'';
  if(!ME){
-  const btns=INFO.providers.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${ret}">Continue with ${esc(p.label)}</a>`).join(' ');
+  const btns=INFO.providers.map(p=>provBtn(p,ret,'Continue with '+p.label)).join(' ');
   if(authMode==='forgot'){
    el.innerHTML=`<h1>Reset your password</h1><div class="panel"><p class="s">Enter the email on your account and we'll send you a link to choose a new password.</p>
    <form id="fgForm"><label class="f"><span>Email</span><input type="email" class="inp" id="fEmail" maxlength="200" autocomplete="email" required></label>
@@ -245,7 +248,7 @@ function renderAccount(){
  <div class="panel"><h2>Signing in</h2>
  <p>${ME.email?esc(ME.email)+(ME.email_verified?'':' <span class="tag" title="Not confirmed yet">not confirmed</span>'+(INFO.mail?' <button class="btn" type="button" id="vSend">Send confirmation email</button> <span class="s" id="vMsg"></span>':'')):'<span class="s">No email on file</span>'}${ME.admin?' <span class="tag">admin</span>':''}</p>
  <p class="s">Signed in with: ${INFO.logins.map(l=>esc(LOGIN_NAMES[l]||l)).join(', ')}</p>
- ${more.length?`<div class="row"><span class="s">Link another sign-in:</span>${more.map(p=>`<a class="btn" href="/api/auth/login/${p.id}?return=${encodeURIComponent('/#/account')}">${esc(p.label)}</a>`).join(' ')}</div>`:''}
+ ${more.length?`<div class="row"><span class="s">Link another sign-in:</span>${more.map(p=>provBtn(p,encodeURIComponent('/#/account'),p.label)).join(' ')}</div>`:''}
  <form id="pwSet"><h3>${hasPw?'Change password':'Add a password'}</h3>${hasPw?'':`<p class="s">Then you can also sign in with ${ME.email?'your email':'an email'} and password.</p>`}
  ${ME.email?'':'<label class="f"><span>Email</span><input type="email" class="inp" id="sEmail" maxlength="200" autocomplete="email" required></label>'}
  ${hasPw?'<label class="f"><span>Current password</span><input type="password" class="inp" id="sCur" maxlength="200" autocomplete="current-password" required></label>':''}
@@ -1763,4 +1766,28 @@ function chatManage(){const P=$('chMan');if(!P.hidden){P.hidden=true;return}P.hi
 
 if(FIRST)route();
 loadMe().then(route);
+})();
+
+// iPhone app (Capacitor shell): Google and others refuse to sign in inside an app's web view, so sign-in services open
+// in a system browser sheet. The site sends back paintersdesk://auth?code=…, and the app swaps that one-time code,
+// with the secret verifier only this web view knows, for a normal session at /api/auth/app.
+(()=>{
+ const C=window.Capacitor;if(!(C&&C.isNativePlatform&&C.isNativePlatform()))return;
+ const P=C.Plugins||{},KEY='pd-app-verifier',enc=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+ document.addEventListener('click',async e=>{
+  const a=e.target.closest&&e.target.closest('a[href^="/api/auth/login/"]');if(!a||!P.Browser)return;
+  e.preventDefault();
+  const v=enc(crypto.getRandomValues(new Uint8Array(32))),ch=enc(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
+  try{localStorage.setItem(KEY,v)}catch(_){}
+  let link='';if(ME){try{link='&link='+encodeURIComponent((await api('/auth/link-token',{method:'POST'})).token)}catch(_){}}
+  P.Browser.open({url:location.origin+a.getAttribute('href')+'&app='+ch+link,presentationStyle:'popover'});
+ },true);
+ P.App&&P.App.addListener('appUrlOpen',({url})=>{
+  let u;try{u=new URL(url)}catch(_){return}
+  if(u.protocol!=='paintersdesk:'||u.host!=='auth')return;
+  let v='';try{v=localStorage.getItem(KEY)||'';localStorage.removeItem(KEY)}catch(_){}
+  P.Browser&&P.Browser.close().catch(()=>{});
+  const q=new URLSearchParams({code:u.searchParams.get('code')||'',verifier:v,return:u.searchParams.get('return')||'/'});
+  location.href='/api/auth/app?'+q;
+ });
 })();

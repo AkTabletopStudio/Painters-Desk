@@ -47,6 +47,27 @@ const PROVIDERS = {
       return { id: String(u.id), name: u.name || u.login, email: primary ? primary.email : null, avatar: u.avatar_url || null };
     },
   },
+  // Sign in with Apple (required by the App Store because the app offers other social sign-ins). Apple posts the
+  // result back as a form (form_post), its client secret is a short-lived JWT signed with the .p8 key, and the
+  // profile comes from the signed id_token. The name is only sent on the very first sign-in, in the form's 'user' field.
+  apple: {
+    label: 'Apple',
+    authorize: 'https://appleid.apple.com/auth/authorize',
+    token: 'https://appleid.apple.com/auth/token',
+    scope: 'name email',
+    extra: { response_mode: 'form_post' },
+    formPost: true,
+    id: env => env.APPLE_CLIENT_ID,
+    secret: env => env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY ? 'jwt' : null,
+    clientSecret: appleClientSecret,
+    async profile(token, tok, env, form) {
+      const c = await verifyAppleIdToken(env, tok.id_token);
+      let name = null;
+      try { const n = JSON.parse(form.get('user') || '{}').name || {}; name = [n.firstName, n.lastName].filter(Boolean).join(' ').trim() || null; } catch {}
+      const email = c.email && (c.email_verified === true || c.email_verified === 'true') ? c.email : null;
+      return { id: c.sub, name: name || (email ? email.split('@')[0] : 'Painter'), email, avatar: null, refresh: tok.refresh_token || null };
+    },
+  },
 };
 
 // Security headers on every response (pages, files, API, redirects). The CSP is report-only for now: the page has inline
@@ -104,7 +125,8 @@ async function handle(request, env, ctx) {
   try {
     // Writes must come from this site's own pages (blocks cross-site form posts using the session cookie).
     // The unsubscribe link is the exception: mail apps post to it directly, and its token is the proof.
-    if (request.method !== 'GET' && request.method !== 'HEAD' && url.pathname !== '/api/unsubscribe') {
+    // Apple's sign-in posts its result from appleid.apple.com; the state cookie check is the proof there.
+    if (request.method !== 'GET' && request.method !== 'HEAD' && url.pathname !== '/api/unsubscribe' && url.pathname !== '/api/auth/callback/apple') {
       const origin = request.headers.get('Origin');
       if (origin !== url.origin) return json({ error: 'Bad origin' }, 403);
     }
@@ -138,7 +160,9 @@ async function route(request, env, url) {
   if (p === '/api/auth/verify' && m === 'GET') return verifyEmail(env, url);
   if (p === '/api/me/verify-email' && m === 'POST') return resendVerify(request, env, url);
   if ((r = p.match(/^\/api\/auth\/login\/(\w+)$/)) && m === 'GET') return oauthStart(request, env, url, r[1]);
-  if ((r = p.match(/^\/api\/auth\/callback\/(\w+)$/)) && m === 'GET') return oauthCallback(request, env, url, r[1]);
+  if ((r = p.match(/^\/api\/auth\/callback\/(\w+)$/)) && (m === 'GET' || m === 'POST')) return oauthCallback(request, env, url, r[1]);
+  if (p === '/api/auth/app' && m === 'GET') return appSignIn(request, env, url);
+  if (p === '/api/auth/link-token' && m === 'POST') return linkToken(request, env);
   if (p === '/api/auth/dev' && m === 'GET') return devLogin(request, env, url);
   if (p === '/api/auth/logout' && m === 'POST') return logout(request, env, url);
   if (p === '/api/me/wheel' && m === 'GET') return getWheel(request, env);
@@ -260,9 +284,11 @@ function cookies(request) {
   return out;
 }
 
-function setCookie(url, name, value, { maxAge, path = '/' } = {}) {
-  const secure = url.protocol === 'https:' ? '; Secure' : '';
-  return `${name}=${encodeURIComponent(value)}; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+function setCookie(url, name, value, { maxAge, path = '/', sameSite = 'Lax' } = {}) {
+  const https = url.protocol === 'https:';
+  // SameSite=None (only over https) lets the cookie ride on a cross-site form post, which is how Apple returns.
+  const ss = sameSite === 'None' && https ? 'None' : 'Lax';
+  return `${name}=${encodeURIComponent(value)}; Path=${path}; HttpOnly; SameSite=${ss}; Max-Age=${maxAge}${https ? '; Secure' : ''}`;
 }
 
 function randomToken(bytes = 32) {
@@ -374,14 +400,14 @@ async function startSession(env, url, userId, returnTo) {
 
 // Find or create the account for an external login. First sign-in creates the account automatically;
 // a new login method joins an existing account when signed in already, or when the verified email matches.
-async function upsertIdentity(env, request, provider, prof) {
+async function upsertIdentity(env, request, provider, prof, linkId = null) {
   const ident = await env.DB.prepare('SELECT user_id FROM identities WHERE provider = ? AND provider_id = ?').bind(provider, prof.id).first();
   if (ident) {
     await env.DB.prepare('UPDATE users SET avatar = COALESCE(?, avatar) WHERE id = ?').bind(prof.avatar, ident.user_id).run();
     return ident.user_id;
   }
   const t = now(), stmts = [];
-  const signedIn = await currentUser(request, env);
+  const signedIn = linkId ? { id: linkId } : await currentUser(request, env);
   let userId = signedIn?.id;
   if (!userId && prof.email) {
     const byEmail = await env.DB.prepare('SELECT id, email_verified FROM users WHERE email = ? COLLATE NOCASE').bind(prof.email).first();
@@ -417,11 +443,20 @@ async function oauthStart(request, env, url, name) {
     response_type: 'code', scope: p.scope, state, ...(p.extra || {}),
   });
   const ret = safeReturn(url.searchParams.get('return'));
+  // The iPhone app signs in through a system browser sheet, which has its own cookies, so it passes a PKCE-style
+  // challenge (app=) and, when adding a sign-in to an account, a one-time link token from /api/auth/link-token.
+  const app = url.searchParams.get('app') || '';
+  if (app && !/^[\w-]{43}$/.test(app)) throw new HttpError(400, 'Bad app sign-in request');
+  let linkId = url.searchParams.get('link') ? await takeToken(env, url.searchParams.get('link'), 'linkreq') : null;
+  // Apple returns by a cross-site form post that carries no session cookie, so the signed-in account is remembered
+  // against this state instead (never in the cookie, which the browser could change).
+  if (!linkId && (app || p.formPost)) linkId = (await currentUser(request, env))?.id || null;
+  if (linkId) await putToken(env, state, linkId, 'link', '', 600);
   return new Response(null, {
     status: 302,
     headers: {
       Location: `${p.authorize}?${q}`,
-      'Set-Cookie': setCookie(url, OAUTH_COOKIE, `${state}|${name}|${ret}`, { maxAge: 600, path: '/api/auth' }),
+      'Set-Cookie': setCookie(url, OAUTH_COOKIE, `${state}|${name}|${ret}|${app}`, { maxAge: 600, path: '/api/auth', sameSite: p.formPost ? 'None' : 'Lax' }),
     },
   });
 }
@@ -429,22 +464,121 @@ async function oauthStart(request, env, url, name) {
 async function oauthCallback(request, env, url, name) {
   const p = PROVIDERS[name];
   if (!p || !p.id(env)) throw new HttpError(404, 'Unknown sign-in method');
-  const [state, prov, ret] = (cookies(request)[OAUTH_COOKIE] || '').split('|');
-  if (url.searchParams.get('error')) return Response.redirect(`${url.origin}/#/account?error=cancelled`, 302);
-  if (!state || state !== url.searchParams.get('state') || prov !== name) throw new HttpError(400, 'Sign-in expired, please try again');
+  const form = request.method === 'POST' ? await request.formData().catch(() => new FormData()) : null;
+  const param = k => (form ? form.get(k) : url.searchParams.get(k)) || '';
+  const [state, prov, ret, app] = (cookies(request)[OAUTH_COOKIE] || '').split('|');
+  if (param('error')) return Response.redirect(`${url.origin}/#/account?error=cancelled`, 302);
+  if (!state || state !== param('state') || prov !== name) throw new HttpError(400, 'Sign-in expired, please try again');
   const tr = await fetch(p.token, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
-      client_id: p.id(env), client_secret: p.secret(env), code: url.searchParams.get('code') || '',
+      client_id: p.id(env), client_secret: p.clientSecret ? await p.clientSecret(env) : p.secret(env), code: param('code'),
       grant_type: 'authorization_code', redirect_uri: `${url.origin}/api/auth/callback/${name}`,
     }),
   });
   const tok = await tr.json().catch(() => ({}));
   if (!tok.access_token) throw new HttpError(400, 'Sign-in failed, please try again');
-  const prof = await p.profile(tok.access_token);
-  const userId = await upsertIdentity(env, request, name, prof);
-  return startSession(env, url, userId, ret);
+  const prof = await p.profile(tok.access_token, tok, env, form);
+  const linkId = await takeToken(env, state, 'link');
+  const userId = await upsertIdentity(env, request, name, prof, linkId);
+  if (prof.refresh) await env.DB.prepare('UPDATE identities SET refresh_token = ? WHERE provider = ? AND provider_id = ?')
+    .bind(prof.refresh, name, prof.id).run().catch(e => console.error('refresh_token not saved', e.message));
+  if (!app) return startSession(env, url, userId, ret);
+  // iPhone app: hand a one-time code back to the app, which swaps it (with its verifier) in its own web view.
+  const code = randomToken();
+  await putToken(env, code, userId, 'app', app, 120);
+  const back = new URLSearchParams({ code, return: ret || '/' });
+  return new Response(null, { status: 302, headers: {
+    Location: `${APP_SCHEME}://auth?${back}`,
+    'Set-Cookie': setCookie(url, OAUTH_COOKIE, '', { maxAge: 0, path: '/api/auth' }),
+  } });
+}
+
+/* ---------- iPhone app sign-in hand-off ---------- */
+const APP_SCHEME = 'paintersdesk';
+
+// One-time tokens live in email_tokens (only a hash is stored); 'email' holds the app's PKCE challenge for 'app' codes.
+async function putToken(env, token, userId, kind, extra, seconds) {
+  const t = now();
+  await env.DB.prepare('INSERT INTO email_tokens (token_hash, user_id, kind, email, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(await sha256(token), userId, kind, extra, t + seconds * 1000, t).run();
+}
+async function takeToken(env, token, kind, check) {
+  if (!token) return null;
+  const h = await sha256(String(token));
+  const row = await env.DB.prepare('SELECT user_id, email, expires_at FROM email_tokens WHERE token_hash = ? AND kind = ?').bind(h, kind).first();
+  if (!row) return null;
+  await env.DB.prepare('DELETE FROM email_tokens WHERE token_hash = ?').bind(h).run();
+  if (row.expires_at < now()) return null;
+  if (check && !(await check(row.email))) return null;
+  return row.user_id;
+}
+
+// Signed in inside the app and adding another sign-in: the browser sheet can't see the app's session, so the app
+// asks for a short-lived token that names this account and passes it to /api/auth/login/<name>?link=.
+async function linkToken(request, env) {
+  const u = await requireUser(request, env);
+  const token = randomToken();
+  await putToken(env, token, u.id, 'linkreq', '', 300);
+  return json({ token });
+}
+
+// The app opens /api/auth/app?code=…&verifier=… in its web view; the code only works with the verifier whose
+// SHA-256 the app sent at the start, so another app that grabs the paintersdesk:// link can't use it.
+async function appSignIn(request, env, url) {
+  const verifier = url.searchParams.get('verifier') || '';
+  const userId = await takeToken(env, url.searchParams.get('code'), 'app', async challenge => {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    return b64url(d) === challenge;
+  });
+  if (!userId) return Response.redirect(`${url.origin}/#/account?error=expired`, 302);
+  return startSession(env, url, userId, url.searchParams.get('return'));
+}
+
+const b64url = a => btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64url = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+
+/* ---------- Sign in with Apple ---------- */
+// Secrets (Worker runtime Variables and Secrets): APPLE_CLIENT_ID = the Services ID, APPLE_TEAM_ID, APPLE_KEY_ID and
+// APPLE_PRIVATE_KEY = the whole .p8 file. The client secret is an ES256 JWT that Apple accepts for up to 6 months; we make a fresh 5-minute one.
+async function appleClientSecret(env) {
+  const pem = String(env.APPLE_PRIVATE_KEY).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const key = await crypto.subtle.importKey('pkcs8', Uint8Array.from(atob(pem), c => c.charCodeAt(0)), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const enc = o => b64url(new TextEncoder().encode(JSON.stringify(o)));
+  const iat = Math.floor(Date.now() / 1000);
+  const head = `${enc({ alg: 'ES256', kid: env.APPLE_KEY_ID })}.${enc({ iss: env.APPLE_TEAM_ID, iat, exp: iat + 300, aud: 'https://appleid.apple.com', sub: env.APPLE_CLIENT_ID })}`;
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(head));
+  return `${head}.${b64url(sig)}`;
+}
+
+// Checks the id_token's signature against Apple's published keys, and that it is for this site and still current.
+async function verifyAppleIdToken(env, idToken) {
+  const [h, b, s] = String(idToken || '').split('.');
+  if (!s) throw new HttpError(400, 'Sign-in failed, please try again');
+  const head = JSON.parse(new TextDecoder().decode(unb64url(h)));
+  const claims = JSON.parse(new TextDecoder().decode(unb64url(b)));
+  const keys = (await (await fetch('https://appleid.apple.com/auth/keys')).json()).keys || [];
+  const jwk = keys.find(k => k.kid === head.kid);
+  if (!jwk || head.alg !== 'RS256') throw new HttpError(400, 'Sign-in failed, please try again');
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, unb64url(s), new TextEncoder().encode(`${h}.${b}`));
+  if (!ok || claims.iss !== 'https://appleid.apple.com' || claims.aud !== env.APPLE_CLIENT_ID || claims.exp * 1000 < Date.now())
+    throw new HttpError(400, 'Sign-in failed, please try again');
+  return claims;
+}
+
+// Apple requires apps to revoke their Sign in with Apple tokens when the account is deleted.
+async function revokeApple(env, userId) {
+  if (!PROVIDERS.apple.secret(env)) return;
+  let rows = [];
+  try { rows = (await env.DB.prepare("SELECT refresh_token FROM identities WHERE user_id = ? AND provider = 'apple' AND refresh_token IS NOT NULL").bind(userId).all()).results; } catch { return; }
+  for (const r of rows) {
+    await fetch('https://appleid.apple.com/auth/revoke', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: env.APPLE_CLIENT_ID, client_secret: await appleClientSecret(env), token: r.refresh_token, token_type_hint: 'refresh_token' }),
+    }).catch(e => console.error('Apple revoke failed', e.message));
+  }
 }
 
 // Local development only: sign in as a named test user without any OAuth keys. Enabled by DEV_LOGIN=1 in .dev.vars.
@@ -759,6 +893,7 @@ async function getProfile(request, env, id) {
 
 async function deleteAccount(request, env) {
   const u = await requireUser(request, env);
+  await revokeApple(env, u.id);
   const imgs = (await env.DB.prepare('SELECT id FROM images WHERE user_id = ?').bind(u.id).all()).results.map(i => i.id);
   await deleteImages(env, imgs);
   try { await env.DB.prepare('DELETE FROM wants WHERE user_id = ?').bind(u.id).run(); } catch (e) { if (!noWants(e)) throw e; }
