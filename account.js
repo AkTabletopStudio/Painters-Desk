@@ -7,7 +7,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const BYKEY=new Map(P.map(p=>[p.k,p]));
 // Paints renamed after people had already saved them: old key -> current key. Migration 0014 rewrites the stored keys;
 // until it runs, a collection still holding an old key is moved across the first time it loads.
-const RENAMED={'M|S13|Dark Sea Blue':'M|S13|Dark Sea Ben','E|E019|Pthalo Turquoise Light':'E|E019|Phthalo Turquoise Light','S||Tidal Navy':'S||Tidal Wave'};
+const RENAMED={'M|S13|Dark Sea Blue':'M|S13|Dark Sea Ben','E|E019|Pthalo Turquoise Light':'E|E019|Phthalo Turquoise Light','S||Tidal Navy':'S||Tidal Wave','d||Golfag Brown':'d||Golgfag Brown','u|72.060|':'u|72.060|Tinny Tin','6|4112|Dead Flush':'6|4112|Dead Flesh'};
 // The owned set only holds keys of paints that exist, so "N paints owned" matches what the wheel can show.
 const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
