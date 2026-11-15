@@ -181,7 +181,7 @@ function typeOf(app) {
   const ptG = {};
   for (const m of app.match(/const PT_G=\{(.*?)\};/)[1].matchAll(/(?:'([^']*)'|(\w+))\s*:\s*'([^']*)'/g)) ptG[m[1] ?? m[2]] = m[3];
   const isMet = p => metG.has(p.g) || metK.has(p.g + '|' + p.n) || /anodized|^candy /i.test(p.n) && p.g !== 'Û' || /\bmet(al|allic)?\b/i.test(p.n + ' ' + p.c) ||
-    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï' && p.g !== 'Ý';
+    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï' && p.g !== 'Ý' && p.g !== 'Ű';
   const isPearl = p => /\bpearl\b|iridescent|^interference /i.test(p.n) && !/skin/i.test(p.n) && p.g !== 'Ï' && p.g !== 'Ş';
   return p => isPearl(p) ? 'pearl' : isMet(p) ? 'met' : p.g === 'Ê' && /^fluorescent /i.test(p.n) ? 'fx' : ptG[p.g] || (/speedpaint|contrast/i.test(p.c) ? 'con' : /\bwash$/i.test(p.c) || /\bwash\b|\bshade$/i.test(p.n) || (p.g === 'A' || p.g === 'Ħ') && / tone$/i.test(p.n) ? 'wash' :
     /\bink$/i.test(p.n) || / ink$/i.test(p.c) ? 'ink' : /fluo|^neon|effects$/i.test(p.n + '|' + p.c) ? 'fx' :
@@ -682,6 +682,7 @@ const BRAND_INFO = {
   'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters. Its Velvet inks are concentrated satin acrylic inks for glazes, washes and mixing.',
   'golden': 'Golden Artist Colors makes artist-grade acrylics in New York. Its Heavy Body paints are mostly single pigments, so they mix cleanly, and many miniature painters use them for wet blending and glazing alongside hobby paints. High Flow is the same pigments as a thin, ink-like acrylic for airbrushing, glazes and washes, with fluorescent, iridescent and interference colours too.',
   'nocturna-models': 'Nocturna Models is a Spanish fantasy miniatures company. Its N-Paint range comes in sets of eight: flesh, greys, reds, blues, greens and browns, each a ramp from shadow to highlight, plus metallic and ink sets.',
+  warcolours: 'Warcolours is a miniature paint brand. Its Layer range is built as 18 hue families with 5 tones each, from lightest (1) to darkest (5), plus White and Black, so a ramp is just the next number down. Antithesis is its one-coat contrast range, and it also makes Onecoat basecoats, Glazes, Transparents, Inkredible inks, Metallics, Fluorescents and Gems, and Nostalgia \'88 and \'94 recreate the original 1988 and 1994 miniature paint colours, with Nostalgia Colours Rackham doing the same for the 100 Confrontation-era Rackham paints.',
   'bear-cavalry': 'Bear Cavalry is an American miniature painting company. Its paints are named after battles, songs and history, and come in reds, oranges, yellows, greens, blues, purples, greys and browns.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
