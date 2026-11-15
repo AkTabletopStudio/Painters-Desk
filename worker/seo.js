@@ -181,7 +181,7 @@ function typeOf(app) {
   const ptG = {};
   for (const m of app.match(/const PT_G=\{(.*?)\};/)[1].matchAll(/(?:'([^']*)'|(\w+))\s*:\s*'([^']*)'/g)) ptG[m[1] ?? m[2]] = m[3];
   const isMet = p => metG.has(p.g) || metK.has(p.g + '|' + p.n) || /anodized|^candy /i.test(p.n) && p.g !== 'Û' || /\bmet(al|allic)?\b/i.test(p.n + ' ' + p.c) ||
-    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï';
+    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï' && p.g !== 'Ý';
   const isPearl = p => /\bpearl\b|iridescent|^interference /i.test(p.n) && !/skin/i.test(p.n) && p.g !== 'Ï' && p.g !== 'Ş';
   return p => isPearl(p) ? 'pearl' : isMet(p) ? 'met' : p.g === 'Ê' && /^fluorescent /i.test(p.n) ? 'fx' : ptG[p.g] || (/speedpaint|contrast/i.test(p.c) ? 'con' : /\bwash$/i.test(p.c) || /\bwash\b|\bshade$/i.test(p.n) || (p.g === 'A' || p.g === 'Ħ') && / tone$/i.test(p.n) ? 'wash' :
     /\bink$/i.test(p.n) || / ink$/i.test(p.c) ? 'ink' : /fluo|^neon|effects$/i.test(p.n + '|' + p.c) ? 'fx' :
@@ -679,7 +679,7 @@ const BRAND_INFO = {
   'mr-hobby': 'Mr. Hobby is the hobby paint brand of GSI Creos in Japan. Mr. Color is its solvent-based acrylic lacquer, Aqueous Hobby Color the water-based acrylic and Acrysion the low-odour water-based range, all with large sets of aircraft, armour and ship colours.',
   reaper: 'Reaper Miniatures is an American miniatures company. Its Master Series Paints come in triads of a shadow, a midtone and a highlight, with skin, metallic, liner, clear and ink colours.',
   'formula-p3': 'Formula P3 is the paint range Privateer Press made for its Warmachine and Hordes miniatures. Many colours are named after the factions they were made for, and the range includes metallics, inks and washes.',
-  'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters.',
+  'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters. Its Velvet inks are concentrated satin acrylic inks for glazes, washes and mixing.',
   'golden': 'Golden Artist Colors makes artist-grade acrylics in New York. Its Heavy Body paints are mostly single pigments, so they mix cleanly, and many miniature painters use them for wet blending and glazing alongside hobby paints. High Flow is the same pigments as a thin, ink-like acrylic for airbrushing, glazes and washes, with fluorescent, iridescent and interference colours too.',
   'nocturna-models': 'Nocturna Models is a Spanish fantasy miniatures company. Its N-Paint range comes in sets of eight: flesh, greys, reds, blues, greens and browns, each a ramp from shadow to highlight, plus metallic and ink sets.',
   'bear-cavalry': 'Bear Cavalry is an American miniature painting company. Its paints are named after battles, songs and history, and come in reds, oranges, yellows, greens, blues, purples, greys and browns.',
