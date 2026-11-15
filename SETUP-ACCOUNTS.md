@@ -118,3 +118,35 @@ opted in with a confirmed address. Each email has an unsubscribe link (`/api/uns
 
 Profiles (`#/u/<user id>`) show the icon, display name, about text, link, favourite paints and public recipes &
 tutorials. Uploaded icons go to the R2 bucket like tutorial photos. Needs migration `0004_profiles_passwords.sql`.
+
+## Sign in with Apple
+
+Required by the App Store because the iPhone app offers Google, Discord and GitHub sign-in. The button appears
+(on the website too) once all four runtime secrets below are set in Workers > painters-desk > Settings >
+Variables and Secrets. Needs migration `0026_apple_refresh_token.sql` applied first.
+
+In the Apple Developer site (Certificates, Identifiers & Profiles):
+
+1. Identifiers > App IDs: `com.aktabletopstudio.paintersdesk`, with "Sign in with Apple" ticked.
+2. Identifiers > Services IDs: `com.aktabletopstudio.paintersdesk.web`, with Sign in with Apple configured:
+   primary App ID as above, domain `paintersdesk.com`, return URL `https://paintersdesk.com/api/auth/callback/apple`.
+3. Keys: a new key with Sign in with Apple enabled. Download the `.p8` file (only offered once) and note its Key ID.
+
+| Secret | Value |
+| --- | --- |
+| `APPLE_CLIENT_ID` | the Services ID, `com.aktabletopstudio.paintersdesk.web` |
+| `APPLE_TEAM_ID` | the 10-character Team ID (top right of the developer site) |
+| `APPLE_KEY_ID` | the key's 10-character Key ID |
+| `APPLE_PRIVATE_KEY` | the whole `.p8` file, including the BEGIN/END lines |
+
+Apple posts the result back as a form, so the callback accepts POST from appleid.apple.com. The refresh token is
+kept only so deleting an account can revoke it, which App Store rule 5.1.1(v) requires.
+
+## Sign-in inside the iPhone app
+
+Google (and the others) refuse to sign in inside an app's web view. In the app, `account.js` opens
+`/api/auth/login/<name>?app=<challenge>` in a system browser sheet. After sign-in the Worker redirects to
+`paintersdesk://auth?code=…`, and the app loads `/api/auth/app?code=…&verifier=…` in its own web view. That
+swaps the one-time code (2 minutes, single use, stored hashed in `email_tokens`) for a normal session. The code
+only works with the verifier whose SHA-256 the app sent at the start, so another app that grabs the link can't use it.
+Adding a sign-in while signed in uses a 5-minute token from `POST /api/auth/link-token`.

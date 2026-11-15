@@ -31,11 +31,10 @@ testers for 14 days before the app can go to production.
 
 A native shell that opens paintersdesk.com. Still to do before it can go to Apple review:
 
-1. Sign-in: Google refuses sign-in inside an app web view, so OAuth must open in a system browser
-   sheet (`@capacitor/browser`, ASWebAuthenticationSession) and return to the app with a one-time
-   code that the Worker swaps for a session cookie.
-2. Sign in with Apple: required by App Store guideline 4.8 because the site offers Google, Discord
-   and GitHub sign-in.
+1. Sign-in hand-off: done in the site (see SETUP-ACCOUNTS.md, "Sign-in inside the iPhone app"). The
+   Xcode project must register the `paintersdesk` URL scheme (Info > URL Types) so the app receives
+   `paintersdesk://auth?code=…`.
+2. Sign in with Apple: done in the site; it switches on once the APPLE_* secrets are set (SETUP-ACCOUNTS.md).
 3. Native touches for guideline 4.2 (minimum functionality): share sheet, camera for Palette from a
    photo, haptics.
 4. Builds run on GitHub's macOS runners, so no Mac is needed.
