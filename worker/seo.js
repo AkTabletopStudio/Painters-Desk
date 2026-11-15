@@ -682,6 +682,7 @@ const BRAND_INFO = {
   'kimera-kolors': 'Kimera Kolors is an Italian paint brand. Its Pure Pigments are single-pigment colours made for mixing, like an artist\'s palette, and its Signature sets are colours chosen by well-known miniature painters. Its Velvet inks are concentrated satin acrylic inks for glazes, washes and mixing.',
   'golden': 'Golden Artist Colors makes artist-grade acrylics in New York. Its Heavy Body paints are mostly single pigments, so they mix cleanly, and many miniature painters use them for wet blending and glazing alongside hobby paints. High Flow is the same pigments as a thin, ink-like acrylic for airbrushing, glazes and washes, with fluorescent, iridescent and interference colours too.',
   'nocturna-models': 'Nocturna Models is a Spanish fantasy miniatures company. Its N-Paint range comes in sets of eight: flesh, greys, reds, blues, greens and browns, each a ramp from shadow to highlight, plus metallic and ink sets.',
+  warcolours: 'Warcolours is a miniature paint brand. Its Layer range is built as 18 hue families with 5 tones each, from lightest (1) to darkest (5), plus White and Black, so a ramp is just the next number down.',
   'bear-cavalry': 'Bear Cavalry is an American miniature painting company. Its paints are named after battles, songs and history, and come in reds, oranges, yellows, greens, blues, purples, greys and browns.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
