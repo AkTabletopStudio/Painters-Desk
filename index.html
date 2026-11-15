@@ -80,7 +80,7 @@ dialog.pd.pickdlg{background:linear-gradient(var(--card),var(--card)),var(--bg)}
 .wtips li{display:flex;gap:10px;align-items:flex-start;counter-increment:wt}
 .wtips li:before{content:counter(wt);flex:0 0 26px;height:26px;display:grid;place-items:center;border-radius:50%;background:var(--tea);color:#111;font-weight:700;font-size:14px}
 /* Wheel tour (app.js pdTour): animated walkthrough on a mock of the wheel page, drawn at a fixed size and scaled to fit. */
-.tourb{padding:4px 12px;font-size:14px;margin-left:6px;vertical-align:1px}
+.tourb{padding:4px 12px;font-size:14px;margin-left:6px;vertical-align:1px}.tourb[hidden]{display:none}
 dialog.pd.tourdlg{width:720px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);overflow:auto;padding:14px 16px 16px;background:linear-gradient(var(--card),var(--card)),var(--bg)}
 .tourdlg .tux{position:absolute;top:8px;right:8px;z-index:3}
 .tubox{position:relative;overflow:hidden;margin:30px 0 10px;border-radius:14px}
@@ -893,7 +893,6 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <li data-a="paints"><span class="tg up">Better</span><b>Kimera colours from Kimera's own chart.</b> All 72 Kimera Pure Pigments and Signature swatches now come from Kimera's official hand-painted colour chart instead of photos of a third-party chart. Magenta, Purple, Ultramarine Blue and Cobalt Blue Green change the most. Swatches are still estimates.</li>
 </ul></div>
 <div class="panel cl"><h2>14 November 2026</h2><ul>
-<li data-a="wheel"><span class="tg nw">New</span><b>Colour wheel tour.</b> A short animated walkthrough shows how to choose paints, save them to My paints, tap a paint, change the colour scheme and its hue width, and build a ramp. It opens once on your first visit to the wheel, and <b>▶ Watch the tour</b> above the wheel replays it any time.</li>
 <li data-a="themes"><span class="tg nw">New</span><b>Classic theme.</b> A plain look with no backdrop art: your device's own font, flat greys, thin borders and one blue accent. <b>Classic</b> follows your light or dark setting and <b>Classic Dark</b> is always charcoal. The wheel sits on neutral grey, so swatches read cleanly. Pick either from the Theme button.</li>
 <li data-a="guides"><span class="tg nw">New</span><b>Paint types explained.</b> A new guide, <a href="/guides/miniature-paint-types">Paint types explained</a>, covers what base, layer, shade, contrast and speed paints, inks, glazes, dry and air paints, metallics, colour-shift, pearl and fluorescent paints, technical paints, primers and varnish are, and when to use each, with the ranges of each type on the site. The <b>Paint types</b> pop-up on the wheel links to it, and the Type on every paint page now links to the part of the guide for that type.</li>
 <li data-a="wheel"><span class="tg up">Better</span><b>Wheel tools in plain sight.</b> The <b>More tools</b> menu on the colour wheel is gone. <b>Paint types</b>, <b>From a photo</b> and <b>Show labels</b> now sit on the page next to the Scheme button, one tap away.</li>
@@ -1098,7 +1097,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 </section>
 <section id="v-wheel">
 <h1>Paint colour wheel</h1>
-<p class="s">Tap any paint on the wheel to see its complement, neighbours and matches from every brand. <a href="guides/colour-theory">How to read the wheel</a> <button class="btn tourb" type="button" id="tourBtn">▶ Watch the tour</button></p>
+<p class="s">Tap any paint on the wheel to see its complement, neighbours and matches from every brand. <a href="guides/colour-theory">How to read the wheel</a> <button class="btn tourb" type="button" id="tourBtn" hidden>▶ Watch the tour</button></p>
 <div class="panel wshow" id="wshow"><b class="wsl">Showing:</b><span class="wchips" id="wchips"></span><button class="btn pri" type="button" id="pickBtn" aria-haspopup="dialog">＋ Change paints</button><button class="btn" type="button" id="mineBtn" hidden>My collection</button><span class="s" id="cnt2"></span></div>
 <dialog class="pd pickdlg" id="pickDlg" aria-labelledby="pickT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div id="pickd"><div class="pkh"><h2 id="pickT">Choose paints for the wheel</h2><span class="s" id="cnt"></span></div>
 <div class="bar"><input id="q" type="search" placeholder="Search paints (name or code)"> <button id="clr" type="button">Clear all</button></div>

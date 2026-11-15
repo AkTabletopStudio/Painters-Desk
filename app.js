@@ -890,6 +890,8 @@ rampLink();addEventListener('hashchange',rampLink);
 
 // Wheel tour: an animated walkthrough on a small mock of the wheel page (it never touches the real selection).
 // Opens once on the first visit to the wheel (localStorage pd-tour), and any time from the Watch the tour button.
+// Switched off 2026-11-15 (owner: not a good experience on phone). Set TOUR_ON=true to bring back the button and the first-visit popup.
+const TOUR_ON=false;
 (()=>{const dlg=document.createElement('dialog');dlg.className='pd tourdlg';dlg.id='tourDlg';dlg.setAttribute('aria-labelledby','tuT');
  const RM=matchMedia('(prefers-reduced-motion: reduce)');
  dlg.innerHTML='<button class="cpx tux" type="button" aria-label="Close the tour">×</button><div class="tubox" aria-hidden="true"><div class="tust"></div></div>'+
@@ -1010,9 +1012,9 @@ rampLink();addEventListener('hashchange',rampLink);
  dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
  addEventListener('resize',()=>dlg.open&&fit());
  window.pdTour=()=>{try{localStorage.setItem('pd-tour','1')}catch(e){}if(dlg.open)return;dlg.showModal();fit();setPlay(!RM.matches);go(0);last=performance.now();if(!raf)raf=requestAnimationFrame(loop)};
- document.getElementById('tourBtn').onclick=()=>pdTour();
+ document.getElementById('tourBtn').onclick=()=>pdTour();document.getElementById('tourBtn').hidden=!TOUR_ON;
  // First visit to the wheel: open it once, unless another popup (like the theme picker) is already up.
  const vw=document.getElementById('v-wheel');let tries=0;
- const first=()=>{let seen=true;try{seen=!!localStorage.getItem('pd-tour')}catch(e){}if(seen||vw.hidden)return;
+ const first=()=>{if(!TOUR_ON)return;let seen=true;try{seen=!!localStorage.getItem('pd-tour')}catch(e){}if(seen||vw.hidden)return;
   if(document.querySelector('dialog[open]')){if(++tries<40)setTimeout(first,1500);return}pdTour()};
  new MutationObserver(()=>{if(!vw.hidden)setTimeout(first,700)}).observe(vw,{attributes:true,attributeFilter:['hidden']});setTimeout(first,1200)})();
