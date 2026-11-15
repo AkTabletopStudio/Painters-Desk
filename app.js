@@ -513,7 +513,7 @@ const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]
 // Match closeness scale (ΔE between two swatch estimates), shared by every tag on the site; worker/seo.js closeness() uses the same cut-offs.
 const MQS=[[2,'perfect','Perfect'],[6,'vclose','Very close'],[10,'close','Close'],[15,'fair','Fair'],[20,'loose','Loose'],[30,'vloose','Very loose'],[1/0,'poor','Poor']],
  mq=d=>{const r=MQS.find(x=>d<x[0]);return[r[1],r[2]]},MQ_TXT='Perfect = ΔE under 2, Very close under 6, Close under 10, Fair under 15, Loose under 20, Very loose under 30, Poor 30 or more';
-const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart',w:'Army Painter Historical to Fanatic chart',L:'Army Painter Warpaints Fanatic conversion chart'};
+const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart',w:'Army Painter Historical to Fanatic chart',L:'Army Painter Warpaints Fanatic conversion chart',r:'AK Real Colors conversion chart'};
 // Metallic and pearl paints only match each other, and other paints only match other paints: a gold is never a yellow's match.
 // The other finish is listed apart (Metallic matches / Non-metallic colours), one nearest per brand plus any chart pairs.
 const isMetT=p=>{const t=paintType(p);return t==='met'||t==='pearl'};
@@ -633,7 +633,7 @@ function selLocal(){try{const w=JSON.parse(localStorage.getItem(WK));return w&&w
 // The 42 Two Thin Coats triad paints that were range 'k' until 22 Oct 2026 keep a selection saved under their old keys.
 const K0=P.findIndex(p=>p.n==='Doom Death Black'),wasK=p=>p.i>=K0&&p.i<K0+42;
 // Paints renamed after people saved a selection: new key -> old key.
-const WAS={'S||Tidal Wave':'S||Tidal Navy'};
+const WAS={'S||Tidal Wave':'S||Tidal Navy','d||Golgfag Brown':'d||Golfag Brown','u|72.060|Tinny Tin':'u|72.060|','6|4112|Dead Flesh':'6|4112|Dead Flush'};
 function selApply(w){const g=new Set(w.g||[]),k=new Set(w.k||[]);P.forEach(p=>p.on=g.has(p.g)||k.has(p.k)||k.has(WAS[p.k])||wasK(p)&&(g.has('k')||k.has('k'+p.k.slice(1))))}
 let onSelSave=null;
 function remember(){const w=selNow();try{localStorage.setItem(WK,JSON.stringify(w))}catch(e){}if(onSelSave)onSelSave(w)}

@@ -11,7 +11,8 @@ import { CRAFT, CRAFT_DATE } from './craft-guides.js';
 const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
 // Renamed paints, [old 'brand/paint' slug, new one]. Only paths under /paints/ reach this.
-const MOVED = [['army-painter/tidal-navy', 'army-painter/tidal-wave']];
+const MOVED = [['army-painter/tidal-navy', 'army-painter/tidal-wave'], ['citadel/golfag-brown', 'citadel/golgfag-brown'],
+  ['vallejo/72-060', 'vallejo/tinny-tin'], ['green-stuff-world/dead-flush', 'green-stuff-world/dead-flesh']];
 const movedRe = a => new RegExp('/' + a + '(/|$)');
 
 let DATA = null;
