@@ -237,7 +237,7 @@ const label = p => p.n + (p.c ? ' (' + p.c + ')' : '');
 const closeness = d => d < 2 ? 'perfect' : d < 6 ? 'very close' : d < 10 ? 'close' : d < 15 ? 'fair' : d < 20 ? 'loose' : d < 30 ? 'very loose' : 'poor';
 const CLOSE_TXT = 'under 2 is a perfect match (you’d struggle to tell them apart), under 6 very close, under 10 close, under 15 fair, under 20 loose, under 30 very loose, and 30 or more a poor match';
 
-const OG_IMAGE = SITE + '/icons/og-image-2026-11.jpg';
+const OG_IMAGE = SITE + '/icons/og-image-2026-11-15.jpg';
 const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painters Desk', url: SITE + '/', publisher: { '@id': SITE + '/#org' } };
 const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png' };
 
@@ -770,7 +770,7 @@ ${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="l
 }
 
 function indexPage(D) {
-  const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
+  const n = D.brands.reduce((a, b) => a + b.paints.length, 0).toLocaleString('en');
   const title = 'Miniature paint equivalents and conversion charts by brand';
   const desc = `Closest equivalents for ${n} miniature paints across Citadel, Vallejo, Army Painter, Pro Acryl, AK Interactive, Scale75 and more. Swatch colours are estimates.`;
   const body = `<h1>Miniature paint equivalents</h1>
@@ -1328,7 +1328,7 @@ function guideLinks(cur) {
 }
 
 function guidesPage(D) {
-  const n = D.brands.reduce((a, b) => a + b.paints.length, 0);
+  const n = D.brands.reduce((a, b) => a + b.paints.length, 0).toLocaleString('en');
   const title = 'Miniature painting guides and paint conversion charts';
   const desc = 'Colour theory for miniature painters, how to thin paints, prime, varnish, airbrush, use contrast paints, paint black and white, base and weather models, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and conversion charts between Citadel, Vallejo, Army Painter, Pro Acryl, AK, Two Thin Coats, Scale75 and Tamiya, plus a Tone Pro chart, built from ' + n + ' paints. Swatch colours are estimates.';
   const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${RAMPS[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
