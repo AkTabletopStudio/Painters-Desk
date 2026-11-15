@@ -1,0 +1,15 @@
+{
+  "appId": "com.aktabletopstudio.paintersdesk",
+  "appName": "Painters Desk",
+  "webDir": "www",
+  "server": {
+    "url": "https://paintersdesk.com/index.html",
+    "allowNavigation": ["paintersdesk.com"]
+  },
+  "ios": {
+    "scheme": "Painters Desk",
+    "contentInset": "always",
+    "backgroundColor": "#0b0224",
+    "limitsNavigationsToAppBoundDomains": true
+  }
+}

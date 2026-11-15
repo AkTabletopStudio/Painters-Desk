@@ -89,6 +89,7 @@ async function handle(request, env, ctx) {
     });
     return Response.redirect(url.toString(), 301);
   }
+  if (url.pathname === '/.well-known/assetlinks.json') return assetLinks(env);
   if (isSeoPath(url.pathname)) {
     const r = await seo(request, env, url);
     if (r.status === 200 && request.method === 'GET' && url.pathname !== '/sitemap.xml') ctx?.waitUntil(countVisit(request, env, url.pathname, request.headers.get('Referer'), url));
@@ -3182,4 +3183,21 @@ export class ChatRoom {
     await this.changed();
   }
   async webSocketError() { await this.changed(); }
+}
+
+// Digital Asset Links: proves the Android app (a Trusted Web Activity) belongs to this site, so it opens
+// full screen with no browser bar. The signing-key fingerprints come from the ANDROID_CERT_SHA256 runtime
+// variable (comma separated: the Play App Signing key and the upload key), so a new key needs no deploy.
+// With the variable unset the list is empty and the app would show a browser bar, which is harmless.
+const ANDROID_PACKAGE = 'com.aktabletopstudio.paintersdesk';
+function assetLinks(env) {
+  const fps = String(env.ANDROID_CERT_SHA256 || '').split(',').map(s => s.trim().toUpperCase())
+    .filter(s => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
+  const body = fps.length ? [{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: { namespace: 'android_app', package_name: ANDROID_PACKAGE, sha256_cert_fingerprints: fps },
+  }] : [];
+  return new Response(JSON.stringify(body, null, 2), {
+    headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600', 'access-control-allow-origin': '*' },
+  });
 }

@@ -1,0 +1,23 @@
+{
+  "name": "painters-desk-ios",
+  "private": true,
+  "version": "1.0.0",
+  "description": "iPhone app shell for paintersdesk.com (Capacitor). Not deployed with the site.",
+  "scripts": {
+    "add:ios": "cap add ios",
+    "sync": "cap sync ios",
+    "open": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/browser": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@capacitor/haptics": "^7.0.0",
+    "@capacitor/camera": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}
