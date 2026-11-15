@@ -887,3 +887,132 @@ function rampLink(){const m=location.hash.match(/[?&]ramp=(\w+)/);if(!m)return;c
  if(bm){let k='';try{k=decodeURIComponent(bm[1])}catch(e){}const p=P.find(q=>q.k===k);if(p){if(!p.on){p.on=true;sync()}showP(p)}}
  document.getElementById('w').scrollIntoView({block:'start'})}
 rampLink();addEventListener('hashchange',rampLink);
+
+// Wheel tour: an animated walkthrough on a small mock of the wheel page (it never touches the real selection).
+// Opens once on the first visit to the wheel (localStorage pd-tour), and any time from the Watch the tour button.
+(()=>{const dlg=document.createElement('dialog');dlg.className='pd tourdlg';dlg.id='tourDlg';dlg.setAttribute('aria-labelledby','tuT');
+ const RM=matchMedia('(prefers-reduced-motion: reduce)');
+ dlg.innerHTML='<button class="cpx tux" type="button" aria-label="Close the tour">×</button><div class="tubox" aria-hidden="true"><div class="tust"></div></div>'+
+  '<div class="tucap" aria-live="polite"><span class="s tun"></span><h2 id="tuT"></h2><p class="tutx"></p></div><div class="tupg"><i></i></div>'+
+  '<div class="row tuctl"><button class="btn tubk" type="button">‹ Back</button><span class="tudots"></span><button class="btn tupl" type="button" aria-label="Pause">❚❚</button><button class="btn pri tunx" type="button">Next ›</button></div>';
+ document.body.appendChild(dlg);
+ const box=dlg.querySelector('.tubox'),st=dlg.querySelector('.tust'),q=s=>st.querySelector(s),NS='http://www.w3.org/2000/svg';
+ // ---------- mock page ----------
+ st.innerHTML='<div class="tubar"><b>Showing:</b><span class="tuchips"></span><span class="tub pri tuchg">＋ Change paints</span><span class="tucnt"></span></div>'+
+  '<div class="tumodes"><span class="tub tumc on">Colours</span><span class="tub tumr">Ramps</span><span class="tub tumb">Blends</span><span class="tub tusb">Scheme: Complementary</span></div>'+
+  '<svg class="tuwh" viewBox="0 0 300 300"><circle cx="150" cy="150" r="146" class="turing"/><g class="tuwg"></g><g class="tudots2"></g><g class="tuln"></g><circle cx="150" cy="150" r="40" class="tudisc"/><g class="turp"></g></svg>'+
+  '<div class="tuside"></div>'+
+  '<div class="tupop tupick"><b class="tuh">Choose paints for the wheel</b><label class="tuck" data-r="0"><i></i>Citadel Base <span>48</span></label><label class="tuck" data-r="1"><i></i>Citadel Layer <span>92</span></label><label class="tuck" data-r="2"><i></i>Vallejo Game Color <span>110</span></label>'+
+   '<div class="tupf"><span class="tub tuadd">Add ticked paints to my collection</span><span class="tub pri tuok">Show on wheel</span></div></div>'+
+  '<div class="tupop tusch"><b class="tuh">Colour scheme</b><div class="tusl"></div><div class="tutol"><b>Hue width</b><span class="tutr"><i class="tutk"></i></span><span class="tutv">±20°</span></div><div class="tupf"><span class="tub pri tudone">Done</span></div></div>'+
+  '<div class="tutoast"></div><svg class="tucur" viewBox="0 0 24 24"><path d="M5 2l14 10-6.2 1.3 3.6 7.1-2.8 1.4-3.6-7.2L5 19z"/></svg><span class="turip"></span>';
+ const SCH=[['comp','Complementary',[0,180]],['split','Split complementary',[0,150,210]],['ana','Analogous',[0,-30,30]],['triad','Triadic',[0,120,240]],['sq','Square',[0,90,180,270]]];
+ q('.tusl').innerHTML=SCH.map(s=>'<span class="tusi" data-s="'+s[0]+'">'+s[1]+'</span>').join('');
+ // 16 hues x 3 rings: dark near the centre, light at the rim (like the real wheel). Hue 0 = red at the top, clockwise.
+ const D=[],RR=[64,94,124],LL=[30,48,70];
+ for(let i=0;i<16;i++)for(let r=0;r<3;r++){const h=i*22.5,a=(h-90)*Math.PI/180,c=document.createElementNS(NS,'circle');
+  c.setAttribute('cx',(150+RR[r]*Math.cos(a)).toFixed(1));c.setAttribute('cy',(150+RR[r]*Math.sin(a)).toFixed(1));c.setAttribute('r',12.5);
+  c.setAttribute('fill','hsl('+h+' 62% '+LL[r]+'%)');c.style.setProperty('--d',(i*3+r)*14+'ms');q('.tudots2').appendChild(c);D.push({h,r,c,col:'hsl('+h+' 62% '+LL[r]+'%)'})}
+ const hd=(a,b)=>{const d=Math.abs(((a-b)%360+360)%360);return Math.min(d,360-d)},dot=(h,r)=>D.reduce((b,d)=>d.r===r&&(!b||hd(d.h,h)<hd(b.h,h))?d:b,null);
+ const sw=(c,t,x)=>'<span class="tuchip"><i style="background:'+c+'"></i>'+t+(x?' <em>'+x+'</em>':'')+'</span>';
+ const wedge=(h,t)=>{const p=(r,a)=>{a=(a-90)*Math.PI/180;return(150+r*Math.cos(a)).toFixed(1)+' '+(150+r*Math.sin(a)).toFixed(1)};
+  return 'M'+p(46,h-t)+'L'+p(144,h-t)+'A144 144 0 0 1 '+p(144,h+t)+'L'+p(46,h+t)+'A46 46 0 0 0 '+p(46,h-t)+'Z'};
+ const SIDE={
+  empty:'<b>Nothing selected yet</b><ol><li>Tap a paint on the wheel</li><li>See its complements and neighbours</li><li>Get matches from every brand</li></ol>',
+  comp:()=>'<b>Selected:</b>'+sw(dot(202.5,1).col,'Deep Ocean')+'<h4>Complements</h4><div>'+sw(dot(22.5,1).col,'Burnt Orange')+sw(dot(22.5,2).col,'Warm Ochre')+'</div><h4>Neighbours</h4><div>'+sw(dot(180,1).col,'Sea Teal')+sw(dot(225,1).col,'Night Blue')+'</div><h4>Matches</h4><div>'+sw(dot(202.5,1).col,'Ocean Shade','Very close')+'</div>',
+  triad:()=>'<b class="tuhf">Triadic</b><div class="tupal"><i style="flex:6;background:'+dot(202.5,1).col+'">60%</i><i style="flex:3;background:'+dot(322.5,1).col+'">30%</i><i style="flex:1;background:'+dot(82.5,1).col+'">10%</i></div><h4>Blend for each colour</h4>'+
+   [202.5,322.5,82.5].map((h,i)=>'<div class="tubl"><span>'+(i+1)+'</span>'+[0,1,2].map(r=>'<i style="background:'+dot(h,r).col+'"></i>').join('')+'</div>').join('')};
+ const RN=['Deep shadow','Shadow','Dark mid','Base','Highlight','Bright highlight','Glint'],RC=[[40,45,9],[40,48,18],[42,52,30],[45,60,45],[48,62,62],[50,55,78],[55,60,95]].map(a=>'hsl('+a[0]+' '+a[1]+'% '+a[2]+'%)');
+ const RT=['Fair','Close','Close','Your pick','Close','Loose','Very close'];
+ // ---------- state ----------
+ let S={};const set=(e,h)=>{if(e._h!==h){e._h=h;e.innerHTML=h}};
+ function render(){const W=q('.tuwg'),L=q('.tuln'),R=q('.turp');W.innerHTML=L.innerHTML=R.innerHTML='';
+  st.classList.toggle('tuon',!!S.paints);set(q('.tuchips'),S.paints?'<span class="tuwc">Citadel Base</span><span class="tuwc">Citadel Layer</span>':'<span class="s">no paints yet</span>');
+  q('.tucnt').textContent=S.paints?'140 paints':'';
+  q('.tumc').classList.toggle('on',S.mode!=='ramp');q('.tumr').classList.toggle('on',S.mode==='ramp');q('.tumb').classList.toggle('on',false);
+  q('.tusb').textContent='Scheme: '+SCH.find(s=>s[0]===S.sch)[1].replace(' complementary','');q('.tusb').style.visibility=S.mode==='ramp'?'hidden':'';
+  q('.tutv').textContent='±'+Math.round(S.tol)+'°';q('.tutk').style.left=((S.tol-10)/20*100)+'%';
+  st.querySelectorAll('.tusi').forEach(e=>e.classList.toggle('on',e.dataset.s===S.sch));
+  const disc=q('.tudisc');disc.style.fill='';
+  if(S.mode==='ramp'){D.forEach(d=>d.c.classList.toggle('dim',true));
+   // ramp path from the centre (dark) to the rim (light), drawn step by step
+   const n=S.rampN||0;let pts=[];for(let i=0;i<7;i++){const r=48+i*15.5,a=(36+i*3-90)*Math.PI/180;pts.push([150+r*Math.cos(a),150+r*Math.sin(a)])}
+   if(n>1){const pl=document.createElementNS(NS,'polyline');pl.setAttribute('points',pts.slice(0,n).map(p=>p.map(v=>v.toFixed(1)).join(',')).join(' '));pl.setAttribute('class','tupl2');R.appendChild(pl)}
+   pts.slice(0,n).forEach((p,i)=>{const c=document.createElementNS(NS,'circle');c.setAttribute('cx',p[0]);c.setAttribute('cy',p[1]);c.setAttribute('r',i===3?11:8.5);c.setAttribute('fill',RC[i]);c.setAttribute('class','tursp'+(i===3?' tusel':''));R.appendChild(c)});
+   disc.style.fill=n?'url(#tuRg)':'';
+   set(q('.tuside'),'<b>NMM ramp from:</b>'+sw(RC[3],'Old Gold')+'<div class="turl">'+RN.map((t,i)=>'<div class="turr'+(i<n?' in':'')+(i===S.swap?' sw':'')+'"><small>'+t+'</small><i style="background:'+RC[i]+'"></i><em>'+RT[i]+'</em>'+(i===3?'':'<u>↻</u>')+'</div>').join('')+'</div>'+
+    '<svg class="tusword" viewBox="0 0 200 30"><defs><linearGradient id="tuSg" x1="0" y1="0" x2="0" y2="1">'+[6,4,2,0,1,3,5].map((k,i)=>'<stop offset="'+(i/6)+'" stop-color="'+RC[k]+'"/>').join('')+'</linearGradient></defs><rect x="4" y="11" width="24" height="8" rx="2" fill="#6b4a2a"/><rect x="28" y="5" width="6" height="20" rx="2" fill="'+RC[2]+'"/><path d="M34 8h140l20 7-20 7H34z" fill="url(#tuSg)" stroke="#111" stroke-width="1.2"/></svg>');
+   q('.tusword').style.opacity=n>=7?1:0;return}
+  if(S.sel==null){D.forEach(d=>d.c.classList.remove('dim','sel'));set(q('.tuside'),SIDE.empty);return}
+  const s=dot(S.sel,1),roles=SCH.find(x=>x[0]===S.sch)[2].map(o=>(S.sel+o+360)%360),tol=S.tol;
+  roles.forEach((h,i)=>{const p=document.createElementNS(NS,'path');p.setAttribute('d',wedge(h,tol));p.setAttribute('class','tuwd'+(i?'':' tuw0'));W.appendChild(p)});
+  // complementary also lights the neighbours either side, like the real wheel
+  const near=S.sch==='comp'?[S.sel-22.5,S.sel+22.5]:[];
+  D.forEach(d=>{const lit=roles.some(h=>hd(d.h,h)<=tol+.01)||(near.some(h=>hd(d.h,h)<1)&&d.r===1);d.c.classList.toggle('dim',!lit);d.c.classList.toggle('sel',d===s)});
+  const tg=roles.slice(1).map(h=>dot(h,1));
+  const ctr=[s,...tg].map(d=>[+d.c.getAttribute('cx'),+d.c.getAttribute('cy')]);
+  const pl=document.createElementNS(NS,'polygon');pl.setAttribute('points',ctr.map(p=>p.join(',')).join(' '));pl.setAttribute('class','tushape');L.appendChild(pl);
+  ctr.forEach((p,i)=>{const g=document.createElementNS(NS,'g');g.innerHTML='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="7" class="tubg"/><text x="'+p[0]+'" y="'+(p[1]+3.4)+'">'+(i+1)+'</text>';L.appendChild(g)});
+  disc.style.fill='url(#tuDg)';
+  set(q('.tuside'),S.sch==='comp'?SIDE.comp():SIDE.triad());
+  // centre disc: a soft blend of the scheme colours
+  let df=q('#tuDg');if(!df){const de=document.createElementNS(NS,'defs');de.innerHTML='<linearGradient id="tuDg" x1="0" y1="0" x2="1" y2="1"></linearGradient><linearGradient id="tuRg" x1="0" y1="1" x2="0" y2="0">'+RC.map((c,i)=>'<stop offset="'+(i/6)+'" stop-color="'+c+'"/>').join('')+'</linearGradient>';q('.tuwh').prepend(de);df=q('#tuDg')}
+  df.innerHTML=[s,...tg].map((d,i,a)=>'<stop offset="'+(i/(a.length-1))+'" stop-color="'+d.col+'"/>').join('')}
+ // ---------- clock ----------
+ let Qs=[],tm=0,last=0,play=true,raf=0,cur=0,dur=1;
+ const at=(t,f)=>Qs.push({t,f}),tween=(t,ms,f)=>{for(let k=0;k<=ms;k+=40)at(t+k,()=>f(Math.min(1,k/ms)))};
+ function loop(ts){if(play&&dlg.open){tm+=Math.min(ts-last,80);Qs.sort((a,b)=>a.t-b.t);while(Qs.length&&Qs[0].t<=tm)Qs.shift().f();
+   dlg.querySelector('.tupg i').style.width=Math.min(100,tm/dur*100)+'%';if(tm>=dur+400&&cur<SC.length-1)go(cur+1)}
+  last=ts;raf=dlg.open?requestAnimationFrame(loop):0}
+ // cursor: move to an element's centre (in stage units), then tap with a ripple
+ let SCL=1;const ctr=el=>{const a=el.getBoundingClientRect(),b=st.getBoundingClientRect();return[(a.left+a.width/2-b.left)/SCL,(a.top+a.height/2-b.top)/SCL]};
+ const C=q('.tucur'),RP=q('.turip');
+ const mv=(t,sel)=>at(t,()=>{const el=typeof sel==='string'?q(sel):sel();if(!el)return;const[x,y]=ctr(el);C.style.opacity=1;C.style.left=x+'px';C.style.top=y+'px'});
+ const tap=(t,f)=>at(t,()=>{RP.style.left=C.style.left;RP.style.top=C.style.top;RP.classList.remove('go');void RP.offsetWidth;RP.classList.add('go');C.classList.add('dn');setTimeout(()=>C.classList.remove('dn'),180);f&&f()});
+ const pop=(sel,on)=>q(sel).classList.toggle('show',on),toast=t=>{const e=q('.tutoast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1800)};
+ const base=o=>{S=Object.assign({paints:true,sel:null,sch:'comp',tol:20,mode:'col',rampN:0,swap:-1},o);st.querySelectorAll('.tupop').forEach(p=>p.classList.remove('show'));
+  st.querySelectorAll('.tuck').forEach(e=>e.classList.toggle('on',!!S.paints&&e.dataset.r!=='2'));q('.tuadd').textContent='Add ticked paints to my collection';q('.tuadd').classList.remove('ok');q('.tutoast').classList.remove('show');render()};
+ // ---------- scenes ----------
+ const SC=[
+  {t:'Choose your paints',x:'Tap <b>＋ Change paints</b>, tick the ranges you own or want to compare, then <b>Show on wheel</b>. You can mix any brands.',d:7600,run(){base({paints:false});
+   mv(500,'.tuchg');tap(1300,()=>pop('.tupick',true));mv(2100,'.tuck[data-r="0"]');tap(2800,()=>q('.tuck[data-r="0"]').classList.add('on'));mv(3300,'.tuck[data-r="1"]');tap(4000,()=>q('.tuck[data-r="1"]').classList.add('on'));
+   mv(4600,'.tuok');tap(5400,()=>{pop('.tupick',false);S.paints=true;st.classList.add('tuin');render();setTimeout(()=>st.classList.remove('tuin'),1600)})}},
+  {t:'Save them to My paints',x:'Signed in? <b>Add ticked paints to my collection</b> saves the ticked paints to <b>My paints</b>. After that, <b>My collection</b> puts just your own paints on the wheel.',d:6400,run(){base({});
+   mv(500,'.tuchg');tap(1300,()=>pop('.tupick',true));mv(2200,'.tuadd');tap(3100,()=>{const a=q('.tuadd');a.textContent='Added 140 paints ✓';a.classList.add('ok');toast('Saved to My paints')});mv(4300,'.tuok');tap(5100,()=>pop('.tupick',false))}},
+  {t:'Tap any paint',x:'Its <b>complements</b> sit opposite and its <b>neighbours</b> either side. The panel lists <b>matches</b> from other brands and mixes from your own paints.',d:6000,run(){base({});
+   mv(600,()=>dot(202.5,1).c);tap(1600,()=>{S.sel=202.5;render()})}},
+  {t:'Change the harmony',x:'<b>Scheme</b> switches between complementary, split, analogous, triadic, rectangle, square and monochrome. Each colour gets a hue cone on the wheel and a suggested palette.',d:7000,run(){base({sel:202.5});
+   mv(600,'.tusb');tap(1400,()=>pop('.tusch',true));mv(2300,'.tusi[data-s="split"]');tap(2900,()=>{S.sch='split';render()});mv(3600,'.tusi[data-s="triad"]');tap(4200,()=>{S.sch='triad';render()});mv(5100,'.tudone');tap(5800,()=>pop('.tusch',false))}},
+  {t:'Widen or narrow the cones',x:'Drag <b>Hue width</b> in the Scheme popup. Wider cones catch more paints, narrower ones keep the scheme strict.',d:7600,run(){base({sel:202.5,sch:'triad'});
+   mv(500,'.tusb');tap(1300,()=>pop('.tusch',true));mv(2100,'.tutk');at(2700,()=>C.classList.add('dn'));
+   const drag=(t,a,b,ms)=>tween(t,ms,p=>{S.tol=a+(b-a)*(p<.5?2*p*p:1-2*(1-p)*(1-p));render();const[x,y]=ctr(q('.tutk'));C.style.transition='none';C.style.left=x+'px';C.style.top=y+'px'});
+   drag(2900,20,30,1400);drag(4700,30,11,1600);drag(6700,11,20,700);at(7400,()=>{C.style.transition='';C.classList.remove('dn')})}},
+  {t:'Build a ramp',x:'<b>Ramps</b> turns one paint into a shadow-to-highlight ramp for NMM, OSL, skin, gems and more. Swap any step with <b>↻</b>, then check it on a model.',d:8200,run(){base({});
+   mv(500,'.tumr');tap(1200,()=>{S.mode='ramp';render()});
+   for(let i=1;i<=7;i++)at(1600+i*380,()=>{S.rampN=i;render()});
+   mv(5000,'.turr:nth-child(6) u');tap(5800,()=>{S.swap=5;RC[5]='hsl(52 48% 80%)';RT[5]='Close';render()});at(7600,()=>{RC[5]='hsl(50 55% 78%)';RT[5]='Loose'})}},
+  {t:'You\'re ready',x:'<b>Blends</b> lets you build your own blend, and <b>From a photo</b> pulls colours out of a picture. Replay this tour any time with <b>▶ Watch the tour</b> above the wheel.',d:4000,run(){base({});mv(600,'.tumb');tap(1400,()=>q('.tumb').classList.add('on'));at(2600,()=>C.style.opacity=0)}}];
+ const dots=dlg.querySelector('.tudots');dots.innerHTML=SC.map((s,i)=>'<button type="button" aria-label="Step '+(i+1)+': '+s.t.replace(/'/g,'&#39;')+'"></button>').join('');
+ function go(i){cur=i;Qs=[];tm=0;const s=SC[i];dur=s.d;C.style.transition='';C.style.opacity=0;C.classList.remove('dn');
+  dlg.querySelector('.tun').textContent='Step '+(i+1)+' of '+SC.length;dlg.querySelector('#tuT').textContent=s.t;dlg.querySelector('.tutx').innerHTML=s.x;
+  dots.querySelectorAll('button').forEach((b,k)=>b.classList.toggle('on',k===i));dlg.querySelector('.tubk').disabled=!i;
+  dlg.querySelector('.tunx').textContent=i===SC.length-1?'Start painting':'Next ›';
+  RC[5]='hsl(50 55% 78%)';RT[5]='Loose';s.run();
+  // reduced motion: skip straight to each scene's end state
+  if(RM.matches){Qs.sort((a,b)=>a.t-b.t).forEach(e=>e.f());Qs=[];C.style.opacity=0;tm=0}}
+ function fit(){const w=box.clientWidth,tall=w<520;st.dataset.lay=tall?'tall':'wide';const W=tall?380:640,H=tall?560:400;SCL=w/W;st.style.transform='scale('+SCL+')';box.style.height=H*SCL+'px'}
+ const setPlay=p=>{play=p;const b=dlg.querySelector('.tupl');b.textContent=p?'❚❚':'▶';b.setAttribute('aria-label',p?'Pause':'Play')};
+ dlg.querySelector('.tupl').onclick=()=>{if(!play&&tm>=dur)go(cur);setPlay(!play)};
+ dlg.querySelector('.tubk').onclick=()=>go(Math.max(0,cur-1));
+ dlg.querySelector('.tunx').onclick=()=>cur<SC.length-1?go(cur+1):dlg.close();
+ dots.onclick=e=>{const b=e.target.closest('button');if(b)go([...dots.children].indexOf(b))};
+ dlg.querySelector('.tux').onclick=()=>dlg.close();
+ dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
+ addEventListener('resize',()=>dlg.open&&fit());
+ window.pdTour=()=>{try{localStorage.setItem('pd-tour','1')}catch(e){}if(dlg.open)return;dlg.showModal();fit();setPlay(!RM.matches);go(0);last=performance.now();if(!raf)raf=requestAnimationFrame(loop)};
+ document.getElementById('tourBtn').onclick=()=>pdTour();
+ // First visit to the wheel: open it once, unless another popup (like the theme picker) is already up.
+ const vw=document.getElementById('v-wheel');let tries=0;
+ const first=()=>{let seen=true;try{seen=!!localStorage.getItem('pd-tour')}catch(e){}if(seen||vw.hidden)return;
+  if(document.querySelector('dialog[open]')){if(++tries<40)setTimeout(first,1500);return}pdTour()};
+ new MutationObserver(()=>{if(!vw.hidden)setTimeout(first,700)}).observe(vw,{attributes:true,attributeFilter:['hidden']});setTimeout(first,1200)})();
