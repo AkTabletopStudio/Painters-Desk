@@ -1,0 +1,73 @@
+# Builds the Android app (apps/android/project, a Trusted Web Activity that opens paintersdesk.com)
+# into an UNSIGNED Play app bundle (.aab) and keeps it as a run artifact.
+# Run it by hand: Actions > "Android app bundle" > Run workflow.
+# The bundle is signed afterwards with the private upload key, which is never stored in this repo.
+name: Android app bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version name shown in Google Play (e.g. 1.0.0)
+        required: true
+        default: 1.0.0
+      code:
+        description: Version code (a whole number, one higher than the last upload)
+        required: true
+        default: "1"
+  pull_request:
+    paths:
+      - apps/android/**
+      - .github/workflows/android-build.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/android/project
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # GitHub's Ubuntu runners already ship the Android SDK (ANDROID_HOME); Gradle fetches any missing platform.
+      - name: Android SDK
+        run: echo "ANDROID_HOME=$ANDROID_HOME"; ls "$ANDROID_HOME/platforms"
+
+      - name: Set version
+        env:
+          VNAME: ${{ inputs.version || '1.0.0' }}
+          VCODE: ${{ inputs.code || '1' }}
+        run: |
+          echo "$VCODE" | grep -Eq '^[0-9]+$' || { echo "Version code must be a number"; exit 1; }
+          echo "$VNAME" | grep -Eq '^[0-9A-Za-z._-]+$' || { echo "Bad version name"; exit 1; }
+          sed -i -E "s/versionCode [0-9]+/versionCode $VCODE/; s/versionName \"[^\"]*\"/versionName \"$VNAME\"/" app/build.gradle
+          grep -n "versionCode\|versionName" app/build.gradle
+
+      - name: Build bundle
+        run: ./gradlew --no-daemon bundleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: painters-desk-android-${{ inputs.version || '1.0.0' }}-${{ inputs.code || '1' }}-unsigned
+          path: apps/android/project/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+      # The bundle is unsigned (no secrets in it), so it is also printed to the log as base64.
+      # That lets the signing step fetch it where artifact storage can't be reached.
+      - name: Bundle in log
+        run: |
+          F=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
+          sha256sum "$F"
+          echo "-----BEGIN AAB-----"
+          base64 -w 0 "$F" | fold -w 3000
+          echo
+          echo "-----END AAB-----"
