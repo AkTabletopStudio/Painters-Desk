@@ -257,6 +257,9 @@ function renderAccount(){
  ${INFO.mail&&ME.email?`<div class="panel"><h2>Emails</h2>
  <p><label><input type="checkbox" id="uOpt"${ME.updates?' checked':''}> Email me when new features go live</label> <span class="s" id="uMsg"></span></p>
  <p class="s">A few times a year at most, with an unsubscribe link in every email.${ME.email_verified?'':' We only send these to confirmed addresses, so confirm yours above.'} Emails about your account, like password resets, come either way.</p></div>`:''}
+ <div class="panel"><h2>On this device</h2>
+ <p><label><input type="checkbox" id="noFab"${document.documentElement.classList.contains('nofab')?' checked':''}> Hide the floating Chat and Feedback buttons</label></p>
+ <p class="s">Handy for screenshots. Only changes this phone or browser; untick to bring them back.</p></div>
  ${INFO.messages?`<div class="panel" id="msgP"><h2>Messages</h2><p><a class="btn" href="#/inbox">Open messages</a></p>
  <p><label><input type="checkbox" id="mDm"${ME.dm?' checked':''}> Let other painters start conversations with me</label></p>
  <p><label><input type="checkbox" id="mMail"${ME.dm_mail?' checked':''}> Email me when I get a message or a reply to my feedback</label> <span class="s" id="mMsg"></span></p>
@@ -298,6 +301,7 @@ function renderAccount(){
   catch(e){$('sMsg').className='err';$('sMsg').textContent=e.message;$('sGo').disabled=false}};
  if($('vSend'))$('vSend').onclick=async()=>{$('vSend').disabled=true;$('vMsg').className='s';
   try{await api('/me/verify-email',{method:'POST'});$('vMsg').textContent='Sent. Check your inbox (and spam folder).'}catch(e){$('vMsg').className='err';$('vMsg').textContent=e.message;$('vSend').disabled=false}};
+ $('noFab').onchange=e=>{const on=e.target.checked;document.documentElement.classList.toggle('nofab',on);try{on?localStorage.setItem('pd-nofab','1'):localStorage.removeItem('pd-nofab')}catch(_){}};
  if($('uOpt'))$('uOpt').onchange=async()=>{const c=$('uOpt');c.disabled=true;$('uMsg').className='s';
   try{ME=(await api('/me/updates',{method:'PUT',body:{on:c.checked}})).user;INFO.user=ME;$('uMsg').textContent=c.checked?'Thanks, you\'re on the list.':'Turned off.';$('updAsk').hidden=true}
   catch(e){c.checked=!c.checked;$('uMsg').className='err';$('uMsg').textContent=e.message}c.disabled=false};
