@@ -60,3 +60,14 @@ jobs:
           name: painters-desk-android-${{ inputs.version || '1.0.0' }}-${{ inputs.code || '1' }}-unsigned
           path: apps/android/project/app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
+
+      # The bundle is unsigned (no secrets in it), so it is also printed to the log as base64.
+      # That lets the signing step fetch it where artifact storage can't be reached.
+      - name: Bundle in log
+        run: |
+          F=$(ls app/build/outputs/bundle/release/*.aab | head -n 1)
+          sha256sum "$F"
+          echo "-----BEGIN AAB-----"
+          base64 -w 0 "$F" | fold -w 3000
+          echo
+          echo "-----END AAB-----"
