@@ -37,6 +37,8 @@ A native shell (Capacitor 8, Swift Package Manager) that opens paintersdesk.com.
 - Native touches: share sheet (Share button on tutorials and recipes), a light haptic tap when picking a paint,
   camera and photo library for Palette from a photo and uploads (permission texts in Info.plist).
 - `WKAppBoundDomains` = paintersdesk.com, so the site's offline service worker runs inside the app.
+- Bundle ID is `Com.aktabletopstudio.paintersdesk` with a capital C, because that is how the App ID was registered
+  with Apple and App Store Connect matches it exactly.
 - iPhone only for now (TARGETED_DEVICE_FAMILY = 1), portrait. Icon: `assets/icon-1024.png` (the Neon 1984 icon,
   full-bleed), copied into Assets.xcassets/AppIcon.appiconset.
 
