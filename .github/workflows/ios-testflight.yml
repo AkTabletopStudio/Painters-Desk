@@ -72,6 +72,11 @@ jobs:
             -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/asc/key.p8" \
             -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER"
 
+      - name: Show the export log
+        if: failure()
+        run: |
+          for f in "$TMPDIR"/*.xcdistributionlogs/IDEDistribution*.log; do echo "== $f"; tail -n 60 "$f"; done || true
+
       - name: Remove the key
         if: always()
         run: rm -rf "$RUNNER_TEMP/asc"
