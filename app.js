@@ -828,7 +828,7 @@ $('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const
    wheel (hue clockwise from red at the top, grey in the middle, full saturation at the rim) at the chosen lightness. The tapped
    colour is matched by ΔE to the paints shown on the wheel (no metallics or pearls), from all brands, one brand or only the
    painter's own paints. Show on wheel puts the picked paints on the wheel and, if ticked, a spread of paints from every hue at
-   three lightness levels from the same brands, so the complement and neighbours have something to show. Swatches are estimates. */
+   five lightness levels from the same brands, so the complement and neighbours have something to show. Swatches are estimates. */
 {const $=id=>document.getElementById(id),dlg=$('anyDlg'),cv=$('anyCv'),cx=cv.getContext('2d'),W=cv.width,R=W/2-2,esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hsl=(h,s,l)=>{const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));return[f(0)*255,f(8)*255,f(4)*255]};
 const hx2=(r,g,b)=>'#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
@@ -858,9 +858,9 @@ $('anyHex').oninput=e=>{let v=e.target.value.trim();if(!v.startsWith('#'))v='#'+
  if(d){H=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;H=(H*60+360)%360}
  T={H,S:d?d/(1-Math.abs(2*L-1)):0};$('anyL').value=Math.max(8,Math.min(92,Math.round(L*100)));run()};
 $('anyHex').onblur=()=>{$('anyHex').value=target().h};
-// A spread of paints round the wheel: for each 15° of hue and each of dark/mid/light, the most colourful paint near that lightness.
+// A spread of paints round the wheel: for each 15° of hue and each of five lightness levels, the most colourful paint near that lightness.
 function spread(C){const out=new Set(),op=C.filter(p=>onWheel(p)&&paintType(p)==='op'),use=op.length>40?op:C.filter(onWheel);
- for(let s=0;s<24;s++){const inS=use.filter(p=>Math.floor(((p.H+7.5)%360)/15)===s);[.28,.5,.72].forEach(t=>{let b=null,bs=1e9;inS.forEach(p=>{const v=Math.abs(p.L-t)*2+(1-p.S)*.6;if(v<bs){bs=v;b=p}});if(b)out.add(b)})}
+ for(let s=0;s<24;s++){const inS=use.filter(p=>Math.floor(((p.H+7.5)%360)/15)===s);[.2,.35,.5,.65,.8].forEach(t=>{let b=null,bs=1e9;inS.forEach(p=>{const v=Math.abs(p.L-t)*2+(1-p.S)*.6;if(v<bs){bs=v;b=p}});if(b)out.add(b)})}
  return out}
 $('anyGo').onclick=()=>{const ps=M.filter(m=>!OFF.has(m.p)).map(m=>m.p);if(!ps.length)return;dlg.close();
  const all=new Set(ps);if($('anyFill').checked)spread(pool()).forEach(p=>all.add(p));
