@@ -660,7 +660,7 @@ function wChips(tot){
   let loose=[];ss.forEach(x=>{const on=x.ps.filter(i=>P[i].on);if(!on.length)return;if(on.length===x.ps.length)WCH.push({l:b+' '+x.l,ps:x.ps});else loose=loose.concat(on)});
   if(loose.length)WCH.push({l:b+' · '+loose.length+(loose.length>1?' paints':' paint'),ps:loose})});
  const el=document.getElementById('wchips');
- el.innerHTML=WCH.length?WCH.slice(0,WCH_MAX).map((c,j)=>`<span class="wchip">${wEsc(c.l)}<button type="button" data-wc="${j}" aria-label="Take ${wEsc(c.l)} off the wheel" title="Take off the wheel">✕</button></span>`).join('')+(WCH.length>WCH_MAX?`<button type="button" class="wchip more" id="wMore">+${WCH.length-WCH_MAX} more</button>`:''):'<span class="s">no paints yet. Tap Change paints to pick some.</span>';
+ el.innerHTML=WCH.length?WCH.slice(0,WCH_MAX).map((c,j)=>`<span class="wchip">${wEsc(c.l)}<button type="button" data-wc="${j}" aria-label="Take ${wEsc(c.l)} off the wheel" title="Take off the wheel">✕</button></span>`).join('')+(WCH.length>WCH_MAX?`<button type="button" class="wchip more" id="wMore">+${WCH.length-WCH_MAX} more</button>`:''):'<span class="s">no paints yet. Tap Change paints to pick some, or Any colour to start from a colour.</span>';
  document.getElementById('cnt2').textContent=tot?tot+(tot>1?' paints':' paint'):'';
  const m=document.getElementById('wMore');if(m)m.onclick=openPick}
 document.getElementById('wchips').addEventListener('click',e=>{const b=e.target.closest('[data-wc]');if(!b)return;WCH[+b.dataset.wc].ps.forEach(i=>P[i].on=false);sync()});
@@ -823,6 +823,55 @@ $('phGo').onclick=()=>{const ps=[...new Set(COLS.map(c=>c.pick).filter(Boolean))
  const go=()=>pdShowSet(ps,`Showing ${ps.length} paint${ps.length===1?'':'s'} from your photo.`);
  if($('v-wheel').hidden){location.hash='#/';setTimeout(go,60)}else go()};
 $('phUndoB').onclick=()=>{clearTimeout(tm);bar.hidden=true;if(!prev)return;const s=new Set(prev);P.forEach(p=>p.on=s.has(p.i));prev=null;sync()}}
+/* ---------- Any colour (full colour wheel pop-up) ----------
+   For painters who want to start from a colour rather than from paints. The disc is drawn in HSL with the same layout as the
+   wheel (hue clockwise from red at the top, grey in the middle, full saturation at the rim) at the chosen lightness. The tapped
+   colour is matched by ΔE to the paints shown on the wheel (no metallics or pearls), from all brands, one brand or only the
+   painter's own paints. Show on wheel puts the picked paints on the wheel and, if ticked, a spread of paints from every hue at
+   three lightness levels from the same brands, so the complement and neighbours have something to show. Swatches are estimates. */
+{const $=id=>document.getElementById(id),dlg=$('anyDlg'),cv=$('anyCv'),cx=cv.getContext('2d'),W=cv.width,R=W/2-2,esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hsl=(h,s,l)=>{const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));return[f(0)*255,f(8)*255,f(4)*255]};
+const hx2=(r,g,b)=>'#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+let T={H:215,S:.65},M=[],OFF=new Set(),base=null,baseL=-1;
+BRANDS.forEach(([bn],bi)=>{const o=document.createElement('option');o.value=bi;o.textContent=bn.split(' / ')[0];$('anyB').appendChild(o)});
+const Lv=()=>+$('anyL').value/100;
+function disc(){const L=Lv();if(base&&baseL===L)return;const im=cx.createImageData(W,W),d=im.data;
+ for(let y=0;y<W;y++)for(let x=0;x<W;x++){const dx=x-W/2+.5,dy=y-W/2+.5,r=Math.hypot(dx,dy),o=(y*W+x)*4;if(r>R+1)continue;
+  const h=(Math.atan2(dy,dx)*180/Math.PI+90+360)%360,c=hsl(h,Math.min(1,r/R),L);d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=r>R?Math.round((R+1-r)*255):255}
+ base=im;baseL=L}
+function mark(){cx.putImageData(base,0,0);const a=T.H*Math.PI/180-Math.PI/2,r=T.S*R,x=W/2+r*Math.cos(a),y=W/2+r*Math.sin(a);
+ cx.lineWidth=5;cx.strokeStyle='#1b1b1b';cx.beginPath();cx.arc(x,y,13,0,7);cx.stroke();cx.lineWidth=3;cx.strokeStyle='#fff';cx.beginPath();cx.arc(x,y,13,0,7);cx.stroke()}
+const pool=()=>{const b=$('anyB').value,mine=$('anyMine').checked&&OWN;return P.filter(p=>!p.mix&&p.g!=='B'&&shown(p)&&!isMetT(p)&&(b===''||BR_OF[p.g]===+b)&&(!mine||own(p)))};
+function target(){const c=hsl(T.H,T.S,Lv());return{h:hx2(...c),lab:rgbLab(...c)}}
+function run(){disc();mark();const t=target();$('anySw').style.background=t.h;if(document.activeElement!==$('anyHex'))$('anyHex').value=t.h;
+ M=pool().map(p=>({p,d:dE(t,p)})).sort((a,b)=>a.d-b.d).slice(0,8);OFF=new Set(M.slice(3).map(m=>m.p));
+ render()}
+function render(){$('anyRes').innerHTML=M.length?M.map(m=>`<button type="button" class="chip${OFF.has(m.p)?'':' on'}" data-i="${m.p.i}" aria-pressed="${!OFF.has(m.p)}" title="${esc(GL[m.p.g])} · ΔE ${m.d.toFixed(1)}"><i style="background:${m.p.h}"></i><span>${star(m.p)}${esc(m.p.n)}<em>${esc(BRANDS[BR_OF[m.p.g]][0].split(' / ')[0])} · ΔE ${m.d.toFixed(0)}</em></span></button>`).join(''):'<span class="s">No paints to match. Choose All brands, untick My paints only, or show more paint types.</span>';
+ $('anyGo').disabled=!M.some(m=>!OFF.has(m.p))}
+$('anyRes').onclick=e=>{const b=e.target.closest('[data-i]');if(!b)return;const p=P[+b.dataset.i];OFF.has(p)?OFF.delete(p):OFF.add(p);render()};
+function pick(e){const r=cv.getBoundingClientRect(),dx=(e.clientX-r.left)/r.width*W-W/2,dy=(e.clientY-r.top)/r.height*W-W/2;
+ T={H:(Math.atan2(dy,dx)*180/Math.PI+90+360)%360,S:Math.min(1,Math.hypot(dx,dy)/R)};run()}
+let drag=false;cv.onpointerdown=e=>{drag=true;cv.setPointerCapture(e.pointerId);pick(e)};cv.onpointermove=e=>{if(drag)pick(e)};cv.onpointerup=cv.onpointercancel=()=>drag=false;
+$('anyL').oninput=run;$('anyB').onchange=run;$('anyMine').onchange=run;
+$('anyHex').oninput=e=>{let v=e.target.value.trim();if(!v.startsWith('#'))v='#'+v;if(/^#[0-9a-f]{3}$/i.test(v))v='#'+[...v.slice(1)].map(c=>c+c).join('');if(!/^#[0-9a-f]{6}$/i.test(v))return;
+ const r=parseInt(v.slice(1,3),16)/255,g=parseInt(v.slice(3,5),16)/255,b=parseInt(v.slice(5,7),16)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,L=(mx+mn)/2;let H=0;
+ if(d){H=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;H=(H*60+360)%360}
+ T={H,S:d?d/(1-Math.abs(2*L-1)):0};$('anyL').value=Math.max(8,Math.min(92,Math.round(L*100)));run()};
+$('anyHex').onblur=()=>{$('anyHex').value=target().h};
+// A spread of paints round the wheel: for each 15° of hue and each of dark/mid/light, the most colourful paint near that lightness.
+function spread(C){const out=new Set(),op=C.filter(p=>onWheel(p)&&paintType(p)==='op'),use=op.length>40?op:C.filter(onWheel);
+ for(let s=0;s<24;s++){const inS=use.filter(p=>Math.floor(((p.H+7.5)%360)/15)===s);[.28,.5,.72].forEach(t=>{let b=null,bs=1e9;inS.forEach(p=>{const v=Math.abs(p.L-t)*2+(1-p.S)*.6;if(v<bs){bs=v;b=p}});if(b)out.add(b)})}
+ return out}
+$('anyGo').onclick=()=>{const ps=M.filter(m=>!OFF.has(m.p)).map(m=>m.p);if(!ps.length)return;dlg.close();
+ const all=new Set(ps);if($('anyFill').checked)spread(pool()).forEach(p=>all.add(p));
+ const go=()=>{pdShowSet([...all],`Showing ${all.size} paint${all.size===1?'':'s'} around ${target().h}.`);showP(ps[0])};
+ if($('v-wheel').hidden){location.hash='#/';setTimeout(go,60)}else go()};
+$('anyNo').onclick=()=>dlg.close();
+// Opens on the selected paint's colour when there is one, so the closest paints from other brands are one tap away.
+$('anyBtn').onclick=()=>{$('anyMineL').hidden=!OWN||!OWN.size;if(!OWN)$('anyMine').checked=false;
+ if(sel){T={H:sel.H,S:sel.S};$('anyL').value=Math.max(8,Math.min(92,Math.round(sel.L*100)))}
+ dlg.showModal();run()};
+window.pdAnyColour=()=>$('anyBtn').onclick();}
 /* ---------- Inspiration palettes (Palettes tab of Tutorials & Community, #/palettes/<slug>) ----------
    Original themed palettes from palettes.js. Each colour is a target swatch with a job (main, accent, metal...), matched to the
    nearest opaque paints (metallic paints for a metal colour) by ΔE, from one brand or all, or only the painter's own paints.
