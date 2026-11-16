@@ -1,0 +1,77 @@
+# Builds the iPhone app (apps/ios) on a GitHub Mac and uploads it to TestFlight.
+# Run it by hand: Actions > "iPhone build to TestFlight" > Run workflow.
+# Needs these repository secrets (Settings > Secrets and variables > Actions):
+#   APPLE_TEAM_ID   the 10-character Team ID
+#   ASC_KEY_ID      App Store Connect API key ID
+#   ASC_ISSUER_ID   App Store Connect issuer ID
+#   ASC_KEY_P8      the whole .p8 file of that API key
+name: iPhone build to TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version shown in the App Store (e.g. 1.0.0)
+        required: true
+        default: 1.0.0
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor
+        run: npm ci
+
+      - name: Sync the app shell
+        run: npx cap sync ios
+
+      - name: Write the App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/key.p8"
+
+      - name: Archive
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/asc/key.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
+            archive
+
+      - name: Upload to TestFlight
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM" ExportOptions.plist
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist ExportOptions.plist -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/asc/key.p8" \
+            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER"
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

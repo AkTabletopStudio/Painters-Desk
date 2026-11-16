@@ -471,7 +471,7 @@ if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>'+TQN().hint+'</b>
 if(HS){document.getElementById('sel').innerHTML=hPanel(HS,sel)+matchHTML(sel);wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel);return}
 if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to start a blend. It starts with the wheel\'s own complements and neighbours, then you swap in your own.</b>';return}
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):SEL0;if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
-function pick(p){if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
+function pick(p){window.pdHaptic&&pdHaptic();if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
 document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));neuMark()}
