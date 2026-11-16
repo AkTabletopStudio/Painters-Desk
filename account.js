@@ -794,7 +794,7 @@ function voteHTML(r,mine){
   :`<a class="btn vote" href="#/account" title="Sign in to upvote">${bottle()}Upvote · ${n}</a>`;
  const save=ME?`<button class="btn save${r.saved?' on':''}" id="rSave" type="button" aria-pressed="${r.saved}">${r.saved?'★ Saved':'☆ Save'}</button>`
   :`<a class="btn save" href="#/account" title="Sign in to save">☆ Save</a>`;
- return `<div class="row">${btn}${save}<span class="n">${plural(r.views,'view')}</span></div>`}
+ return `<div class="row">${btn}${save}<button class="btn" id="rShare" type="button">Share</button><span class="n">${plural(r.views,'view')}</span><span class="s" id="rShM"></span></div>`}
 
 /* ---------- one recipe / tutorial + comments ---------- */
 async function renderRecipe(id){
@@ -828,6 +828,7 @@ async function renderRecipe(id){
   :(mine?'<p class="s">This is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
  el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p)paintLook(p)});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
+ if($('rShare'))$('rShare').onclick=async()=>{const m=await pdShare({title:r.title,text:`${r.title} by ${r.author.name} on The Painters Desk`,url:`${location.origin}/#/recipe/${r.id}`});$('rShM').textContent=m==='copied'?'Link copied.':m==='fail'?'Could not share here.':''};
  if($('rRep'))$('rRep').onclick=()=>openReport('recipe',r.id,r.title);
  countView(r);
  if($('rSave'))$('rSave').onclick=async()=>{const b=$('rSave');b.disabled=true;
@@ -1767,6 +1768,14 @@ function chatManage(){const P=$('chMan');if(!P.hidden){P.hidden=true;return}P.hi
 if(FIRST)route();
 loadMe().then(route);
 })();
+
+// Share a link: the iPhone app's share sheet, else the browser's (phones), else copy it.
+window.pdShare=async d=>{const C=window.Capacitor;
+ try{if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.Plugins.Share){await C.Plugins.Share.share({...d,dialogTitle:'Share'});return 'shared'}
+  if(navigator.share){await navigator.share(d);return 'shared'}}catch(e){if(e&&(e.name==='AbortError'||/cancel/i.test(e.message||'')))return 'cancelled'}
+ try{await navigator.clipboard.writeText(d.url);return 'copied'}catch(e){return 'fail'}};
+// A light tap felt when picking a paint in the iPhone app; nothing on the web.
+window.pdHaptic=()=>{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.Plugins.Haptics)C.Plugins.Haptics.impact({style:'LIGHT'}).catch(()=>{})};
 
 // iPhone app (Capacitor shell): Google and others refuse to sign in inside an app's web view, so sign-in services open
 // in a system browser sheet. The site sends back paintersdesk://auth?code=…, and the app swaps that one-time code,

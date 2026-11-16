@@ -29,19 +29,20 @@ testers for 14 days before the app can go to production.
 
 ## iPhone: Capacitor (`apps/ios`)
 
-A native shell that opens paintersdesk.com. Still to do before it can go to Apple review:
+A native shell (Capacitor 8, Swift Package Manager) that opens paintersdesk.com. The Xcode project in
+`apps/ios/ios` is committed; `npx cap sync ios` refreshes it after a plugin or config change.
 
-1. Sign-in hand-off: done in the site (see SETUP-ACCOUNTS.md, "Sign-in inside the iPhone app"). The
-   Xcode project must register the `paintersdesk` URL scheme (Info > URL Types) so the app receives
-   `paintersdesk://auth?code=…`.
-2. Sign in with Apple: done in the site; it switches on once the APPLE_* secrets are set (SETUP-ACCOUNTS.md).
-3. Native touches for guideline 4.2 (minimum functionality): share sheet, camera for Palette from a
-   photo, haptics.
-4. Builds run on GitHub's macOS runners, so no Mac is needed.
+- Sign-in: Google and the others open in a system browser sheet and hand back through the `paintersdesk://`
+  URL scheme (registered in Info.plist). Sign in with Apple works the same way. See SETUP-ACCOUNTS.md.
+- Native touches: share sheet (Share button on tutorials and recipes), a light haptic tap when picking a paint,
+  camera and photo library for Palette from a photo and uploads (permission texts in Info.plist).
+- `WKAppBoundDomains` = paintersdesk.com, so the site's offline service worker runs inside the app.
+- iPhone only for now (TARGETED_DEVICE_FAMILY = 1), portrait. Icon: `assets/icon-1024.png` (the Neon 1984 icon,
+  full-bleed), copied into Assets.xcassets/AppIcon.appiconset.
 
-Set up locally (on a Mac) with:
+### Building (no Mac needed)
 
-    cd apps/ios
-    npm install
-    npm run add:ios     # creates apps/ios/ios (Xcode project, git-ignored until it is ready to commit)
-    npm run sync
+GitHub Actions > "iPhone build to TestFlight" > Run workflow. It archives on a GitHub macOS runner, signs
+automatically with an App Store Connect API key and uploads to TestFlight. Repository secrets it needs:
+`APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (the whole .p8 file). The API key needs the
+Admin role, because automatic signing creates the distribution certificate. The build number is the run number.
