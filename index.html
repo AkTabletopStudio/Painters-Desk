@@ -26,6 +26,8 @@ function pdIcon(){var l=document.documentElement.dataset.look,f=document.getElem
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1a15;--fg:#f6eedd;--mut:#c2b69e;--card:#2b2720;--line:#e9dcc0;--ink:#e9dcc0;--soft:#24211b}}
 :root[data-theme="dark"]{--bg:#1d1a15;--fg:#f6eedd;--mut:#c2b69e;--card:#2b2720;--line:#e9dcc0;--ink:#e9dcc0;--soft:#24211b}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
+/* iPhone app and home-screen app: a solid strip behind the clock and battery, so scrolled text never shows through. Zero height in a normal browser. */
+html::after{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:2147483000;pointer-events:none}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 Rubik,system-ui,-apple-system,Segoe UI,sans-serif;padding:0 14px 14px}
 body::before{content:"";display:block;height:12px;margin:0 -14px 14px;background:linear-gradient(90deg,var(--red) 0 16.66%,var(--org) 0 33.33%,var(--yel) 0 50%,var(--tea) 0 66.66%,var(--blu) 0 83.33%,var(--pur) 0)}
 h1{font:400 clamp(34px,6vw,56px)/1 var(--hf);letter-spacing:-1px;margin:14px 0 10px}
