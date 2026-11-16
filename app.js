@@ -1018,3 +1018,14 @@ const TOUR_ON=false;
  const first=()=>{if(!TOUR_ON)return;let seen=true;try{seen=!!localStorage.getItem('pd-tour')}catch(e){}if(seen||vw.hidden)return;
   if(document.querySelector('dialog[open]')){if(++tries<40)setTimeout(first,1500);return}pdTour()};
  new MutationObserver(()=>{if(!vw.hidden)setTimeout(first,700)}).observe(vw,{attributes:true,attributeFilter:['hidden']});setTimeout(first,1200)})();
+
+// A clear (x) button on every search box: shows once there is text, empties the box, re-runs its search and keeps focus.
+(function sxInit(){const D=document,V=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+ const add=i=>{if(i.dataset.sx||!i.parentNode)return;i.dataset.sx=1;i.classList.add('sxi');
+  const w=D.createElement('span'),b=D.createElement('button');w.className='sx';b.type='button';b.className='sxb';b.textContent='×';b.title='Clear';b.setAttribute('aria-label','Clear search');b.tabIndex=-1;
+  i.before(w);w.append(i,b);const sync=()=>{b.hidden=!V.get.call(i)};sync();
+  Object.defineProperty(i,'value',{configurable:true,get(){return V.get.call(this)},set(v){V.set.call(this,v);sync()}});
+  i.addEventListener('input',sync);b.addEventListener('pointerdown',e=>e.preventDefault());
+  b.onclick=()=>{V.set.call(i,'');sync();i.dispatchEvent(new Event('input',{bubbles:true}));i.focus()}};
+ const scan=r=>{if(r.matches&&r.matches('input[type=search]'))add(r);r.querySelectorAll&&r.querySelectorAll('input[type=search]').forEach(add)};
+ scan(D);new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(D.body,{childList:true,subtree:true})})();
