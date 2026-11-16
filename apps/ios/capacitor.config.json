@@ -9,7 +9,7 @@
     ]
   },
   "ios": {
-    "contentInset": "always",
+    "contentInset": "never",
     "backgroundColor": "#0b0224",
     "limitsNavigationsToAppBoundDomains": true
   }
