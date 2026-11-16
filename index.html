@@ -154,7 +154,7 @@ dialog.pd.tourdlg{width:720px;max-width:calc(100vw - 20px);max-height:calc(100dv
 #neud>summary{padding:2px 0}#neud>summary b{font:400 17px/1.2 var(--hf)}
 .bar{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}.bar input{flex:1 1 220px;min-width:0;font:inherit;padding:11px 14px;border:3px solid var(--ink);border-radius:14px;background:var(--bg);color:var(--fg)}
 .bar button,.btn,.mt button{font:inherit;font-weight:700;font-size:15px;padding:9px 16px;border:3px solid var(--ink);border-radius:14px;background:var(--card);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block;box-shadow:3px 3px 0 var(--sh);transition:transform .08s,box-shadow .08s}
-.bar button:hover,.btn:hover,.mt button:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--sh)}
+@media (hover:hover){.bar button:hover,.btn:hover,.mt button:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--sh)}}
 .bar button:active,.btn:active,.mt button:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
 .bar button{background:var(--red);color:#1b1b1b}
 #tree{max-height:55vh;overflow:auto;border-top:3px dashed var(--ink);padding-top:8px}
@@ -887,6 +887,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>16 November 2026</h2><ul>
+<li data-a="site"><span class="tg fx">Fixed</span><b>Buttons on phones.</b> Tapping a button no longer leaves the last button you tapped looking pressed too.</li>
 <li data-a="site"><span class="tg up">Better</span><b>Share button on tutorials and recipes.</b> Public tutorials, recipes and palettes have a Share button next to Save. On a phone it opens your share menu; on a computer it copies the link.</li>
 <li data-a="site"><span class="tg nw">New</span><b>Sign in with Apple.</b> You can now sign in, or add Apple to your account from the account page.</li>
 <li data-a="site"><span class="tg up">Better</span><b>Clear button on search boxes.</b> Every search box now shows a × on the right once you start typing. Tap it to empty the box in one go instead of deleting each letter.</li>

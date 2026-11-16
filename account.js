@@ -1767,35 +1767,42 @@ function chatManage(){const P=$('chMan');if(!P.hidden){P.hidden=true;return}P.hi
 
 if(FIRST)route();
 loadMe().then(route);
+// For the iPhone app's sign-in hand-off below: a short-lived token that adds the new sign-in to the signed-in account.
+window.pdLinkToken=async()=>ME?(await api('/auth/link-token',{method:'POST'})).token:'';
 })();
 
 // Share a link: the iPhone app's share sheet, else the browser's (phones), else copy it.
 window.pdShare=async d=>{const C=window.Capacitor;
- try{if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.Plugins.Share){await C.Plugins.Share.share({...d,dialogTitle:'Share'});return 'shared'}
+ try{if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.nativePromise){await C.nativePromise('Share','share',{...d,dialogTitle:'Share'});return 'shared'}
   if(navigator.share){await navigator.share(d);return 'shared'}}catch(e){if(e&&(e.name==='AbortError'||/cancel/i.test(e.message||'')))return 'cancelled'}
  try{await navigator.clipboard.writeText(d.url);return 'copied'}catch(e){return 'fail'}};
 // A light tap felt when picking a paint in the iPhone app; nothing on the web.
-window.pdHaptic=()=>{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.Plugins.Haptics)C.Plugins.Haptics.impact({style:'LIGHT'}).catch(()=>{})};
+window.pdHaptic=()=>{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.nativePromise)C.nativePromise('Haptics','impact',{style:'LIGHT'}).catch(()=>{})};
 
 // iPhone app (Capacitor shell): Google and others refuse to sign in inside an app's web view, so sign-in services open
 // in a system browser sheet. The site sends back paintersdesk://auth?code=…, and the app swaps that one-time code,
 // with the secret verifier only this web view knows, for a normal session at /api/auth/app.
 (()=>{
  const C=window.Capacitor;if(!(C&&C.isNativePlatform&&C.isNativePlatform()))return;
- const P=C.Plugins||{},KEY='pd-app-verifier',enc=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+ // The site doesn't load Capacitor's JS package, so C.Plugins is empty here: talk to the native plugins through the
+ // bridge's own nativePromise/addListener, which the app injects into every page.
+ const KEY='pd-app-verifier',enc=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+ const call=(p,m,o)=>C.nativePromise(p,m,o||{});
+ let busy=false;
  document.addEventListener('click',async e=>{
-  const a=e.target.closest&&e.target.closest('a[href^="/api/auth/login/"]');if(!a||!P.Browser)return;
-  e.preventDefault();
+  const a=e.target.closest&&e.target.closest('a[href^="/api/auth/login/"]');if(!a||!C.nativePromise)return;
+  e.preventDefault();e.stopPropagation();
+  if(busy)return;busy=true;setTimeout(()=>busy=false,1500);
   const v=enc(crypto.getRandomValues(new Uint8Array(32))),ch=enc(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v)));
   try{localStorage.setItem(KEY,v)}catch(_){}
-  let link='';if(ME){try{link='&link='+encodeURIComponent((await api('/auth/link-token',{method:'POST'})).token)}catch(_){}}
-  P.Browser.open({url:location.origin+a.getAttribute('href')+'&app='+ch+link,presentationStyle:'popover'});
+  let link='';try{const t=await window.pdLinkToken();if(t)link='&link='+encodeURIComponent(t)}catch(_){}
+  call('Browser','open',{url:location.origin+a.getAttribute('href')+'&app='+ch+link,presentationStyle:'popover'}).catch(err=>{busy=false;console.warn('Could not open sign-in',err)});
  },true);
- P.App&&P.App.addListener('appUrlOpen',({url})=>{
-  let u;try{u=new URL(url)}catch(_){return}
+ C.addListener&&C.addListener('App','appUrlOpen',d=>{
+  let u;try{u=new URL(d&&d.url)}catch(_){return}
   if(u.protocol!=='paintersdesk:'||u.host!=='auth')return;
   let v='';try{v=localStorage.getItem(KEY)||'';localStorage.removeItem(KEY)}catch(_){}
-  P.Browser&&P.Browser.close().catch(()=>{});
+  call('Browser','close').catch(()=>{});
   const q=new URLSearchParams({code:u.searchParams.get('code')||'',verifier:v,return:u.searchParams.get('return')||'/'});
   location.href='/api/auth/app?'+q;
  });
