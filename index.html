@@ -413,6 +413,12 @@ dialog.pqd{background:linear-gradient(var(--card),var(--card)),var(--bg);max-wid
 .ctl{margin:0 0 6px}
 /* Top nav: the same buttons on every page. seo.js copies this and the themes below onto the paint and guide pages.
    On phones the sections sit in one row under the logo that swipes sideways. */
+/* Clear (x) button on search boxes, added by sxInit() in app.js and the paint/guide page script. */
+.sx{position:relative;display:inline-flex;vertical-align:middle;min-width:0}.sx>input{flex:1 1 auto;min-width:0}
+.bar>.sx{flex:1 1 220px}.psch>.sx{flex:1}.sx:has(>.inp){display:flex;width:100%}
+.sx>input.sxi{padding-right:40px!important}.sx>input.sxi::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.sx>.sxb{position:absolute!important;right:9px!important;top:50%!important;transform:translateY(-50%)!important;width:26px!important;height:26px!important;min-width:0!important;padding:0!important;margin:0!important;display:flex!important;align-items:center;justify-content:center;border:0!important;border-radius:50%!important;background:transparent!important;color:var(--fg)!important;opacity:.65;font:700 20px/1 system-ui,sans-serif!important;text-shadow:none!important;cursor:pointer;box-shadow:none!important;transition:none!important}
+.sx>.sxb[hidden]{display:none!important}.sx>.sxb:hover,.sx>.sxb:focus-visible{opacity:1;background:var(--fg)!important;color:var(--bg)!important;outline:none}
 nav.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 6px;padding-bottom:12px}
 nav.top .secs{display:contents}
 nav.top a{color:#1b1b1b;text-decoration:none;padding:8px 16px;border-radius:14px;font-size:15px;font-weight:700;background:#fff;border:3px solid var(--ink);white-space:nowrap}
@@ -880,6 +886,9 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>16 November 2026</h2><ul>
+<li data-a="site"><span class="tg up">Better</span><b>Clear button on search boxes.</b> Every search box now shows a × on the right once you start typing. Tap it to empty the box in one go instead of deleting each letter.</li>
+</ul></div>
 <div class="panel cl"><h2>15 November 2026</h2><ul>
 <li data-a="paints"><span class="tg fx">Fixed</span><b>Paint count updated everywhere.</b> The installed app description and the picture shown when the site is shared still said 5,467 paints from 18 brands. They now say 6,433 paints from 19 brands, matching the wheel.</li>
 <li data-a="paints"><span class="tg pt">Paints</span><b>AK Real Colors matches.</b> Each Real Colors paint now links to the Tamiya, Vallejo and Mr. Hobby paints that AK's own conversion chart lists for it (310 chart matches).</li>

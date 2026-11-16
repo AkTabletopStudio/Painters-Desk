@@ -352,6 +352,14 @@ var b=d.getElementById('thBtn');if(b&&g){b.onclick=function(){mark();g.showModal
 var a=d.getElementById('acct');if(a)fetch('/api/me').then(function(r){return r.json()}).then(function(r){var u=r.user,e;if(!u)return;
  if(u.avatar){e=d.createElement('img');e.src=u.avatar;e.alt='';e.className='av'}else{e=d.createElement('span');e.className='av ini';e.textContent=(u.name||'?').trim().charAt(0).toUpperCase()}
  var n=d.createElement('span');n.className='an';n.textContent=u.name;a.title=u.name;a.textContent='';a.append(e,n)}).catch(function(){})})()</script>
+<script>/* Clear (x) button on search boxes, as in app.js sxInit(). */
+(function(){var V=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+document.querySelectorAll('input[type=search]').forEach(function(i){if(i.dataset.sx)return;i.dataset.sx=1;i.classList.add('sxi');
+ var w=document.createElement('span'),b=document.createElement('button');w.className='sx';b.type='button';b.className='sxb';b.textContent='×';b.title='Clear';b.setAttribute('aria-label','Clear search');b.tabIndex=-1;
+ i.parentNode.insertBefore(w,i);w.appendChild(i);w.appendChild(b);function sync(){b.hidden=!V.get.call(i)}sync();
+ Object.defineProperty(i,'value',{configurable:true,get:function(){return V.get.call(this)},set:function(v){V.set.call(this,v);sync()}});
+ i.addEventListener('input',sync);b.addEventListener('pointerdown',function(e){e.preventDefault()});
+ b.onclick=function(){V.set.call(i,'');sync();i.dispatchEvent(new Event('input',{bubbles:true}));i.focus()}})})()</script>
 </body></html>`;
 }
 
