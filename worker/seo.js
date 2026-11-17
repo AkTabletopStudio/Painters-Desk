@@ -316,7 +316,7 @@ dialog.pd{background:var(--card);color:var(--fg);border:3px solid var(--ink);bor
 .prose p,p.prose{margin:0 0 12px;max-width:720px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
 .stats div{border:2px solid var(--ink);border-radius:12px;padding:8px 10px}.stats b{display:block;font:400 22px var(--hf)}
-.tw{overflow-x:auto}a.pr{white-space:nowrap}a.pr i.sw{display:inline-block;width:16px;height:16px;vertical-align:-3px;margin:0 4px 0 0}
+.tw{overflow-x:auto}@media (max-width:700px){.tw table.cv :is(th,td):first-child{position:sticky;left:0;z-index:1;background:linear-gradient(var(--card),var(--card)),var(--bg);box-shadow:2px 0 0 var(--ink)}}a.pr{white-space:nowrap}a.pr i.sw{display:inline-block;width:16px;height:16px;vertical-align:-3px;margin:0 4px 0 0}
 .toc{columns:2 240px;margin:0 0 4px}.faq h3{margin:14px 0 4px}table.pk td{min-width:150px}table.pk a.pr{white-space:normal}table.pk th .sw{display:inline-block;vertical-align:-5px;margin-right:6px}
 table.cv{border-collapse:collapse;width:100%;font-size:15px}
 table.cv th{text-align:left;font-size:13px;color:var(--mut);padding:4px 6px}
