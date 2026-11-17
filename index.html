@@ -39,13 +39,21 @@ p.s{color:var(--mut);margin:0 0 12px;font-size:14px}
 .wrap{max-width:1100px;margin:auto}
 @media (min-width:1000px){.wrap{max-width:1440px}
 .stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,30%);grid-template-rows:auto 1fr;grid-template-areas:"w s" "n s";column-gap:24px;align-items:start}
-.stage #w{grid-area:w}.stage #neup{grid-area:n;margin-top:20px}.stage #sel{grid-area:s;align-self:start}
+.stage .wzw{grid-area:w}.stage #neup{grid-area:n;margin-top:20px}.stage #sel{grid-area:s;align-self:start}
 .stage #w{margin:12px 0 0}
 .stage #sel{position:sticky;top:12px;margin:12px 0 0;max-height:calc(100vh - 36px);overflow:auto;overscroll-behavior:contain}
 .stage #sel .mt .bl{flex-basis:100%;padding-top:0}}
 a{color:inherit}
 svg{width:100%;height:auto;display:block}
 #w{background:var(--soft);border:3px solid var(--ink);border-radius:24px;box-shadow:6px 6px 0 var(--sh);margin:12px 0 16px;box-sizing:border-box}
+/* Wheel zoom (app.js wheelZoom): pinch or Ctrl+scroll to zoom, drag to move around once zoomed; buttons in the top corner. */
+.wzw{position:relative}
+#w{touch-action:pan-x pan-y}#w.zm{touch-action:none;cursor:grab}#w.zm.drag{cursor:grabbing}#w.zm.drag .dot{cursor:grabbing}
+.wzb{position:absolute;top:22px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.wzb button{width:38px;height:38px;padding:0;font:700 22px/1 system-ui,sans-serif;border:2px solid var(--ink);border-radius:10px;background:var(--card,#fff);color:var(--fg);box-shadow:2px 2px 0 var(--sh);cursor:pointer}
+.wzb button:disabled{opacity:.35;cursor:default}.wzb button#wzR{font-size:19px}
+.wzh{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:rgba(0,0,0,.72);color:#fff;font-size:13px;padding:5px 10px;border-radius:8px;pointer-events:none;white-space:nowrap;z-index:2}
+@media(max-width:700px){.wzb{top:20px;right:8px}.wzb button{width:34px;height:34px;font-size:20px}}
 .dot{cursor:pointer}.dot text{pointer-events:none;font-weight:700;text-anchor:middle}
 .panel{background:var(--card);border:3px solid var(--ink);border-radius:20px;padding:16px;margin:16px 0;box-shadow:6px 6px 0 var(--sh)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}
@@ -906,6 +914,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>17 November 2026</h2><ul>
+<li data-a="wheel"><span class="tg nw">New</span><b>Zoom in on the colour wheel.</b> Pinch with two fingers to zoom in on a phone or in the apps, or use the + and − buttons in the corner of the wheel. Once zoomed, drag to move around, and tap ⤢ to see the whole wheel again. On a computer, hold Ctrl and scroll (or pinch on a trackpad). Tapping a paint still selects it.</li>
 <li data-a="site"><span class="tg up">Better</span><b>New menu on phones and in the apps.</b> The page buttons now sit in a tab bar along the bottom of the screen, with every section one tap away, instead of a row you had to swipe sideways. Chat rooms on phones wrap instead of scrolling, guide tables keep their first column in place as you scroll across, and small footer links and ✕ buttons are easier to tap.</li>
 <li data-a="site"><span class="tg nw">New</span><b>The Painters Desk is on the App Store.</b> Get the free iPhone app from the welcome page or the link at the bottom of every page.</li>
 </ul></div>
@@ -1144,7 +1153,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <div class="row pkf"><button class="btn pri" type="button" id="pickOk">Show on wheel</button></div></div></div></dialog><dialog class="pd" id="addDlg" aria-labelledby="addDlgT"><form method="dialog"><h2 id="addDlgT">Add to your collection?</h2><p id="addDlgM"></p><div class="row"><button class="btn" value="cancel" id="addNo" autofocus>Cancel</button><button class="btn pri" value="ok">Add paints</button></div></form></dialog>
 <div class="row nmode"><span class="seg" role="group" aria-label="Wheel mode"><button class="btn pri" type="button" id="mCol" aria-pressed="true">Colours</button><button class="btn" type="button" id="mNmm" aria-pressed="false" title="Build a light-to-dark ramp from one paint for NMM, OSL, gems, skin, highlights, glazes or drybrushing">Ramps</button><button class="btn" type="button" id="mMix" aria-pressed="false" title="Build your own blend: pick the complements and neighbours yourself">Blends</button></span><button class="btn" type="button" id="hSch" aria-haspopup="dialog" title="Choose a colour harmony: complementary, split, analogous, triadic, rectangle, square or monochrome">Scheme: Complementary</button><span class="wtools" id="wTools"><button class="btn" type="button" id="hTy" aria-pressed="false" aria-haspopup="dialog" title="Choose which kinds of paint show on the wheel and in the neutrals">Paint types</button><button class="btn" type="button" id="phBtn" aria-haspopup="dialog" title="Pick the main colours out of a photo and find the closest paints">From a photo</button><label><input type="checkbox" id="lab" checked> Show labels</label></span><span id="nmmOpt" hidden><label>Technique <select id="nTech" class="nsel"></select></label><label>Steps <select id="nSteps" class="nsel"><option value="5">5</option><option value="7" selected>7</option></select></label> <label id="nTintL"><input type="checkbox" id="nTint"> <span id="nTintT">Tint the deepest shadow</span></label> <a id="nGuide" class="ngl" hidden></a></span></div>
 <div class="stage">
-<svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg>
+<div class="wzw" id="wzw"><svg id="w" viewBox="0 0 1000 1000" role="img" aria-label="Pro Acryl paints arranged by hue and lightness"></svg><div class="wzb" role="group" aria-label="Zoom the wheel"><button type="button" id="wzIn" aria-label="Zoom in" title="Zoom in">+</button><button type="button" id="wzOut" aria-label="Zoom out" title="Zoom out" disabled>−</button><button type="button" id="wzR" aria-label="Reset zoom" title="Show the whole wheel" hidden>⤢</button></div><span class="wzh" id="wzh" hidden></span></div>
 <div class="panel" id="sel"></div>
 <div class="panel" id="neup"><details id="neud"><summary><b>Neutrals, greys &amp; whites</b> <span class="s" id="neuN"></span></summary><p class="s" style="margin:8px 0">Tap a paint to inspect it.</p><div class="strip" id="neu"></div>
 <p class="s" style="margin-top:8px">Use Change paints to show any mix of paints from any brand. Basing textures appear in this list only, when selected.</p></details></div>
