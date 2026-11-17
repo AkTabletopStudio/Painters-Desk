@@ -1599,7 +1599,7 @@ function chatShell(){const P=$('chatPop');P.hidden=false;
  chatRooms();chatOnline();
  $('chX').onclick=chatHide;
  $('chPinB').onclick=()=>{$('chPins').hidden=!$('chPins').hidden};
- $('chOnB').onclick=()=>$('chOn').classList.toggle('open');
+ $('chOnB').onclick=e=>{e.stopPropagation();const O=$('chOn'),H=$('chatPop').querySelector('.cphead');if(!O.classList.contains('open')&&H)O.style.top=(H.offsetTop+H.offsetHeight+6)+'px';O.classList.toggle('open')};
  $('chOn').onclick=e=>{if(e.target.closest('a'))$('chOn').classList.remove('open')};
  $('chPins').onclick=e=>{const b=e.target.closest('[data-jump]');if(b)chatJump(b.dataset.jump)};
  $('chRooms').onclick=e=>{const b=e.target.closest('[data-room]');if(b)chatRoom(b.dataset.room)};
@@ -1653,6 +1653,9 @@ $('chImg').onclick=()=>$('chImg').close();
 // Any photo link marked data-big opens in the lightbox instead of a new tab. Ctrl/Cmd/middle-click still open a tab.
 document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a[data-big]');if(!a||e.defaultPrevented||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;const d=$('chImg');if(!d||d.open)return;e.preventDefault();$('chImgI').src=imgURL(a.dataset.big);$('chImgI').alt=a.querySelector('img')?.alt||'Photo';d.showModal()});
 // On phones the popup covers the page, so following a link out of it (a profile) closes it.
+// The online list sits below the header (never over the close button) and closes on any tap outside it or Escape.
+$('chatPop').addEventListener('click',e=>{const O=$('chOn');if(O?.classList.contains('open')&&!e.target.closest('#chOn,#chOnB'))O.classList.remove('open')});
+$('chatPop').addEventListener('keydown',e=>{if(e.key==='Escape'&&$('chOn')?.classList.contains('open')){e.stopPropagation();$('chOn').classList.remove('open')}});
 $('chatPop').addEventListener('click',e=>{if(innerWidth<=700&&e.target.closest('a[href^="#/"]'))chatHide()});
 
 // The writing box: text with @mentions, a photo or two, paint chips, and the message being replied to.
