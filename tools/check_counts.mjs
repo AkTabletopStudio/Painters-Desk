@@ -3,7 +3,7 @@
 // The wheel counter (account.js wCount) and the /paints pages (worker/seo.js) count live,
 // so only the static text in index.html and manifest.webmanifest needs this check.
 // The share image (icons/og-image-*.jpg) is a picture: re-render it from
-// branding/og/og-source.html in the project files when this script reports a new count.
+// branding/og/og-source-ink.html in the project files (node render.js <dir> <paints> <brands> <themes>) when this script reports a new count.
 import { readFileSync } from 'node:fs';
 const root = new URL('..', import.meta.url);
 const read = f => readFileSync(new URL(f, root), 'utf8');
