@@ -495,6 +495,9 @@ nav.top .ni,nav.top .ls{display:none}
 :root[data-look="cyber"] h2,:root[data-look="cyber"] h3{text-transform:uppercase;letter-spacing:1px;text-shadow:-1px 0 rgba(45,226,230,.8),1px 0 rgba(255,42,109,.8)}
 :root[data-look="cyber"] :is(.panel,#w,.card,.feat,dialog.pd,.hero .logo){box-shadow:0 0 0 1px #2de2e6,0 0 22px rgba(45,226,230,.45),inset 0 0 18px rgba(45,226,230,.12),6px 6px 0 #ff2a6d}
 :root[data-look="cyber"] :is(.panel,#w,.card,.feat,nav.top a,nav.top button.thb){-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* Phones and tablets: Chrome on Android sometimes leaves a blank box where large blurred-backdrop panels overlap (the wheel and the panel under it), so touch screens skip the blur. The wheel panel is opaque in every theme, so it never needs it. */
+#w{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+@media (pointer:coarse){:is(.panel,.card,.feat,#sel){-webkit-backdrop-filter:none!important;backdrop-filter:none!important}}
 /* My paints stacks many near-opaque panels; blurring the backdrop behind each one made scrolling stutter on large screens. */
 #v-paints :is(.panel,.card,.sgr,details){-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 :root[data-look="cyber"] :is(.btn,.bar button,.mt button,nav.top a,nav.top button.thb){box-shadow:0 0 10px rgba(45,226,230,.55),inset 0 0 8px rgba(45,226,230,.25)}
