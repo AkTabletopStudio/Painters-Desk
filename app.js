@@ -669,6 +669,51 @@ function openPick(){pickDlg.showModal();document.getElementById('q').focus()}
 document.getElementById('pickBtn').onclick=openPick;
 document.getElementById('pickOk').onclick=()=>pickDlg.close();
 
+/* ---------- Wheel zoom ----------
+   Zooming only changes the SVG viewBox, so nothing is re-laid out or redrawn and the dots stay sharp.
+   Touch: pinch with two fingers to zoom, drag with one finger to move once zoomed (one finger scrolls the page when not zoomed).
+   Mouse/trackpad: Ctrl+scroll or trackpad pinch to zoom, drag to move. +/− buttons and a reset button in the corner.
+   A drag never counts as a tap, so tapping a paint still selects it. */
+(()=>{const W=1000,MAXZ=6,el=svg,bIn=document.getElementById('wzIn'),bOut=document.getElementById('wzOut'),bR=document.getElementById('wzR'),hint=document.getElementById('wzh');
+ let z=1,vx=0,vy=0,moved=false,ht=0;const pts=new Map();let g=null;
+ const clamp=()=>{z=Math.min(MAXZ,Math.max(1,z));const w=W/z;vx=Math.min(W-w,Math.max(0,vx));vy=Math.min(W-w,Math.max(0,vy))};
+ const apply=()=>{clamp();const w=W/z;el.setAttribute('viewBox',`${+vx.toFixed(2)} ${+vy.toFixed(2)} ${+w.toFixed(2)} ${+w.toFixed(2)}`);
+  const zm=z>1.001;el.classList.toggle('zm',zm);bOut.disabled=!zm;bIn.disabled=z>=MAXZ-.001;bR.hidden=!zm};
+ // wheel units per screen pixel, and a screen point as a wheel point
+ const upp=()=>W/z/el.getBoundingClientRect().width;
+ const toW=(cx,cy)=>{const r=el.getBoundingClientRect();return[vx+(cx-r.left)*W/z/r.width,vy+(cy-r.top)*W/z/r.height]};
+ // zoom by factor f keeping the wheel point under (cx,cy) where it is
+ const zoomAt=(f,cx,cy)=>{const[px,py]=toW(cx,cy),r=el.getBoundingClientRect();z*=f;clamp();vx=px-(cx-r.left)*W/z/r.width;vy=py-(cy-r.top)*W/z/r.height;apply()};
+ const zoomMid=f=>{const r=el.getBoundingClientRect();zoomAt(f,r.left+r.width/2,r.top+r.height/2)};
+ const say=t=>{hint.textContent=t;hint.hidden=false;clearTimeout(ht);ht=setTimeout(()=>hint.hidden=true,1800)};
+ bIn.onclick=()=>zoomMid(1.6);bOut.onclick=()=>zoomMid(1/1.6);bR.onclick=()=>{z=1;vx=vy=0;apply()};
+ el.addEventListener('wheel',e=>{
+  if(e.ctrlKey||e.metaKey){e.preventDefault();const k=e.deltaMode?0.05:Math.abs(e.deltaY)<50?0.01:0.0025;zoomAt(Math.exp(-e.deltaY*k),e.clientX,e.clientY);return}
+  if(z<=1.001)return;
+  // zoomed in: plain scrolling moves around the wheel, until it reaches an edge, then the page scrolls as usual
+  const ox=vx,oy=vy,u=upp(),m=e.deltaMode?16:1;vx+=e.deltaX*u*m;vy+=e.deltaY*u*m;apply();if(vx!==ox||vy!==oy)e.preventDefault()},{passive:false});
+ // a plain mouse-wheel over the unzoomed wheel scrolls the page; tell desktop users once how to zoom
+ let told=false;el.addEventListener('wheel',e=>{if(!told&&z<=1.001&&!e.ctrlKey&&!e.metaKey&&matchMedia('(pointer:fine)').matches){told=true;say('Ctrl + scroll to zoom the wheel')}},{passive:true});
+ const mid=()=>{const a=[...pts.values()];return a.length<2?[a[0].x,a[0].y,0]:[(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2,Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)]};
+ el.addEventListener('pointerdown',e=>{if(e.button>0)return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===1)moved=false;
+  if(pts.size>2)return;const[mx,my,d]=mid();g={mx,my,d,z,id:e.pointerId}});
+ el.addEventListener('pointermove',e=>{const pt=pts.get(e.pointerId);if(!pt||!g)return;pt.x=e.clientX;pt.y=e.clientY;
+  const[mx,my,d]=mid();
+  if(pts.size>=2&&g.d>0&&d>0){moved=true;el.classList.add('drag');try{for(const id of pts.keys())el.setPointerCapture(id)}catch(_){}
+   const f=(g.z*d/g.d)/z;const r=el.getBoundingClientRect(),[px,py]=toW(g.mx,g.my);z*=f;clamp();vx=px-(mx-r.left)*W/z/r.width;vy=py-(my-r.top)*W/z/r.height;g.mx=mx;g.my=my;apply();return}
+  if(z<=1.001)return; // not zoomed: leave one-finger drags to the page
+  if(!moved&&Math.hypot(mx-g.mx,my-g.my)<6)return;
+  if(!moved){moved=true;el.classList.add('drag');try{el.setPointerCapture(e.pointerId)}catch(_){}}
+  const u=upp();vx-=(mx-g.mx)*u;vy-=(my-g.my)*u;g.mx=mx;g.my=my;apply()});
+ const up=e=>{if(!pts.delete(e.pointerId))return;if(pts.size){const[mx,my,d]=mid();g={mx,my,d,z}}else{g=null;el.classList.remove('drag')}};
+ el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+ // after a drag or pinch, swallow the click so it doesn't select the paint under the finger
+ el.addEventListener('click',e=>{if(moved){moved=false;e.stopPropagation();e.preventDefault()}},true);
+ // two fingers on the wheel zoom the wheel, not the page (iOS ignores touch-action for pinch)
+ el.addEventListener('touchmove',e=>{if(e.touches.length>1||z>1.001)e.preventDefault()},{passive:false});
+ el.addEventListener('gesturestart',e=>e.preventDefault());
+ apply();
+ window.wheelZoomReset=()=>{z=1;vx=vy=0;apply()}})();
 // One-time tip pointing at the wheel, until the first paint is tapped or the tip is closed.
 (()=>{let seen=false;try{seen=!!localStorage.getItem('pd-tip')}catch(e){}if(seen)return;
  const st=document.querySelector('#v-wheel .stage'),t=document.createElement('div');t.className='wtip';t.setAttribute('role','note');
