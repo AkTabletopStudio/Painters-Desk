@@ -462,6 +462,8 @@ nav.top button.thb:hover{background:var(--yel);color:#1b1b1b}
  html:has(:is(input:not([type=checkbox],[type=radio],[type=button],[type=submit],[type=range],[type=color],[type=file]),textarea,[contenteditable]):focus) body{padding-bottom:0}}
 nav.top .ni,nav.top .ls{display:none}
 /* Bigger touch areas on phones for the small footer links and the ✕ buttons on wheel chips and tips. */
+/* iPhone and iPad zoom the whole page into any text box under 16px and don't zoom back out, so touch screens get 16px boxes. */
+@media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),textarea,select{font-size:16px!important}}
 @media (pointer:coarse){#footFull,#footShort{line-height:2.2}#footFull a,#footShort a{padding:10px 2px}
  .wchip button{position:relative}:is(.wchip,.wtip) button::after{content:"";position:absolute;inset:-10px}}
 /* Site themes (data-look on <html>). Paint Pot is the default and has no attribute. */
