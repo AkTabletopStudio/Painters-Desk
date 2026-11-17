@@ -166,7 +166,6 @@ function route(){
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
- {const s=document.querySelector('#nav .secs'),o=s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8}
  if(view==='welcome')renderWelcome();
  else if(view==='palettes')window.pdPalettes&&pdPalettes(id);
  else if(view==='paints')renderPaints();
