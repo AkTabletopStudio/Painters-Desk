@@ -13,7 +13,7 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','palettes','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum'];
+const VIEWS=['welcome','changelog','palettes','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum','testing'];
 let ME=null,INFO=null,API=false;
 // Saved mixes (My mix paints): loaded with the collection, handed to the wheel (app.js pdSetMixes). MIXOK is false until migration 0020 is live.
 let MIXES=[],MIXOK=false;window.pdMixOK=()=>MIXOK;
@@ -180,6 +180,7 @@ function route(){
  else if(view==='inbox')renderInbox(id,sub);
  else if(view==='people')renderPeople();
  else if(view==='forum')renderForum(id,sub);
+ else if(view==='testing')renderTesting();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -1746,6 +1747,83 @@ function chatManage(){const P=$('chMan');if(!P.hidden){P.hidden=true;return}P.hi
  $('chAdd').onsubmit=async e=>{e.preventDefault();try{const x=await api('/chat/rooms',{method:'POST',body:{name:$('chAN').value,topic:$('chAT').value}});CT.rooms.push({...x.room,unread:false,mentions:0});P.hidden=true;chatRoom(x.room.id)}catch(err){$('chAM').className='err';$('chAM').textContent=err.message}}}
 
 /* ---------- feedback ---------- */
+// Tester checklist (#/testing): app testers tick what works or report a problem per item; answers stay on this
+// device until sent, then go to the team as one feedback message (same inbox and email as the Feedback button).
+const TESTS=[
+ ['Install and sign in',[
+  ['inst','Installed the app from Google Play (or the App Store) and opened it'],
+  ['icon','The home-screen icon is the ink-brush colour wheel'],
+  ['load','The app loads in about 5 seconds, with no blank or white screen'],
+  ['look','Picked a look (theme) and it applied everywhere'],
+  ['sign','Signed in and landed back in the app, signed in'],
+  ['stay','Closed the app fully, reopened it, still signed in']]],
+ ['The colour wheel',[
+  ['pick','Change paints: ticked my brands and they appeared on the wheel'],
+  ['tap','Tapping a paint shows its complements, neighbours and matches'],
+  ['zoom','Pinch to zoom, drag, reset, and tapping a paint while zoomed'],
+  ['sch','Scheme (complementary, triadic and so on) changes the picks'],
+  ['types','Paint types: hiding and showing metallics, washes or inks'],
+  ['photo','From a photo suggests sensible paints'],
+  ['scroll','Scrolling up and down: no blank boxes, flicker or stuck areas']]],
+ ['Matches, ramps and blends',[
+  ['match','Matches for a paint I know well look right'],
+  ['ramp','Ramps: built a skin, NMM or OSL ramp and the preview updates'],
+  ['swap','The swap button on a ramp step tries the next nearest paint'],
+  ['blend','Blends: two paints and the steps between them look right'],
+  ['save','Saved a ramp or blend as a recipe and found it in Community']]],
+ ['My paints and account',[
+  ['own','Ticked paints I own and the count updates'],
+  ['undo','Unticking 5 or more asks first, and Undo works'],
+  ['sug','Suggested paints make sense for my collection'],
+  ['sync','Signed in on another device and my paints match'],
+  ['prof','Edited my profile name or picture']]],
+ ['Community, chat and feedback',[
+  ['browse','Browsed tutorials, recipes and palettes; upvoted or saved one'],
+  ['pal','Made a palette (New palette or From a photo)'],
+  ['chat','Posted in chat; the online list opens and closes'],
+  ['pics','Added a photo to chat or a palette; it opens full size']]],
+ ['Phone checks',[
+  ['back','The back button goes to the previous screen'],
+  ['rot','Turning the phone sideways: nothing cut off'],
+  ['kbd','Typing: the box stays visible and the page doesn\'t zoom in'],
+  ['off','Airplane mode: the wheel still loads, and syncs after'],
+  ['links','Links to guides and paint pages open inside the app'],
+  ['font','Larger system text size: buttons and labels still fit']]]];
+const TKEY='pd-test',tLoad=()=>{try{return JSON.parse(localStorage.getItem(TKEY))||{}}catch(e){return {}}},tSave=d=>{try{localStorage.setItem(TKEY,JSON.stringify(d))}catch(e){}};
+function renderTesting(){
+ const el=$('v-testing'),d=tLoad();d.s=d.s||{};d.n=d.n||{};
+ const all=TESTS.flatMap(x=>x[1]);
+ const tally=()=>{const v=Object.values(d.s);return {done:v.filter(x=>x==='ok'||x==='bad').length,bad:v.filter(x=>x==='bad').length}};
+ const item=([k,t])=>`<div class="tci" data-k="${k}"><p>${esc(t)}</p><div class="fbk" role="radiogroup" aria-label="${esc(t)}">${[['ok','Works'],['bad','Problem'],['skip','Skipped']].map(([v,l])=>`<label><input type="radio" name="t-${k}" value="${v}"${d.s[k]===v?' checked':''}><span>${l}</span></label>`).join('')}</div><textarea class="inp" maxlength="500" placeholder="What happened? Which screen?"${d.s[k]==='bad'?'':' hidden'}>${esc(d.n[k]||'')}</textarea></div>`;
+ el.innerHTML=`<h1>Tester checklist</h1>
+ <div class="panel"><p>Thanks for testing! Try these over your 14 days, a few at a time. Your answers save on this device, so you can come back later, then press <b>Send</b> once at the end (or any time you find a problem).</p>
+ <p class="s">Please stay opted in to the test for the full 14 days. Google counts testers before the app can go on the Play Store.</p>
+ <label class="f"><span>Your phone (make and model)</span><input type="text" class="inp" id="tPhone" maxlength="80" placeholder="e.g. Pixel 7, Galaxy S23, iPhone 13" value="${esc(d.phone||'')}"></label></div>
+ <p class="tcbar" id="tBar"></p>
+ ${TESTS.map(([h,its])=>`<div class="panel"><h2>${esc(h)}</h2>${its.map(item).join('')}</div>`).join('')}
+ <div class="panel"><h2>Anything else?</h2><label class="f"><span>What did you like, what confused you, what would you add?</span><textarea class="inp" id="tMore" maxlength="1500">${esc(d.more||'')}</textarea></label>
+ <label class="f"><span>Email (optional, for our reply)</span><input type="email" class="inp" id="tEmail" maxlength="200" autocomplete="email" value="${esc(d.email||ME?.email||'')}"></label>
+ <input type="text" id="tWeb" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px">
+ <div class="row"><button class="btn pri" type="button" id="tSend">Send to the team</button><span class="s" id="tMsg"></span></div></div>`;
+ const bar=()=>{const t=tally();$('tBar').textContent=`${t.done} of ${all.length} tried`+(t.bad?` · ${t.bad} problem${t.bad>1?'s':''} noted`:'')};bar();
+ el.querySelectorAll('.tci').forEach(r=>{const k=r.dataset.k,ta=r.querySelector('textarea');
+  r.querySelectorAll('input').forEach(i=>i.onchange=()=>{d.s[k]=i.value;ta.hidden=i.value!=='bad';if(i.value==='bad')ta.focus();tSave(d);bar()});
+  ta.oninput=()=>{d.n[k]=ta.value;tSave(d)}});
+ $('tPhone').oninput=e=>{d.phone=e.target.value;tSave(d)};$('tMore').oninput=e=>{d.more=e.target.value;tSave(d)};$('tEmail').oninput=e=>{d.email=e.target.value;tSave(d)};
+ $('tSend').onclick=async()=>{const t=tally();
+  if(!t.done&&!$('tMore').value.trim()){$('tMsg').className='err';$('tMsg').textContent='Mark at least one item, or write a comment, first.';return}
+  const bad=all.filter(([k])=>d.s[k]==='bad').map(([k,x])=>'- '+x+(d.n[k]?.trim()?': '+d.n[k].trim():'')),ok=all.filter(([k])=>d.s[k]==='ok').map(([,x])=>'- '+x);
+  let msg=`Tester checklist: ${t.done} of ${all.length} tried, ${t.bad} problem${t.bad===1?'':'s'}\nPhone: ${$('tPhone').value.trim()||'not given'}\n`;
+  if(bad.length)msg+=`\nPROBLEMS\n${bad.join('\n')}\n`;
+  if($('tMore').value.trim())msg+=`\nCOMMENTS\n${$('tMore').value.trim()}\n`;
+  const w=`\nWORKED (${ok.length})\n${ok.join('\n')}`;msg+=(msg.length+w.length<=4000?w:`\nWORKED: ${ok.length} items`);
+  $('tSend').disabled=true;$('tMsg').className='s';$('tMsg').textContent='Sending…';
+  try{if(!ME&&INFO.messages)newFbToken();
+   await api('/feedback',{method:'POST',body:{kind:t.bad?'bug':'other',message:msg.slice(0,4000),email:$('tEmail').value.trim(),website:$('tWeb').value,page:'#/testing'}});
+   d.sent=Date.now();tSave(d);$('tMsg').className='ok';$('tMsg').textContent='Sent, thank you! You can keep testing and send again later.';unread()}
+  catch(e){$('tMsg').className='err';$('tMsg').textContent=e.message}
+  $('tSend').disabled=false}}
+
 // The floating Feedback button on every page opens this popup; messages go to /api/feedback.
 {const D=$('fbDlg'),F=$('fbForm');let sent=false;
  const reset=()=>{sent=false;F.reset();$('fbErr').textContent='';$('fbBody').hidden=false;$('fbSend').hidden=false;$('fbSend').disabled=false;$('fbNo').textContent='Cancel';const m=D.querySelector('#fbDone');if(m)m.remove()};
