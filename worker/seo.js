@@ -1325,31 +1325,31 @@ export function renderGuides(D) {
   return GUIDES.length;
 }
 
-// The guides in the order the /guides list shows them: colour theory, techniques from easiest to hardest, brushes, then
-// conversion charts (from Citadel, then to Citadel).
-const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.basic).sort((a, b) => a.basic - b.basic), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level),
-  ...GUIDES.filter(g => g.brush).sort((a, b) => a.brush - b.brush), ...GUIDES.filter(g => g.conv)];
+// The guides in the order the /guides list shows them: colour theory, painting basics, brushes (the tools before the
+// techniques that use them), techniques from easiest to hardest, then conversion charts (from Citadel, then to Citadel).
+// Inspiration palettes live in the Palettes tab of Tutorials & Community, so they are not listed with the guides.
+const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.basic).sort((a, b) => a.basic - b.basic),
+  ...GUIDES.filter(g => g.brush).sort((a, b) => a.brush - b.brush), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level), ...GUIDES.filter(g => g.conv)];
 
 function guideLinks(cur) {
   const li = g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`;
-  return `<section class="panel"><h2>More guides</h2><ul class="m list">${guideOrder().filter(g => g !== cur).map(li).join('')}${PALS.length ? '<li><a href="/guides/palettes">Colour palettes</a></li>' : ''}</ul></section>`;
+  return `<section class="panel"><h2>More guides</h2><ul class="m list">${guideOrder().filter(g => g !== cur).map(li).join('')}</ul></section>`;
 }
 
 function guidesPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0).toLocaleString('en');
   const title = 'Miniature painting guides and paint conversion charts';
-  const desc = 'Colour theory for miniature painters, how to thin paints, prime, varnish, airbrush, use contrast paints, paint black and white, base and weather models, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, brush types and the best brushes for miniatures, and conversion charts between Citadel, Vallejo, Army Painter, Pro Acryl, AK, Two Thin Coats, Scale75 and Tamiya, plus a Tone Pro chart, built from ' + n + ' paints. Swatch colours are estimates.';
+  const desc = 'Colour theory for miniature painters, how to thin paints, prime, varnish, airbrush, use contrast paints, paint black and white, base and weather models, brush types and the best brushes for miniatures, step-by-step guides to drybrushing, edge highlighting, zenithal highlights, glazing, skin, gems, OSL and NMM with the best paints for each, and conversion charts between Citadel, Vallejo, Army Painter, Pro Acryl, AK, Two Thin Coats, Scale75 and Tamiya, plus a Tone Pro chart, built from ' + n + ' paints. Swatch colours are estimates.';
   const card = g => `<li><a href="/guides/${g.slug}"><b>${esc(g.label)}</b></a>${g.q ? `<span class="chip">${RAMPS[g.q](guideBase(D, g).lab).map(x => `<i style="background:${labHex(x.t)}"></i>`).join('')}</span>` : ''}<em>${esc(g.blurb)}</em></li>`;
   const charts = (k, h) => `<div><h3>${h}</h3><ul class="m">${GUIDES.filter(g => g.conv && g.conv[k] === 'citadel').map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div>`;
   const body = `<h1>Paint guides</h1>
-<p class="prose">Guides to colour, painting basics, techniques and brushes, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
+<p class="prose">Guides to colour, painting basics, brushes and techniques, and conversion charts between brands, built from the ${n} paints on The Painters Desk. Everything here comes from the same swatch estimates and conversion charts as the colour wheel, so treat matches as close, never exact.</p>
 <section class="panel"><h2>Start here</h2><ul class="m gl">${GUIDES.filter(g => g.learn).map(card).join('')}</ul></section>
-${PALS.length ? `<section class="panel"><h2>Colour palettes</h2><p class="s">${PALS.length} themed colour schemes, each with the closest paint in every major brand.</p><ul class="m gl">${PALS.slice(0, 6).map(x => `<li><a href="/guides/palettes/${x.s}"><b>${esc(x.n)}</b></a><span class="chip">${x.c.map(c => `<i style="background:${c.h}"></i>`).join('')}</span><em>${esc(x.b)}</em></li>`).join('')}</ul><p><a class="btn" href="/guides/palettes">All ${PALS.length} palettes</a></p></section>` : ''}
 <section class="panel"><h2>Painting basics</h2><p class="s">The groundwork every model needs: what each paint type is, thinning, priming and varnishing, airbrushing, contrast paints, black and white, bases and weathering.</p><ul class="m gl">${guideOrder().filter(g => g.basic).map(card).join('')}</ul></section>
-<section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
 <section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
+<section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
 <section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}<div><h3>Other charts</h3><ul class="m">${GUIDES.filter(g => g.conv && !g.conv.slice(0, 2).includes('citadel')).map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div></div></section>
-<p>Looking for one paint? <a href="/paints">Browse every brand</a>.</p>`;
+<p>Looking for one paint? <a href="/paints">Browse every brand</a>.${PALS.length ? ` Looking for a colour scheme? <a href="/#/recipes/palette">Browse the ${PALS.length} inspiration palettes</a> in Tutorials &amp; Community.` : ''}</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
 }
 
