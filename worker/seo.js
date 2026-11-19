@@ -237,7 +237,7 @@ const label = p => p.n + (p.c ? ' (' + p.c + ')' : '');
 const closeness = d => d < 2 ? 'perfect' : d < 6 ? 'very close' : d < 10 ? 'close' : d < 15 ? 'fair' : d < 20 ? 'loose' : d < 30 ? 'very loose' : 'poor';
 const CLOSE_TXT = 'under 2 is a perfect match (you’d struggle to tell them apart), under 6 very close, under 10 close, under 15 fair, under 20 loose, under 30 very loose, and 30 or more a poor match';
 
-const OG_IMAGE = SITE + '/icons/og-image-2026-11-15.jpg';
+const OG_IMAGE = SITE + '/icons/og-image-2026-11-17.jpg';
 const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painters Desk', url: SITE + '/', publisher: { '@id': SITE + '/#org' } };
 const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png' };
 
