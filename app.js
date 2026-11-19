@@ -30,22 +30,40 @@ let HIDE_T=new Set(['wash','ink','fx','tech','pearl']);try{const s=localStorage.
 try{if(localStorage.getItem('pd-ty-pearl')===null){HIDE_T.add('pearl');localStorage.setItem('pd-ty-pearl','1')}}catch(e){}
 const shown=p=>!HIDE_T.has(paintType(p));
 // On the wheel: HSL saturation 0.14+, or Lab chroma 8+ so dull but clearly tinted paints (Wyvern Green) aren't listed as neutrals.
-const onWheel=p=>p.g!=='B'&&(p.S>=.14||Math.hypot(p.lab[1],p.lab[2])>=8)&&p.L>.07&&p.L<.95;
+// On the wheel when the paint has real colour: Lab chroma 6.5+ (HSL saturation isn't used, it shoots up near black and white, which put
+// greys like Corvus Black on the wheel while Dark Ivory missed out), and not near-black / near-white (Lab L 3-98). Metallic swatches are
+// greyish estimates, so metallics keep the older HSL rule. Mirrored in worker/seo.js onWheel.
+const onWheel=p=>p.g!=='B'&&(/^(met|pearl)$/.test(paintType(p))?(p.S>=.14||Math.hypot(p.lab[1],p.lab[2])>=8)&&p.L>.07&&p.L<.95:Math.hypot(p.lab[1],p.lab[2])>=6.5&&p.lab[0]>3&&p.lab[0]<98);
+// Dot spacing (MD) shrinks as more paints are shown so they fit in the ring between the centre disc and the rim (radius 125-455),
+// and push-apart can't move a dot more than LCAP (18°) round from its own hue, so a busy wheel still puts every paint at its colour.
+let WMD=54;const LCAP=18*Math.PI/180;
 function layout(){const vis=p=>p.on&&shown(p);CH=P.filter(p=>vis(p)&&onWheel(p));const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
-const MD=CH.length>140?44:54;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
+const N=CH.length;WMD=N>140?Math.max(14,Math.min(44,.85*Math.sqrt(601e3/(.866*N)))):54;const MD=WMD,IT=N>2000?200:N>800?300:500;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
-CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
+CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.a0=a;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
 // Push-apart only checks dots in the same or neighbouring grid cells (cell = MD), so it scales with the number of dots, not its square.
 const G=Math.ceil(1000/MD)+3,cell=new Map(),ck=(x,y)=>(Math.floor(x/MD)+1)*G+Math.floor(y/MD)+1;
-for(let it=0;it<500;it++){cell.clear();CH.forEach((p,i)=>{const k=ck(p.x,p.y),c=cell.get(k);if(c)c.push(i);else cell.set(k,[i])});
+for(let it=0;it<IT;it++){cell.clear();CH.forEach((p,i)=>{const k=ck(p.x,p.y),c=cell.get(k);if(c)c.push(i);else cell.set(k,[i])});
 for(let i=0;i<CH.length;i++){const a=CH[i],k0=ck(a.x,a.y);for(let gx=-G;gx<=G;gx+=G)for(let gy=-1;gy<=1;gy++){const c=cell.get(k0+gx+gy);if(c)for(const j of c){if(j<=i)continue;const b=CH[j];let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||.01;if(d<MD){const k=(MD-d)/2/d;a.x-=dx*k;a.y-=dy*k;b.x+=dx*k;b.y+=dy*k}}}
-a.x+=(a.ox-a.x)*.008;a.y+=(a.oy-a.y)*.008;const dx=a.x-CX,dy=a.y-CY,d=Math.hypot(dx,dy);if(d>455||d<125){const t=Math.min(455,Math.max(125,d))/d;a.x=CX+dx*t;a.y=CY+dy*t}}}}
+a.x+=(a.ox-a.x)*.008;a.y+=(a.oy-a.y)*.008;
+// Keep the dot in the ring and within LCAP of its hue angle (this also stops dots being pushed across the centre to the other side).
+const dx=a.x-CX,dy=a.y-CY,d=Math.min(455,Math.max(125,Math.hypot(dx,dy))),an=Math.atan2(dy,dx),da=Math.atan2(Math.sin(an-a.a0),Math.cos(an-a.a0)),aa=Math.abs(da)>LCAP?a.a0+Math.sign(da)*LCAP:an;
+a.x=CX+d*Math.cos(aa);a.y=CY+d*Math.sin(aa)}}}
 function lines(n){let w=n.split(' ').map(x=>AB[x]||x);if(w.length===1)return w;let best=1,bm=1e9;for(let k=1;k<w.length;k++){const m=Math.max(w.slice(0,k).join(' ').length,w.slice(k).join(' ').length);if(m<bm){bm=m;best=k}}return[w.slice(0,best).join(' '),w.slice(best).join(' ')]}
 function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
 // Neighbour / complement ranking: hue distance plus how far apart the two paints' saturation (Lab chroma) is, so a muted paint such as
 // an ivory or bone gets muted partners instead of strong yellows or pure blues that only share its (unsteady) hue angle.
 // The chroma term fades out for strong colours (full below chroma 15, none from 40), where the hue is steady and hue-only picks give a fuller light-to-dark spread.
 const chr=p=>Math.hypot(p.lab[1],p.lab[2]),hcS=(p,t,b)=>{const cb=chr(b);return hd(p.H,t)+Math.abs(chr(p)-cb)*Math.max(0,Math.min(1,(40-cb)/25))};
+// Partner score = hcS, plus a big penalty for a different kind of paint (metallics partner metallics, opaque partners opaque; a Contrast
+// paint may also take opaque partners), so other kinds only fill in when the hue window has too few. A strong colour (chroma 25+) ranks
+// near-greys (chroma under 10) lower, since their hue angle says little. For complements (cm), a muted pick
+// also prefers partners of similar lightness, so a pale grey-blue gets pale browns rather than near-blacks (fades out for strong colours, like hcS).
+const tyK=p=>{const t=paintType(p);return t==='pearl'?'met':t==='ink'?'wash':t},tyPen=(p,b)=>{const a=tyK(b),c=tyK(p);return a===c||a==='con'&&c==='op'?0:100};
+const ptS=(p,t,b,cm)=>hcS(p,t,b)+tyPen(p,b)+(chr(b)>=25&&chr(p)<10?20:0)+(cm?.35*Math.abs(p.lab[0]-b.lab[0])*Math.max(0,Math.min(1,(40-chr(b))/25)):0);
+// The first n of a ranked list, keeping one paint per brand and swatch (Citadel Air copies, Pro Acryl primers and Army Painter Legacy
+// paints share their twin's swatch) and skipping twins of the selected paint b.
+const swK=p=>BR_OF[p.g]+'|'+p.h,uniqSw=(l,b,n)=>{const s=new Set([swK(b)]),o=[];for(const p of l){const k=swK(p);if(s.has(k))continue;s.add(k);o.push(p);if(o.length>=n)break}return o};
 /* ---------- Ramp mode (NMM, OSL, gems, skin, zenithal, edge highlights, glazes, drybrushing, underpainting) ----------
    Tap a paint and it builds a light ramp for the chosen technique. Each technique sets its own stops in Lab/LCh
    (how dark and light it goes, how chroma and hue drift, and what the optional tint does). Each stop then takes the
@@ -155,7 +173,7 @@ const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
    wheel or in the neutrals, and can mix any step with the base. Mixed colours are estimates (Lab average by parts). */
 let BL=null,ACT=null;const MXR=[[1,0],[2,1],[1,1],[1,2]],MXN=['Pure','2:1 with base','1:1 with base','1:2 with base'];
 function autoPicks(b){if(!CH.includes(b))return{comp:[],ana:[]};const th=(b.H+180)%360,c=CH.filter(p=>p!==b);
-return{comp:c.filter(p=>hd(p.H,th)<=22).sort((x,y)=>hcS(x,th,b)-hcS(y,th,b)).slice(0,6),ana:c.filter(p=>hd(p.H,b.H)<=25).sort((x,y)=>hcS(x,b.H,b)-hcS(y,b.H,b)).slice(0,6)}}
+return{comp:uniqSw(c.filter(p=>hd(p.H,th)<=22).sort((x,y)=>ptS(x,th,b,1)-ptS(y,th,b,1)),b,6),ana:uniqSw(c.filter(p=>hd(p.H,b.H)<=25).sort((x,y)=>ptS(x,b.H,b)-ptS(y,b.H,b)),b,6)}}
 function blendSeed(b){const {comp,ana}=autoPicks(b),m=q=>!ONLY_MINE||own(q),byL=(x,y)=>Math.abs(x.L-b.L)-Math.abs(y.L-b.L);
 const c=comp.filter(m).slice(0,2).sort(byL).reverse(),a=ana.filter(m).slice(0,2).sort(byL);
 BL={b,s:[...c.map(p=>({p,sp:p,m:0})),{p:b,base:1},...a.map(p=>({p,sp:p,m:0}))]};ACT=null}
@@ -211,7 +229,7 @@ const w=(a,c)=>Math.hypot(1.6*(a[0]-c[0]),a[1]-c[1],a[2]-c[2]),d76=(a,c)=>Math.h
 if(ok)used.add(b);
 return nmmTargets(b).map((x,i)=>{if(x.base&&ok)return{...x,p:b,d:0,pick:1};
 const c=pool.filter(q=>!used.has(q)).map(q=>({q,d:w(q.lab,x.t)})).sort((a,c)=>a.d-c.d);if(!c.length)return{...x,p:null};
-const m=c[(nmmSkip[i]||0)%Math.min(c.length,8)].q;used.add(m);return{...x,p:m,d:d76(m.lab,x.t),alt:c.length>1}})}
+const m=c[(nmmSkip[i]||0)%Math.min(c.length,8)].q;used.add(m);return{...x,p:m,d:de00(m.lab,x.t),alt:c.length>1}})}
 const labHex=([L,A,B])=>{const fy=(L+16)/116,iv=t=>t**3>.008856?t**3:(t-16/116)/7.787,X=iv(fy+A/500)*.95047,Y=iv(fy),Z=iv(fy-B/200)*1.08883;
 const s=v=>{v=v>.0031308?1.055*v**(1/2.4)-.055:12.92*v;return Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0')};
 return'#'+s(3.2406*X-1.5372*Y-.4986*Z)+s(-.9689*X+1.8758*Y+.0415*Z)+s(.0557*X-.204*Y+1.057*Z)};
@@ -372,9 +390,9 @@ const schSave=()=>{try{localStorage.setItem('pd-scheme',JSON.stringify({s:SCH,t:
 const hAng=h=>U(h)*Math.PI/180-Math.PI/2;
 function harmony(b){const sc=HSC[SCH],tol=SCH==='mono'?Math.min(HTOL,14):HTOL,mine=p=>!ONLY_MINE||own(p);
 const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);const band=[b,...l].filter(p=>hd(p.H,t)<=tol||p===b);
-if(SCH==='mono')l=[b,...l].sort((x,y)=>x.lab[0]-y.lab[0]).slice(0,12);
-else{l.sort((x,y)=>hcS(x,t,b)-hcS(y,t,b));l=main?[b,...l.slice(0,4)]:l.slice(0,6)}
-const sc2=p=>hcS(p,t,b)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
+if(SCH==='mono')l=[b,...uniqSw(l.sort((x,y)=>x.lab[0]-y.lab[0]),b,11)].sort((x,y)=>x.lab[0]-y.lab[0]);
+else{l.sort((x,y)=>ptS(x,t,b,!main)-ptS(y,t,b,!main));l=main?[b,...uniqSw(l,b,4)]:uniqSw(l,b,6)}
+const sc2=p=>ptS(p,t,b)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
 return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k],bl:pk&&SCH!=='mono'?hBlend(pk,band.filter(p=>p===pk||nmmOK(p)),mine):null}});return{sc,groups,tol}}
 // A 3-step blend for one scheme colour: the pick as the mid tone, plus the paints in its hue band closest to ~18 Lab L darker and lighter
 // (at least 8 apart, owned paints first when 'Only my paints' is on). A step stays empty when the band has nothing dark or light enough.
@@ -448,15 +466,15 @@ let comp=[],ana=[];const NBp=MODE==='nmm'?NB:null,R=NBp?nmmRamp(NBp):null,MB=MOD
 if(MB&&(!BL||BL.b!==MB))blendSeed(MB);if(MB)blendAuto();const MX=MB?BL.s.map(x=>x.p):null;
 const HS=sel&&!R&&!MX&&MODE==='col'&&SCH!=='comp'?harmony(sel):null,HIN=HS?new Set(HS.groups.flatMap(g=>g.l)):null,HPK=HS&&SCH!=='mono'?new Set(HS.groups.map(g=>g.pk).filter(Boolean)):new Set();
 if(HS)s+=hUnder(HS,sel);
-if(sel&&!R&&!MX&&!HS){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.filter(p=>hd(p.H,th)<=HTOL).sort((a,b)=>hcS(a,th,sel)-hcS(b,th,sel)).slice(0,6);
-ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hcS(a,sel.H,sel)-hcS(b,sel.H,sel)).slice(0,6);
+if(sel&&!R&&!MX&&!HS){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=uniqSw(cands.filter(p=>hd(p.H,th)<=HTOL).sort((a,b)=>ptS(a,th,sel,1)-ptS(b,th,sel,1)),sel,6);
+ana=uniqSw(cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>ptS(a,sel.H,sel)-ptS(b,sel.H,sel)),sel,6);
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
 if(R)s+=nmmWheel(R);
 if(MX)s+=blendWheel();
 if(sel&&!R&&!MX&&!HS){const ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
 s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${discStops(sel,comp,ana).map(([h,o])=>`<stop offset="${o.toFixed(4)}" stop-color="${h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
-const show=document.getElementById('lab').checked;const R0=CH.length>140?20:26,kk=R0/26;
+const R0=WMD>=54?26:Math.round(WMD*4.6)/10,kk=R0/26,show=document.getElementById('lab').checked&&R0>=12;
 CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):HS?HIN.has(p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
 const st=p.mix?'stroke="#1b1b1b" stroke-dasharray="7 4"':(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'||p.g==='!'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
 const sw=p===sel?5:comp.includes(p)?4:2;
@@ -513,18 +531,28 @@ r=f(r);g=f(g);b=f(b);
 let x=(.4124*r+.3576*g+.1805*b)/.95047,y=.2126*r+.7152*g+.0722*b,z=(.0193*r+.1192*g+.9505*b)/1.08883;const t=v=>v>.008856?Math.cbrt(v):7.787*v+16/116;
 return[116*t(y)-16,500*(t(x)-t(y)),200*(t(y)-t(z))]}
 P.forEach(p=>p.lab=hexLab(p.h));
-const dE=(a,b)=>Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2]);
+// Colour difference between two paints: CIEDE2000 (ΔE2000). It tracks how different two colours look far better than the plain
+// Lab distance (CIE76), which overstates gaps between saturated blues, greens and yellows. de00 takes two Lab arrays. Mirrored in worker/seo.js.
+const de00=(l1,l2)=>{const[L1,a1,b1]=l1,[L2,a2,b2]=l2,R=Math.PI/180,C7=c=>{const c7=c**7;return Math.sqrt(c7/(c7+6103515625))};
+const Cb=(Math.hypot(a1,b1)+Math.hypot(a2,b2))/2,G=.5*(1-C7(Cb)),A1=(1+G)*a1,A2=(1+G)*a2,c1=Math.hypot(A1,b1),c2=Math.hypot(A2,b2);
+const h1=c1?(Math.atan2(b1,A1)/R+360)%360:0,h2=c2?(Math.atan2(b2,A2)/R+360)%360:0;let dh=h2-h1;if(dh>180)dh-=360;else if(dh<-180)dh+=360;if(!c1||!c2)dh=0;
+const dL=L2-L1,dC=c2-c1,dH=2*Math.sqrt(c1*c2)*Math.sin(dh*R/2),Lb=(L1+L2)/2,cb=(c1+c2)/2;
+const hb=!c1||!c2?h1+h2:Math.abs(h1-h2)<=180?(h1+h2)/2:h1+h2<360?(h1+h2+360)/2:(h1+h2-360)/2;
+const T=1-.17*Math.cos((hb-30)*R)+.24*Math.cos(2*hb*R)+.32*Math.cos((3*hb+6)*R)-.2*Math.cos((4*hb-63)*R);
+const SL=1+.015*(Lb-50)**2/Math.sqrt(20+(Lb-50)**2),SC=1+.045*cb,SH=1+.015*cb*T,RT=-2*C7(cb)*Math.sin(60*Math.exp(-(((hb-275)/25)**2))*R);
+return Math.sqrt((dL/SL)**2+(dC/SC)**2+(dH/SH)**2+RT*(dC/SC)*(dH/SH))};
+const dE=(a,b)=>de00(a.lab,b.lab);
 // Match closeness scale (ΔE between two swatch estimates), shared by every tag on the site; worker/seo.js closeness() uses the same cut-offs.
-const MQS=[[2,'perfect','Perfect'],[6,'vclose','Very close'],[10,'close','Close'],[15,'fair','Fair'],[20,'loose','Loose'],[30,'vloose','Very loose'],[1/0,'poor','Poor']],
- mq=d=>{const r=MQS.find(x=>d<x[0]);return[r[1],r[2]]},MQ_TXT='Perfect = ΔE under 2, Very close under 6, Close under 10, Fair under 15, Loose under 20, Very loose under 30, Poor 30 or more';
+const MQS=[[1.5,'perfect','Perfect'],[4,'vclose','Very close'],[7,'close','Close'],[11,'fair','Fair'],[15,'loose','Loose'],[22,'vloose','Very loose'],[1/0,'poor','Poor']],
+ mq=d=>{const r=MQS.find(x=>d<x[0]);return[r[1],r[2]]},MQ_TXT='ΔE2000: Perfect = under 1.5, Very close under 4, Close under 7, Fair under 11, Loose under 15, Very loose under 22, Poor 22 or more';
 const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f:'Army Painter Fanatic conversion chart',h:'Herrick Games paint comparison chart',k:'AK 3rd Generation equivalence chart',w:'Army Painter Historical to Fanatic chart',L:'Army Painter Warpaints Fanatic conversion chart',r:'AK Real Colors conversion chart'};
 // Metallic and pearl paints only match each other, and other paints only match other paints: a gold is never a yellow's match.
 // The other finish is listed apart (Metallic matches / Non-metallic colours), one nearest per brand plus any chart pairs.
 const isMetT=p=>{const t=paintType(p);return t==='met'||t==='pearl'};
-// Matches in other ranges. Short list (default): per brand, chart ✓ matches within ΔE 25 of our swatch, else the 1 nearest paint of the
-// same type within ΔE 12; same-named paints in one brand shown once. MATCH_ALL (Show all button) brings back the full list: every chart
+// Matches in other ranges (ΔE2000). Short list (default): per brand, chart ✓ matches within ΔE 18 of our swatch, else the 1 nearest paint of the
+// same type within ΔE 9; same-named paints in one brand shown once. MATCH_ALL (Show all button) brings back the full list: every chart
 // match plus the 2-3 nearest per brand, no limit. Same split by finish either way (xch/xnear = metallic vs non-metallic section).
-let MATCH_ALL=false;const M_TICK=25,M_NEAR=12,tyG=t=>t==='ink'?'wash':t;
+let MATCH_ALL=false;const M_TICK=18,M_NEAR=9,tyG=t=>t==='ink'?'wash':t;
 // Varnishes, mediums and thinners only match each other (mirrored in worker/seo.js clearOf).
 const CLEAR=/\b(varnish|thinner|retarder|flow improver|(matt|matte|gloss|satin|glaze|glazing|airbrush|lahmian|contrast|wash|blending|texture|pouring|speedpaint|metallic|shading|chipping) medium)\b/i,clearOf=q=>CLEAR.test(q.n);
 const dedupe=a=>{const s=new Set();return a.filter(m=>{const k=m.p.n.trim().toLowerCase();if(s.has(k))return false;s.add(k);return true})};
@@ -566,7 +594,7 @@ const mixRate=d=>mq(d)[1];
 let MIXC=null;
 function mixFor(p){if(MIXC&&MIXC.p===p&&MIXC.o===OWN)return MIXC.r;
 const t=p.lab,pool=P.filter(q=>own(q)&&!q.mix&&q!==p&&q.g!=='B'&&nmmOK(q));pool.forEach(q=>{if(!q.ks)q.ks=KSv(q.h)});
-const T=KSv(p.h),W=T.map(k=>1/(k+.08)**2),dl=l=>Math.hypot(l[0]-t[0],l[1]-t[1],l[2]-t[2]),n=pool.length;
+const T=KSv(p.h),W=T.map(k=>1/(k+.08)**2),dl=l=>de00(l,t),n=pool.length;
 const near=pool.map(q=>({q,d:dE(p,q)})).sort((a,b)=>a.d-b.d),one=near[0]||null;
 // Quick pass: for every pair, the best straight-line fit in K/S space (where pigment mixing is linear), weighted toward the target.
 const cand=[];for(let i=0;i<n;i++){const A=pool[i].ks;for(let j=i+1;j<n;j++){const B=pool[j].ks;let num=0,den=0,r=0;
@@ -581,9 +609,9 @@ for(let i=0;i<top.length;i++)for(let j=i+1;j<top.length;j++)for(let k=j+1;k<top.
  for(const w of MX3){const s=w[0]+w[1]+w[2],d=dl(ksLab([0,1,2].map(c=>(w[0]*q[0].ks[c]+w[1]*q[1].ks[c]+w[2]*q[2].ks[c])/s)));if(!best||d<best.d)best={m:q.map((x,z)=>[x,w[z]]),d}}three.push(best)}
 three.sort((a,b)=>a.d-b.d);
 // Keep mixes that beat the closest paint they already own, no pair twice, the larger share first. A 3-paint mix has to earn its place.
-const out=[],seen=new Set(),lim=one?one.d-1:99;
-for(const x of two){if(out.length>=3)break;const key=x.m.map(y=>y[0].n.trim().toLowerCase()).sort().join('|');if(x.d>=lim||x.d>25||seen.has(key))continue;seen.add(key);out.push(x)}
-const b3=three[0];if(b3&&b3.d<lim&&b3.d<25&&(!out.length||b3.d<out[0].d-1.5))out.push(b3);
+const out=[],seen=new Set(),lim=one?one.d-.8:99;
+for(const x of two){if(out.length>=3)break;const key=x.m.map(y=>y[0].n.trim().toLowerCase()).sort().join('|');if(x.d>=lim||x.d>18||seen.has(key))continue;seen.add(key);out.push(x)}
+const b3=three[0];if(b3&&b3.d<lim&&b3.d<18&&(!out.length||b3.d<out[0].d-1.2))out.push(b3);
 out.forEach(x=>x.m.sort((a,b)=>b[1]-a[1]));out.sort((a,b)=>a.d-b.d);
 const r={n,one,mixes:out};MIXC={p,o:OWN,r};return r}
 function kmHex(m){const s=m.reduce((a,x)=>a+x[1],0);return labHex(ksLab([0,1,2].map(c=>m.reduce((a,x)=>a+x[1]*x[0].ks[c],0)/s)))}

@@ -490,7 +490,7 @@ function renderMixes(){const el=$('mixP');if(!el)return;
  ms.map(p=>`<div class="mxr"><span class="mxsw"><i style="background:${p.h}"></i></span><div class="mxt"><b>${esc(p.n)}</b><span class="s">${p.mix.m.map(([q,k])=>k+' part'+(k>1?'s ':' ')+esc(q.n)+' ('+esc(GL[q.g])+')').join(' + ')}</span></div><button type="button" class="mxsv" data-mxdel="${esc(p.mix.id)}">Remove</button></div>`).join('');
  el.querySelectorAll('[data-mxdel]').forEach(e=>e.onclick=async()=>{e.disabled=true;try{await pdDelMix(e.dataset.mxdel)}catch(er){e.disabled=false;e.textContent=er.message}})}
 // Plan for a project: pick an Inspiration palette or one of your own / saved tutorials, recipes and palette cards, and each colour
-// is sorted into what you own, what you own that's close (ΔE under 6), what you could mix (ΔE under 6) and what to buy.
+// is sorted into what you own, what you own that's close (ΔE under 6), what you could mix (ΔE2000 under 4.5, mixFor() works in ΔE2000) and what to buy.
 let PLRECS=null;
 const plKind=q=>{const t=paintType(q);return t==='met'?'met':/wash|ink/.test(t)?'wash':t==='con'?'con':'op'};
 function planTargets(v){if(!v)return null;const[s,id]=[v.slice(0,3),v.slice(4)];
@@ -501,7 +501,7 @@ function planTargets(v){if(!v)return null;const[s,id]=[v.slice(0,3),v.slice(4)];
 function planRow(t){const mineP=P.filter(q=>!q.mix&&q.g!=='B'&&OWN.has(q.k)&&plKind(q)===t.kind).map(q=>({q,d:d76(q.lab,t.lab)})).sort((a,b)=>a.d-b.d),best=mineP[0]||null;
  if(t.p&&OWN.has(t.p.k))return{t,st:'own'};
  if(best&&best.d<6)return{t,st:'close',best};
- if(t.kind==='op'){const m=mixFor(t.p||{n:t.label,k:'plan|'+t.h,h:t.h,lab:t.lab}).mixes[0];if(m&&m.d<6)return{t,st:'mix',mix:m,best}}
+ if(t.kind==='op'){const m=mixFor(t.p||{n:t.label,k:'plan|'+t.h,h:t.h,lab:t.lab}).mixes[0];if(m&&m.d<4.5)return{t,st:'mix',mix:m,best}}
  let buy=t.p;if(!buy){const myB=new Set([...OWN].map(k=>BYKEY.get(k)).filter(Boolean).map(p=>BR_OF[p.g])),c=P.filter(q=>!q.mix&&q.g!=='B'&&!OWN.has(q.k)&&plKind(q)===t.kind).map(q=>({q,d:d76(q.lab,t.lab)})).sort((a,b)=>a.d-b.d);
   const a=c[0],m=c.find(x=>myB.has(BR_OF[x.q.g]));buy=(m&&a&&m.d<=a.d+4?m:a||{}).q||null}
  return{t,st:'buy',buy,best}}
