@@ -1,10 +1,16 @@
 const AB={Dark:'Dk',Bright:'Br',Yellow:'Yel',Orange:'Orng',Green:'Grn',Brown:'Brn',Burnt:'Brnt',Fluorescent:'Fluor',Golden:'Gld',Magenta:'Mag',Turquoise:'Turq',Ultramarine:'Ultram.',Pyrrole:'Pyr.',Shadow:'Shdw',Advanced:'Adv.',Petroleum:'Petrol.',Burgundy:'Burg.',Crimson:'Crim.',Mahogany:'Mahog.',Emerald:'Emer.',Neutral:'Neut.',Titanium:'Ti',Heavy:'Hvy',Faded:'Fdd',Wash:'Wsh',Flesh:'Flsh',Yellow_:''};
+// Painter's (RYB) wheel: W is the paint's place on the wheel, the screen (HSL) hue H bent piecewise so red sits opposite green, yellow
+// opposite purple and blue opposite orange, as on the colour wheels painters learn. Complements, neighbours and schemes all use W.
+// hslH() turns a wheel angle back into a screen hue (for the wheel's background colours). Mirrored in worker/seo.js.
+const RYB_K=[[0,0],[30,60],[60,120],[120,180],[180,210],[240,240],[280,300],[320,330],[360,360]],
+ rybMap=(h,i,j)=>{h=(h%360+360)%360;for(let k=1;k<RYB_K.length;k++){const a=RYB_K[k-1][i],b=RYB_K[k][i];if(h<=b){const x=RYB_K[k-1][j],y=RYB_K[k][j];return x+(h-a)/(b-a)*(y-x)}}return h},
+ rybH=h=>rybMap(h,0,1),hslH=w=>rybMap(w,1,0);
 let g='M';const P=[];
 RAW.split('\n').forEach(l=>{if(l[0]==='#'){g=l[1];return}const[n,c,h]=l.split('|');const r=parseInt(h.slice(1,3),16)/255,gg=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255;
 const mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;let H=0;
 if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
 const S=d?d/(1-Math.abs(2*L-1)):0;
-P.push({n,c,h,g,H,S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n,i:P.length})});
+P.push({n,c,h,g,H,W:rybH(H),S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n,i:P.length})});
 // Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
 let OWN=null,ONLY_MINE=false;const own=p=>!!p.mix||!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
 let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
@@ -40,7 +46,7 @@ let WMD=54;const LCAP=18*Math.PI/180;
 function layout(){const vis=p=>p.on&&shown(p);CH=P.filter(p=>vis(p)&&onWheel(p));const chs=new Set(CH);NE=P.filter(p=>vis(p)&&!chs.has(p)).sort((a,b)=>a.L-b.L);
 const N=CH.length;WMD=N>140?Math.max(14,Math.min(44,.85*Math.sqrt(601e3/(.866*N)))):54;const MD=WMD,IT=N>2000?200:N>800?300:500;const srt=[...CH].sort((a,b)=>a.L-b.L);srt.forEach((p,i)=>p.rk=i/Math.max(1,srt.length-1));
 U=h=>h;
-CH.forEach(p=>{const a=U(p.H)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.a0=a;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
+CH.forEach(p=>{const a=U(p.W)*Math.PI/180-Math.PI/2,r=135+(.55*p.rk+.45*Math.min(1,Math.max(0,(p.L-.1)/.85)))*320;p.a0=a;p.ox=CX+r*Math.cos(a);p.oy=CY+r*Math.sin(a);p.x=p.ox;p.y=p.oy});
 // Push-apart only checks dots in the same or neighbouring grid cells (cell = MD), so it scales with the number of dots, not its square.
 const G=Math.ceil(1000/MD)+3,cell=new Map(),ck=(x,y)=>(Math.floor(x/MD)+1)*G+Math.floor(y/MD)+1;
 for(let it=0;it<IT;it++){cell.clear();CH.forEach((p,i)=>{const k=ck(p.x,p.y),c=cell.get(k);if(c)c.push(i);else cell.set(k,[i])});
@@ -54,7 +60,7 @@ function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
 // Neighbour / complement ranking: hue distance plus how far apart the two paints' saturation (Lab chroma) is, so a muted paint such as
 // an ivory or bone gets muted partners instead of strong yellows or pure blues that only share its (unsteady) hue angle.
 // The chroma term fades out for strong colours (full below chroma 15, none from 40), where the hue is steady and hue-only picks give a fuller light-to-dark spread.
-const chr=p=>Math.hypot(p.lab[1],p.lab[2]),hcS=(p,t,b)=>{const cb=chr(b);return hd(p.H,t)+Math.abs(chr(p)-cb)*Math.max(0,Math.min(1,(40-cb)/25))};
+const chr=p=>Math.hypot(p.lab[1],p.lab[2]),hcS=(p,t,b)=>{const cb=chr(b);return hd(p.W,t)+Math.abs(chr(p)-cb)*Math.max(0,Math.min(1,(40-cb)/25))};
 // Partner score = hcS, plus a big penalty for a different kind of paint (metallics partner metallics, opaque partners opaque; a Contrast
 // paint may also take opaque partners), so other kinds only fill in when the hue window has too few. A strong colour (chroma 25+) ranks
 // near-greys (chroma under 10) lower, since their hue angle says little. For complements (cm), a muted pick
@@ -172,8 +178,8 @@ const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
    ordered like the centre disc). The painter then swaps, adds, removes and reorders steps by tapping paints on the
    wheel or in the neutrals, and can mix any step with the base. Mixed colours are estimates (Lab average by parts). */
 let BL=null,ACT=null;const MXR=[[1,0],[2,1],[1,1],[1,2]],MXN=['Pure','2:1 with base','1:1 with base','1:2 with base'];
-function autoPicks(b){if(!CH.includes(b))return{comp:[],ana:[]};const th=(b.H+180)%360,c=CH.filter(p=>p!==b);
-return{comp:uniqSw(c.filter(p=>hd(p.H,th)<=22).sort((x,y)=>ptS(x,th,b,1)-ptS(y,th,b,1)),b,6),ana:uniqSw(c.filter(p=>hd(p.H,b.H)<=25).sort((x,y)=>ptS(x,b.H,b)-ptS(y,b.H,b)),b,6)}}
+function autoPicks(b){if(!CH.includes(b))return{comp:[],ana:[]};const th=(b.W+180)%360,c=CH.filter(p=>p!==b);
+return{comp:uniqSw(c.filter(p=>hd(p.W,th)<=22).sort((x,y)=>ptS(x,th,b,1)-ptS(y,th,b,1)),b,6),ana:uniqSw(c.filter(p=>hd(p.W,b.W)<=25).sort((x,y)=>ptS(x,b.W,b)-ptS(y,b.W,b)),b,6)}}
 function blendSeed(b){const {comp,ana}=autoPicks(b),m=q=>!ONLY_MINE||own(q),byL=(x,y)=>Math.abs(x.L-b.L)-Math.abs(y.L-b.L);
 const c=comp.filter(m).slice(0,2).sort(byL).reverse(),a=ana.filter(m).slice(0,2).sort(byL);
 BL={b,s:[...c.map(p=>({p,sp:p,m:0})),{p:b,base:1},...a.map(p=>({p,sp:p,m:0}))]};ACT=null}
@@ -192,11 +198,11 @@ st.forEach((x,i)=>{if(fx(x))return;const lo=A.filter(a=>a<i).pop(),hi=A.find(a=>
 todo.forEach(([x,t])=>{const q=near(t);if(q){x.p=q;used.add(q)}x.t=t})}
 const mixLab=x=>{if(x.base||!x.m)return x.p.lab;const[r0,r1]=MXR[x.m],b=BL.b.lab;return x.p.lab.map((v,i)=>(v*r0+b[i]*r1)/(r0+r1))};
 const mixHex=x=>x.base||!x.m?x.p.h:labHex(mixLab(x));
-const blendTag=p=>{const b=BL.b;if(!CH.includes(b)||!CH.includes(p))return'Neutral';if(hd(p.H,(b.H+180)%360)<=30)return'Complement';if(hd(p.H,b.H)<=30)return'Neighbour';return'Other hue'};
+const blendTag=p=>{const b=BL.b;if(!CH.includes(b)||!CH.includes(p))return'Neutral';if(hd(p.W,(b.W+180)%360)<=30)return'Complement';if(hd(p.W,b.W)<=30)return'Neighbour';return'Other hue'};
 function blendFill(p){if(!ACT||!BL)return false;if(p!==BL.b){if(ACT.ins)BL.s.splice(ACT.i,0,{p,sp:p,m:0,man:1});else BL.s[ACT.i]={...BL.s[ACT.i],p,man:1}}ACT=null;draw();return true}
 // Wheel overlay: the blend as a path through its paints on the wheel, and the centre disc as the blend in the painter's order.
 function blendWheel(){const st=BL.s;let s=stepLine(st.map(x=>x.p),BL.b);
-const b=BL.b,ax=(CH.includes(b)?b.H:0)*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
+const b=BL.b,ax=(CH.includes(b)?b.W:0)*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
 return s+`<defs><linearGradient id="bg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${mixHex(x)}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#bg)" stroke="#1b1b1b" stroke-width="3"><title>Your blend</title></circle>`}
 function blendPanel(){const el=document.getElementById('sel'),b=BL.b,st=BL.s,i0=st.findIndex(x=>x.base),esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const add=(i,t)=>`<button type="button" class="badd${ACT&&ACT.ins&&ACT.i===i?' on':''}" data-ma="${i}">${ACT&&ACT.ins&&ACT.i===i?'Now tap a paint on the wheel…':t}</button>`;
@@ -239,7 +245,7 @@ const rampGrad=(id,R,rad)=>rad?`<radialGradient id="${id}" cx=".5" cy=".5" r=".5
 // Greys and whites have no hue, so a ramp or blend step that uses one gets a dashed dot on the base paint's spoke, placed by lightness
 // like the rest of the wheel (dark in the middle, light at the rim). OFF holds those dots for draw(); stepPts gives every step a point.
 let OFF=[];
-function stepPts(ps,b){const h=CH.includes(b)?b.H:(ps.find(p=>CH.includes(p))||{H:0}).H,a=U(h)*Math.PI/180-Math.PI/2,o=[];
+function stepPts(ps,b){const h=CH.includes(b)?b.W:(ps.find(p=>CH.includes(p))||{W:0}).W,a=U(h)*Math.PI/180-Math.PI/2,o=[];
  ps.forEach(p=>{if(!CH.includes(p)&&!o.some(x=>x.p===p))o.push({p,r:135+Math.min(1,Math.max(0,(p.L-.1)/.85))*320})});
  o.sort((x,y)=>x.r-y.r).forEach((x,i)=>{if(i)x.r=Math.max(x.r,o[i-1].r+44)});
  OFF=o.map(x=>[x.p,CX+x.r*Math.cos(a),CY+x.r*Math.sin(a)]);
@@ -389,7 +395,7 @@ let SCH='comp',HTOL=20;try{const o=JSON.parse(localStorage.getItem('pd-scheme'))
 const schSave=()=>{try{localStorage.setItem('pd-scheme',JSON.stringify({s:SCH,t:HTOL}))}catch(e){}};
 const hAng=h=>U(h)*Math.PI/180-Math.PI/2;
 function harmony(b){const sc=HSC[SCH],tol=SCH==='mono'?Math.min(HTOL,14):HTOL,mine=p=>!ONLY_MINE||own(p);
-const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);const band=[b,...l].filter(p=>hd(p.H,t)<=tol||p===b);
+const groups=sc.offs.map((o,k)=>{const t=(b.W+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.W,t)<=tol);const band=[b,...l].filter(p=>hd(p.W,t)<=tol||p===b);
 if(SCH==='mono')l=[b,...uniqSw(l.sort((x,y)=>x.lab[0]-y.lab[0]),b,11)].sort((x,y)=>x.lab[0]-y.lab[0]);
 else{l.sort((x,y)=>ptS(x,t,b,!main)-ptS(y,t,b,!main));l=main?[b,...uniqSw(l,b,4)]:uniqSw(l,b,6)}
 const sc2=p=>ptS(p,t,b)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
@@ -397,7 +403,7 @@ return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k],bl:pk&&SCH!=='mono'?hBlend(
 // A 3-step blend for one scheme colour: the pick as the mid tone, plus the paints in its hue band closest to ~18 Lab L darker and lighter
 // (at least 8 apart, owned paints first when 'Only my paints' is on). A step stays empty when the band has nothing dark or light enough.
 function hBlend(m,band,mine){const L=m.lab[0],f=(dir)=>{const c=band.filter(p=>p!==m&&(dir<0?p.lab[0]<=L-8:p.lab[0]>=L+8));if(!c.length)return null;
- const tg=L+dir*18,sc=p=>Math.abs(p.lab[0]-tg)+.5*hd(p.H,m.H)+(mine(p)?0:1000);return c.sort((x,y)=>sc(x)-sc(y))[0]};return[f(-1),m,f(1)]}
+ const tg=L+dir*18,sc=p=>Math.abs(p.lab[0]-tg)+.5*hd(p.W,m.W)+(mine(p)?0:1000);return c.sort((x,y)=>sc(x)-sc(y))[0]};return[f(-1),m,f(1)]}
 // Opens Blends with the colour's 3-step blend fixed in place (shadow and highlight count as the painter's own picks).
 function hOpenBlend(bl){const[sh,m,hi]=bl;sel=m;NB=m;BL={b:m,s:[...(sh?[{p:sh,sp:sh,m:0,man:1}]:[]),{p:m,base:1},...(hi?[{p:hi,sp:hi,m:0,man:1}]:[])]};setMode('mix');document.getElementById('w').scrollIntoView({block:'start'})}
 function hArc(t,tol,r0,r1){const a0=hAng(t-tol),a1=hAng(t+tol),L=tol*2>180?1:0;
@@ -408,7 +414,7 @@ groups.forEach(g=>s+=`<path d="${hArc(g.t,tol,112,470)}" fill="currentColor" opa
 const V=groups.map(g=>[CX+300*Math.cos(hAng(g.t)),CY+300*Math.sin(hAng(g.t)),g.t]);
 if(V.length===2)s+=`<line x1="${V[0][0]}" y1="${V[0][1]}" x2="${V[1][0]}" y2="${V[1][1]}" stroke="currentColor" stroke-width="4" opacity=".7"/>`;
 else if(V.length>2){const o=SCH==='ana'?V:[...V].sort((x,y)=>x[2]-y[2]);s+=`<${SCH==='ana'?'polyline':'polygon'} points="${o.map(v=>v[0].toFixed(1)+','+v[1].toFixed(1)).join(' ')}" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" opacity=".7"/>`}
-else{const a=hAng(b.H);s+=`<line x1="${CX+112*Math.cos(a)}" y1="${CY+112*Math.sin(a)}" x2="${CX+470*Math.cos(a)}" y2="${CY+470*Math.sin(a)}" stroke="currentColor" stroke-width="4" opacity=".6" stroke-dasharray="2 8" stroke-linecap="round"/>`}
+else{const a=hAng(b.W);s+=`<line x1="${CX+112*Math.cos(a)}" y1="${CY+112*Math.sin(a)}" x2="${CX+470*Math.cos(a)}" y2="${CY+470*Math.sin(a)}" stroke="currentColor" stroke-width="4" opacity=".6" stroke-dasharray="2 8" stroke-linecap="round"/>`}
 return s}
 // Numbered role badges and the palette disc go over the dots (they don't take taps).
 function hOver(HS){const {groups}=HS;let s='<g pointer-events="none">';
@@ -457,22 +463,22 @@ schUI();
 
 function draw(){let s='';OFF=[];
 for(let h=0;h<360;h+=10){const a0=U(h-5)*Math.PI/180-Math.PI/2,a1=U(h+5)*Math.PI/180-Math.PI/2,R=480,r=110;
-s+=`<path d="M${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}L${CX+R*Math.cos(a0)} ${CY+R*Math.sin(a0)}A${R} ${R} 0 0 1 ${CX+R*Math.cos(a1)} ${CY+R*Math.sin(a1)}L${CX+r*Math.cos(a1)} ${CY+r*Math.sin(a1)}A${r} ${r} 0 0 0 ${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}Z" fill="hsl(${h},65%,50%)" opacity=".16"/>`}
+s+=`<path d="M${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}L${CX+R*Math.cos(a0)} ${CY+R*Math.sin(a0)}A${R} ${R} 0 0 1 ${CX+R*Math.cos(a1)} ${CY+R*Math.sin(a1)}L${CX+r*Math.cos(a1)} ${CY+r*Math.sin(a1)}A${r} ${r} 0 0 0 ${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}Z" fill="hsl(${Math.round(hslH(h))},65%,50%)" opacity=".16"/>`}
 [.2,.5,.8].forEach(l=>s+=`<circle cx="${CX}" cy="${CY}" r="${140+l*300}" fill="none" stroke="currentColor" opacity=".18" stroke-dasharray="4 6"/>`);
 if(!sel)s+=`<text x="${CX}" y="${CY-8}" text-anchor="middle" fill="currentColor" opacity=".5" font-size="15">darker ←</text><text x="${CX}" y="${CY+14}" text-anchor="middle" fill="currentColor" opacity=".5" font-size="15">→ lighter (rim)</text>`;
-const hn={0:'Red',30:'Orange',60:'Yellow',120:'Green',180:'Cyan',240:'Blue',280:'Violet',320:'Magenta'};
+const hn={0:'Red',60:'Orange',120:'Yellow',180:'Green',240:'Blue',300:'Violet',330:'Magenta'};
 for(const h in hn){const a=U(+h)*Math.PI/180-Math.PI/2;s+=`<text x="${CX+492*Math.cos(a)}" y="${CY+492*Math.sin(a)+4}" text-anchor="middle" font-size="13" fill="currentColor" opacity=".6">${hn[h]}</text>`}
 let comp=[],ana=[];const NBp=MODE==='nmm'?NB:null,R=NBp?nmmRamp(NBp):null,MB=MODE==='mix'?NB:null;
 if(MB&&(!BL||BL.b!==MB))blendSeed(MB);if(MB)blendAuto();const MX=MB?BL.s.map(x=>x.p):null;
 const HS=sel&&!R&&!MX&&MODE==='col'&&SCH!=='comp'?harmony(sel):null,HIN=HS?new Set(HS.groups.flatMap(g=>g.l)):null,HPK=HS&&SCH!=='mono'?new Set(HS.groups.map(g=>g.pk).filter(Boolean)):new Set();
 if(HS)s+=hUnder(HS,sel);
-if(sel&&!R&&!MX&&!HS){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=uniqSw(cands.filter(p=>hd(p.H,th)<=HTOL).sort((a,b)=>ptS(a,th,sel,1)-ptS(b,th,sel,1)),sel,6);
-ana=uniqSw(cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>ptS(a,sel.H,sel)-ptS(b,sel.H,sel)),sel,6);
-const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
+if(sel&&!R&&!MX&&!HS){const th=(sel.W+180)%360;const cands=CH.filter(p=>p!==sel);comp=uniqSw(cands.filter(p=>hd(p.W,th)<=HTOL).sort((a,b)=>ptS(a,th,sel,1)-ptS(b,th,sel,1)),sel,6);
+ana=uniqSw(cands.filter(p=>hd(p.W,sel.W)<=25).sort((a,b)=>ptS(a,sel.W,sel)-ptS(b,sel.W,sel)),sel,6);
+const a=th*Math.PI/180-Math.PI/2,b=sel.W*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
 if(R)s+=nmmWheel(R);
 if(MX)s+=blendWheel();
-if(sel&&!R&&!MX&&!HS){const ax=sel.H*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
+if(sel&&!R&&!MX&&!HS){const ax=sel.W*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
 s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${discStops(sel,comp,ana).map(([h,o])=>`<stop offset="${o.toFixed(4)}" stop-color="${h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
 const R0=WMD>=54?26:Math.round(WMD*4.6)/10,kk=R0/26,show=document.getElementById('lab').checked&&R0>=12;
 CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):HS?HIN.has(p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
@@ -642,7 +648,7 @@ window.pdSetMixes=list=>{P.length=P0;
  (list||[]).forEach(x=>{const m=(x.parts||[]).map(y=>[KEY[y.k],y.parts]).filter(y=>y[0]);if(m.length<2)return;m.forEach(([q])=>{if(!q.ks)q.ks=KSv(q.h)});
   const h=m.length===x.parts.length?kmHex(m):x.hex,r=parseInt(h.slice(1,3),16)/255,gg=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255,mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;
   let H=0;if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
-  const p={n:x.name,c:'My mix',h,g:'µ',H,S:d?d/(1-Math.abs(2*L-1)):0,L,lum:.299*r+.587*gg+.114*b,k:'µ|'+x.id+'|'+x.name,i:P.length,lab:hexLab(h),mix:{id:x.id,m}};
+  const p={n:x.name,c:'My mix',h,g:'µ',H,W:rybH(H),S:d?d/(1-Math.abs(2*L-1)):0,L,lum:.299*r+.587*gg+.114*b,k:'µ|'+x.id+'|'+x.name,i:P.length,lab:hexLab(h),mix:{id:x.id,m}};
   Object.defineProperty(p,'on',{get:()=>true,set(){},enumerable:true});P.push(p)});
  const gone=q=>q&&q.mix&&!P.includes(q);if(gone(sel))sel=null;if(gone(NB))NB=null;if(BL&&(gone(BL.b)||BL.s.some(x=>gone(x.p))))BL=null;
  MIXC=null;layout();renderNeu();draw()};
@@ -942,7 +948,7 @@ function detail(el,x){const R=matchAll(x),hv=R.filter(r=>r.pick&&own(r.pick.p)).
  `<div class="row"><button type="button" class="btn pri" id="plShow">Show on wheel</button><button type="button" class="btn" id="plSave" title="Save these paints as a palette card in Tutorials &amp; Community (needs an account)">Save as palette card</button><a class="btn" href="/guides/palettes/${x.s}">Paints in every brand</a>${OWN?`<a class="btn" href="#/paints?plan=pal:${x.s}">Plan it with my paints</a>`:''}</div>`;
  const B=$('plB');if(B)B.onchange=()=>{ST.b=B.value;save();detail(el,x)};const M=$('plMine');if(M)M.onchange=()=>{ST.mine=M.checked?1:0;save();detail(el,x)};
  el.querySelector('.plrows').onclick=e=>{const b=e.target.closest('button');if(!b)return;
-  if(b.dataset.bl!==undefined){const m=R[+b.dataset.bl].pick.p,band=pool({}).filter(p=>hd(p.H,m.H)<=20),bl=hBlend(m,band,p=>!mine()||own(p));
+  if(b.dataset.bl!==undefined){const m=R[+b.dataset.bl].pick.p,band=pool({}).filter(p=>hd(p.W,m.W)<=20),bl=hBlend(m,band,p=>!mine()||own(p));
    bl.forEach(p=>{if(p)p.on=true});sync();location.hash='#/';setTimeout(()=>hOpenBlend(bl),60);return}
   if(b.dataset.c===undefined)return;(PK[x.s]=PK[x.s]||{})[+b.dataset.c]=P[+b.dataset.i].k;detail(el,x)};
  $('plShow').onclick=()=>{const ps=[...new Set(R.filter(r=>r.pick).map(r=>r.pick.p))],hid=ps.filter(p=>!shown(p)).length;location.hash='#/';

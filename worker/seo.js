@@ -1057,7 +1057,7 @@ ${guideLinks(g)}`;
 /* ---------- colour theory guide ---------- */
 
 const guideHTML = (D, g) => g.page ? g.page(D, g) : g.conv ? convPage(D, g) : techPage(D, g);
-const THEORY_DATE = '2026-10-26';
+const THEORY_DATE = '2026-11-19';
 
 // Hue, saturation and lightness of a swatch, worked out the same way as the wheel in app.js (HSL from the hex colour).
 function hslOf(h) {
@@ -1074,17 +1074,21 @@ const onWheel = p => Math.hypot(p.lab[1], p.lab[2]) >= 6.5 && p.lab[0] > 3 && p.
 const pol = (c, r, deg) => [c + r * Math.cos((deg - 90) * Math.PI / 180), c + r * Math.sin((deg - 90) * Math.PI / 180)].map(v => +v.toFixed(1));
 
 // A hue ring with spokes and dots at the given angles: the little diagrams for each colour scheme.
+// Painter's (RYB) wheel angle from a screen (HSL) hue and back, the same mapping as rybH()/hslH() in app.js.
+const RYB_K = [[0, 0], [30, 60], [60, 120], [120, 180], [180, 210], [240, 240], [280, 300], [320, 330], [360, 360]];
+const rybMap = (h, i, j) => { h = (h % 360 + 360) % 360; for (let k = 1; k < RYB_K.length; k++) { const a = RYB_K[k - 1][i], b = RYB_K[k][i]; if (h <= b) { const x = RYB_K[k - 1][j], y = RYB_K[k][j]; return x + (h - a) / (b - a) * (y - x) } } return h };
+const rybH = h => rybMap(h, 0, 1), hslH = w => Math.round(rybMap(w, 1, 0));
 function hueRing(c, R, w) {
   const seg = [];
   for (let a = 0; a < 360; a += 10) {
     const [x1, y1] = pol(c, R, a - 5.2), [x2, y2] = pol(c, R, a + 5.2), [x3, y3] = pol(c, R - w, a + 5.2), [x4, y4] = pol(c, R - w, a - 5.2);
-    seg.push(`<path d="M${x1} ${y1}A${R} ${R} 0 0 1 ${x2} ${y2}L${x3} ${y3}A${R - w} ${R - w} 0 0 0 ${x4} ${y4}Z" fill="hsl(${a} 75% 52%)"/>`);
+    seg.push(`<path d="M${x1} ${y1}A${R} ${R} 0 0 1 ${x2} ${y2}L${x3} ${y3}A${R - w} ${R - w} 0 0 0 ${x4} ${y4}Z" fill="hsl(${hslH(a)} 75% 52%)"/>`);
   }
   return seg.join('');
 }
 function ringSVG(angles, size = 150) {
   const c = size / 2, R = c - 12, seg = [hueRing(c, R, 14)];
-  const dots = angles.map(a => { const [x, y] = pol(c, R - 7, a); return `<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="2"/><circle cx="${x}" cy="${y}" r="8" fill="hsl(${a} 75% 52%)" stroke="currentColor" stroke-width="3"/>` });
+  const dots = angles.map(a => { const [x, y] = pol(c, R - 7, a); return `<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="2"/><circle cx="${x}" cy="${y}" r="8" fill="hsl(${hslH(a)} 75% 52%)" stroke="currentColor" stroke-width="3"/>` });
   return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-hidden="true">${seg.join('')}${dots.join('')}</svg>`;
 }
 
@@ -1092,7 +1096,7 @@ function theoryPage(D, g) {
   const cit = D.brands.find(b => b.slug === 'citadel');
   // Opaque Citadel paints on the wheel, leaving out Air (the same colours again, thinned) and any repeated names.
   const seen = new Set();
-  const pool = cit.paints.filter(p => p.t === 'op' && !/\bair\b/i.test(D.GL[p.g]) && !seen.has(p.n) && seen.add(p.n)).map(p => ({ p, lab: p.lab, ...hslOf(p.h) })).filter(onWheel);
+  const pool = cit.paints.filter(p => p.t === 'op' && !/\bair\b/i.test(D.GL[p.g]) && !seen.has(p.n) && seen.add(p.n)).map(p => { const x = hslOf(p.h); return { p, lab: p.lab, ...x, H: rybH(x.H) } }).filter(onWheel);
   // The opaque Citadel paint closest to a hue, preferring mid-tone, fairly saturated paints so the examples read clearly.
   const near = (h, used) => pool.filter(x => !used.has(x.p)).map(x => ({ x, k: hueD(x.H, h) * 1.5 + Math.abs(x.L - .42) * 60 + Math.max(0, .45 - x.S) * 80 }))
     .sort((a, b) => a.k - b.k)[0]?.x;
@@ -1136,7 +1140,7 @@ ${hueRing(c, 168, 6)}<circle cx="${c}" cy="${c}" r="24" fill="none" stroke="curr
 <p class="s">Top: one hue, dark to light (value). Bottom: one hue, grey to intense (saturation).</p></section>
 
 <section class="panel prose"><h2>The colour wheel</h2>
-<p>A colour wheel arranges hues in a circle, so every colour sits between its neighbours and opposite its <b>complement</b>. Painters traditionally learn a red, yellow and blue wheel (RYB), where red sits opposite green, yellow opposite purple and blue opposite orange. Screens use a red, green and blue wheel of light (RGB), which spaces the hues a little differently: there red sits opposite a blue-green, and yellow opposite a deep blue.</p>
+<p>A colour wheel arranges hues in a circle, so every colour sits between its neighbours and opposite its <b>complement</b>. Painters traditionally learn a red, yellow and blue wheel (RYB), where red sits opposite green, yellow opposite purple and blue opposite orange. Screens use a red, green and blue wheel of light (RGB), which spaces the hues differently: there red sits opposite a blue-green, and yellow opposite a deep blue. The Painters Desk wheel uses the painter's RYB wheel.</p>
 <p>Neither is "correct". Both are models, and real paints are made from pigments that don't follow either one exactly. Mixing two complements together dulls them toward a brown or grey, which is why a thin glaze of the complement is a classic way to knock back a colour that is too bright, and why you get mud when complements mix by accident on a wet model.</p>
 <p><b>Warm and cool.</b> Reds, oranges and yellows feel warm and seem to come forward; blues, greens and violets feel cool and seem to sit back. Many painters shift the hue as well as the value along a ramp: cooler or more purple in the shadows, warmer or more yellow in the highlights. It makes a ramp look lit, rather than just darker and lighter.</p></section>
 
@@ -1148,13 +1152,13 @@ ${hueRing(c, 168, 6)}<circle cx="${c}" cy="${c}" r="24" fill="none" stroke="curr
 <section class="panel"><h2>How The Painters Desk uses the colour wheel</h2>
 <div class="hero">${wheel}<div class="prose" style="flex:1;min-width:260px">
 <p>This is a small version of the site's wheel showing only Citadel's opaque paints, without the push-apart, so some dots overlap. <b>${esc(ex.p.n)}</b> has the thick outline; its complements (across the dashed line) and its neighbours have thinner outlines.</p>
-<p><b>Around the wheel: the paint's own hue.</b> Each paint sits at the true hue angle of its swatch colour, measured the screen (RGB) way, with red at the top and the hues running clockwise through yellow, green, blue and purple. We don't squeeze the hues into a painter's RYB wheel, because that would mean bending every paint's real position by a different amount.</p>
+<p><b>Around the wheel: the paint's own hue.</b> Each paint sits at the hue of its swatch colour on a painter's RYB wheel, with red at the top and the hues running clockwise through orange, yellow, green, blue and purple. The swatch's screen hue is stretched round the reds, oranges and yellows and squeezed through the greens and blues, so red sits opposite green, yellow opposite purple and blue opposite orange, as painters expect.</p>
 <p><b>Centre to rim: lightness.</b> Dark paints sit near the centre and light ones near the rim. The distance mixes each paint's lightness with its rank among the paints you're showing, so a crowd of mid tones still spreads out.</p>
 <p><b>Push-apart.</b> Hundreds of paints share some hues, so the dots are nudged apart until none overlap and then pulled gently back toward their true spot. A dot can end up a few degrees from its exact hue, but complements and neighbours are always worked out from the exact hues.</p>
 <p><b>Neutrals.</b> Paints with very little saturation, and near-blacks and near-whites, have no meaningful hue, so they go in the Neutrals, greys &amp; whites list under the wheel instead.</p>
 </div></div>
 <div class="prose">
-<p><b>Complements and neighbours.</b> Tap a paint and the wheel picks up to six <b>complements</b>: the paints, from the ones you're showing, whose hue is within 22° of the exact opposite, closest first. It also picks up to six <b>neighbours</b> (analogous colours) within 25° of the paint's own hue. Both are chosen by hue only, so they can be lighter or darker than your paint: pick the value you need for the job, dark ones for shading and light ones for highlights. With ${esc(ex.p.n)} and all of Citadel's opaque paints, that gives:</p>
+<p><b>Complements and neighbours.</b> Tap a paint and the wheel picks up to six <b>complements</b>: the paints, from the ones you're showing, whose hue is within 22° of the exact opposite, closest first. It also picks up to six <b>neighbours</b> (analogous colours) within 25° of the paint's own hue. Both are chosen mainly by hue (muted paints also get muted partners, and paints of the same kind come first), so they can be lighter or darker than your paint: pick the value you need for the job, dark ones for shading and light ones for highlights. With ${esc(ex.p.n)} and all of Citadel's opaque paints, that gives:</p>
 <div class="grid"><div><h3>Complements</h3>${comp.length ? chipList(comp) : '<p class="s">None within 22°.</p>'}</div><div><h3>Neighbours</h3>${ana.length ? chipList(ana) : '<p class="s">None within 25°.</p>'}</div></div>
 <p><b>The centre disc.</b> The disc in the middle of the wheel blends from the complements, through your paint, out to its neighbours. Each side runs from dark to light and the two sides meet where their shades match, so you can see how the colours would grade into each other on a model.</p>
 <p><b>Ramps and Blends.</b> Ramps mode turns colour theory into steps: for <a href="/guides/best-paints-for-nmm">non-metallic metal</a>, <a href="/guides/best-paints-for-osl">object source lighting</a>, <a href="/guides/best-paints-for-gems">gems</a>, <a href="/guides/best-paints-for-skin-tones">skin</a>, <a href="/guides/zenithal-highlighting">zenithal</a> and <a href="/guides/edge-highlighting">edge highlights</a> and <a href="/guides/glazing">glazes</a> it sets a target colour for each step (shifting hue and saturation as well as lightness, as described above) and finds the nearest opaque paint for each one. Blends mode lets you pin a few paints and fills the steps between them. Each technique has its own step-by-step guide with example ramps.</p>
