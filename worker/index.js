@@ -376,7 +376,7 @@ async function me(request, env) {
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // messages: the Messages pages work (migration 0015).
   // forum: the Forum pages work (migration 0018). chat: the Chat page works (migration 0019).
-  // forum is only on for admins until FORUM_OPEN is set to 1 (the owner paused it 2026-10-31 to focus on chat).
+  // forum is off for everyone, admins included, until FORUM_OPEN is set to 1 (paused 2026-10-31, hidden from admins too 2026-11-19).
   // msgPhotos: photos can be sent in Messages (migration 0023).
   const messages = await hasMessages(env), msgPhotos = messages && await hasMsgPhotos(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
@@ -2201,8 +2201,8 @@ async function hasForum(env) {
   if (!forumReady) forumReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'forum_threads'").first());
   return forumReady;
 }
-// The forum is paused: only admins can see it until the FORUM_OPEN variable is set to 1. Its data stays as it is.
-const forumOpen = (env, u) => env.FORUM_OPEN === '1' || !!u?.admin;
+// The forum is paused for everyone, admins included (owner asked 2026-11-19), until the FORUM_OPEN variable is set to 1. Its data stays as it is.
+const forumOpen = (env, u) => env.FORUM_OPEN === '1';
 async function needForum(env) {
   if (!await hasForum(env)) throw new HttpError(503, 'The forum is not open on this server yet');
 }
