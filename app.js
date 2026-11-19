@@ -42,6 +42,10 @@ for(let i=0;i<CH.length;i++){const a=CH[i],k0=ck(a.x,a.y);for(let gx=-G;gx<=G;gx
 a.x+=(a.ox-a.x)*.008;a.y+=(a.oy-a.y)*.008;const dx=a.x-CX,dy=a.y-CY,d=Math.hypot(dx,dy);if(d>455||d<125){const t=Math.min(455,Math.max(125,d))/d;a.x=CX+dx*t;a.y=CY+dy*t}}}}
 function lines(n){let w=n.split(' ').map(x=>AB[x]||x);if(w.length===1)return w;let best=1,bm=1e9;for(let k=1;k<w.length;k++){const m=Math.max(w.slice(0,k).join(' ').length,w.slice(k).join(' ').length);if(m<bm){bm=m;best=k}}return[w.slice(0,best).join(' '),w.slice(best).join(' ')]}
 function hd(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d}
+// Neighbour / complement ranking: hue distance plus how far apart the two paints' saturation (Lab chroma) is, so a muted paint such as
+// an ivory or bone gets muted partners instead of strong yellows or pure blues that only share its (unsteady) hue angle.
+// The chroma term fades out for strong colours (full below chroma 15, none from 40), where the hue is steady and hue-only picks give a fuller light-to-dark spread.
+const chr=p=>Math.hypot(p.lab[1],p.lab[2]),hcS=(p,t,b)=>{const cb=chr(b);return hd(p.H,t)+Math.abs(chr(p)-cb)*Math.max(0,Math.min(1,(40-cb)/25))};
 /* ---------- Ramp mode (NMM, OSL, gems, skin, zenithal, edge highlights, glazes, drybrushing, underpainting) ----------
    Tap a paint and it builds a light ramp for the chosen technique. Each technique sets its own stops in Lab/LCh
    (how dark and light it goes, how chroma and hue drift, and what the optional tint does). Each stop then takes the
@@ -151,7 +155,7 @@ const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
    wheel or in the neutrals, and can mix any step with the base. Mixed colours are estimates (Lab average by parts). */
 let BL=null,ACT=null;const MXR=[[1,0],[2,1],[1,1],[1,2]],MXN=['Pure','2:1 with base','1:1 with base','1:2 with base'];
 function autoPicks(b){if(!CH.includes(b))return{comp:[],ana:[]};const th=(b.H+180)%360,c=CH.filter(p=>p!==b);
-return{comp:c.filter(p=>hd(p.H,th)<=22).sort((x,y)=>hd(x.H,th)-hd(y.H,th)).slice(0,6),ana:c.filter(p=>hd(p.H,b.H)<=25).sort((x,y)=>hd(x.H,b.H)-hd(y.H,b.H)).slice(0,6)}}
+return{comp:c.filter(p=>hd(p.H,th)<=22).sort((x,y)=>hcS(x,th,b)-hcS(y,th,b)).slice(0,6),ana:c.filter(p=>hd(p.H,b.H)<=25).sort((x,y)=>hcS(x,b.H,b)-hcS(y,b.H,b)).slice(0,6)}}
 function blendSeed(b){const {comp,ana}=autoPicks(b),m=q=>!ONLY_MINE||own(q),byL=(x,y)=>Math.abs(x.L-b.L)-Math.abs(y.L-b.L);
 const c=comp.filter(m).slice(0,2).sort(byL).reverse(),a=ana.filter(m).slice(0,2).sort(byL);
 BL={b,s:[...c.map(p=>({p,sp:p,m:0})),{p:b,base:1},...a.map(p=>({p,sp:p,m:0}))]};ACT=null}
@@ -369,8 +373,8 @@ const hAng=h=>U(h)*Math.PI/180-Math.PI/2;
 function harmony(b){const sc=HSC[SCH],tol=SCH==='mono'?Math.min(HTOL,14):HTOL,mine=p=>!ONLY_MINE||own(p);
 const groups=sc.offs.map((o,k)=>{const t=(b.H+o+360)%360,main=o===0;let l=CH.filter(p=>p!==b&&hd(p.H,t)<=tol);const band=[b,...l].filter(p=>hd(p.H,t)<=tol||p===b);
 if(SCH==='mono')l=[b,...l].sort((x,y)=>x.lab[0]-y.lab[0]).slice(0,12);
-else{l.sort((x,y)=>hd(x.H,t)-hd(y.H,t));l=main?[b,...l.slice(0,4)]:l.slice(0,6)}
-const sc2=p=>hd(p.H,t)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
+else{l.sort((x,y)=>hcS(x,t,b)-hcS(y,t,b));l=main?[b,...l.slice(0,4)]:l.slice(0,6)}
+const sc2=p=>hcS(p,t,b)+28*Math.abs(p.L-b.L)+(mine(p)?0:1000),pk=main?b:[...l].sort((x,y)=>sc2(x)-sc2(y))[0]||null;
 return{t,off:o,role:sc.roles[k],l,pk,prop:sc.prop[k],bl:pk&&SCH!=='mono'?hBlend(pk,band.filter(p=>p===pk||nmmOK(p)),mine):null}});return{sc,groups,tol}}
 // A 3-step blend for one scheme colour: the pick as the mid tone, plus the paints in its hue band closest to ~18 Lab L darker and lighter
 // (at least 8 apart, owned paints first when 'Only my paints' is on). A step stays empty when the band has nothing dark or light enough.
@@ -444,8 +448,8 @@ let comp=[],ana=[];const NBp=MODE==='nmm'?NB:null,R=NBp?nmmRamp(NBp):null,MB=MOD
 if(MB&&(!BL||BL.b!==MB))blendSeed(MB);if(MB)blendAuto();const MX=MB?BL.s.map(x=>x.p):null;
 const HS=sel&&!R&&!MX&&MODE==='col'&&SCH!=='comp'?harmony(sel):null,HIN=HS?new Set(HS.groups.flatMap(g=>g.l)):null,HPK=HS&&SCH!=='mono'?new Set(HS.groups.map(g=>g.pk).filter(Boolean)):new Set();
 if(HS)s+=hUnder(HS,sel);
-if(sel&&!R&&!MX&&!HS){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.filter(p=>hd(p.H,th)<=HTOL).sort((a,b)=>hd(a.H,th)-hd(b.H,th)).slice(0,6);
-ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hd(a.H,sel.H)-hd(b.H,sel.H)).slice(0,6);
+if(sel&&!R&&!MX&&!HS){const th=(sel.H+180)%360;const cands=CH.filter(p=>p!==sel);comp=cands.filter(p=>hd(p.H,th)<=HTOL).sort((a,b)=>hcS(a,th,sel)-hcS(b,th,sel)).slice(0,6);
+ana=cands.filter(p=>hd(p.H,sel.H)<=25).sort((a,b)=>hcS(a,sel.H,sel)-hcS(b,sel.H,sel)).slice(0,6);
 const a=th*Math.PI/180-Math.PI/2,b=sel.H*Math.PI/180-Math.PI/2;
 s+=`<line x1="${sel.x}" y1="${sel.y}" x2="${CX+440*Math.cos(U(th)*Math.PI/180-Math.PI/2)}" y2="${CY+440*Math.sin(U(th)*Math.PI/180-Math.PI/2)}" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" opacity=".55"/>`}
 if(R)s+=nmmWheel(R);
