@@ -199,13 +199,26 @@ function hexLab(h) {
   const t = v => v > .008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116;
   return [116 * t(y) - 16, 500 * (t(x) - t(y)), 200 * (t(y) - t(z))];
 }
-const dE = (a, b) => Math.hypot(a.lab[0] - b.lab[0], a.lab[1] - b.lab[1], a.lab[2] - b.lab[2]);
+// Colour difference: CIEDE2000 (ΔE2000), the same formula as de00() in app.js. Tracks how different two colours look much better than
+// the plain Lab distance (CIE76), which overstates gaps between saturated blues, greens and yellows.
+function de00([L1, a1, b1], [L2, a2, b2]) {
+  const R = Math.PI / 180, C7 = c => { const c7 = c ** 7; return Math.sqrt(c7 / (c7 + 6103515625)) };
+  const Cb = (Math.hypot(a1, b1) + Math.hypot(a2, b2)) / 2, G = .5 * (1 - C7(Cb)), A1 = (1 + G) * a1, A2 = (1 + G) * a2, c1 = Math.hypot(A1, b1), c2 = Math.hypot(A2, b2);
+  const h1 = c1 ? (Math.atan2(b1, A1) / R + 360) % 360 : 0, h2 = c2 ? (Math.atan2(b2, A2) / R + 360) % 360 : 0;
+  let dh = h2 - h1; if (dh > 180) dh -= 360; else if (dh < -180) dh += 360; if (!c1 || !c2) dh = 0;
+  const dL = L2 - L1, dC = c2 - c1, dH = 2 * Math.sqrt(c1 * c2) * Math.sin(dh * R / 2), Lb = (L1 + L2) / 2, cb = (c1 + c2) / 2;
+  const hb = !c1 || !c2 ? h1 + h2 : Math.abs(h1 - h2) <= 180 ? (h1 + h2) / 2 : h1 + h2 < 360 ? (h1 + h2 + 360) / 2 : (h1 + h2 - 360) / 2;
+  const T = 1 - .17 * Math.cos((hb - 30) * R) + .24 * Math.cos(2 * hb * R) + .32 * Math.cos((3 * hb + 6) * R) - .2 * Math.cos((4 * hb - 63) * R);
+  const SL = 1 + .015 * (Lb - 50) ** 2 / Math.sqrt(20 + (Lb - 50) ** 2), SC = 1 + .045 * cb, SH = 1 + .015 * cb * T, RT = -2 * C7(cb) * Math.sin(60 * Math.exp(-(((hb - 275) / 25) ** 2)) * R);
+  return Math.sqrt((dL / SL) ** 2 + (dC / SC) ** 2 + (dH / SH) ** 2 + RT * (dC / SC) * (dH / SH));
+}
+const dE = (a, b) => de00(a.lab, b.lab);
 
-// Same rule as matchData() in app.js. Short list (default): per other brand, chart-listed equivalents within ΔE 25 of the swatch,
-// else the 1 nearest paint of the same type within ΔE 12; a name shown once per brand. all=true: every chart match plus the 2-3
+// Same rule as matchData() in app.js. Short list (default): per other brand, chart-listed equivalents within ΔE 18 of the swatch,
+// else the 1 nearest paint of the same type within ΔE 9; a name shown once per brand. all=true: every chart match plus the 2-3
 // nearest swatches, no limit (shown folded under "Show all matches"). Same finish only in ch/near (metallic and pearl paints match
 // each other); xch/xnear: the other finish, listed apart on the page.
-const isMetT = p => p.t === 'met' || p.t === 'pearl', M_TICK = 25, M_NEAR = 12, tyG = t => t === 'ink' ? 'wash' : t;
+const isMetT = p => p.t === 'met' || p.t === 'pearl', M_TICK = 18, M_NEAR = 9, tyG = t => t === 'ink' ? 'wash' : t;
 const nk = p => p.n.trim().toLowerCase(), dedupe = a => { const s = new Set(); return a.filter(m => !s.has(nk(m.p)) && s.add(nk(m.p))) };
 export function matches(D, p, all = false) {
   const mt = isMetT(p), ty = tyG(p.t), doc = (D.MT[p.i] || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) })).filter(m => m.p.slug);
@@ -234,8 +247,8 @@ const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const paintUrl = p => p.url;
 const label = p => p.n + (p.c ? ' (' + p.c + ')' : '');
 // Match closeness scale, the same cut-offs as MQS in app.js.
-const closeness = d => d < 2 ? 'perfect' : d < 6 ? 'very close' : d < 10 ? 'close' : d < 15 ? 'fair' : d < 20 ? 'loose' : d < 30 ? 'very loose' : 'poor';
-const CLOSE_TXT = 'under 2 is a perfect match (you’d struggle to tell them apart), under 6 very close, under 10 close, under 15 fair, under 20 loose, under 30 very loose, and 30 or more a poor match';
+const closeness = d => d < 1.5 ? 'perfect' : d < 4 ? 'very close' : d < 7 ? 'close' : d < 11 ? 'fair' : d < 15 ? 'loose' : d < 22 ? 'very loose' : 'poor';
+const CLOSE_TXT = 'under 1.5 is a perfect match (you’d struggle to tell them apart), under 4 very close, under 7 close, under 11 fair, under 15 loose, under 22 very loose, and 22 or more a poor match';
 
 const OG_IMAGE = SITE + '/icons/og-image-2026-11-17.jpg';
 const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painters Desk', url: SITE + '/', publisher: { '@id': SITE + '/#org' } };
@@ -415,7 +428,7 @@ function paintPage(D, p, rs) {
 <dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Type</dt><dd><a href="/guides/miniature-paint-types#${TYPE_SEC[p.t]}">${esc(TYPE_ONE[p.t])}</a></dd><dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
 <p>Looking for a substitute for ${esc(brandName)} ${esc(p.n)}? These are the closest paints in each other brand on The Painters Desk.
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
-ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Swatches are estimates, so check the real paints before you commit.</p>
+ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Swatches are estimates, so check the real paints before you commit.</p>
 ${p.now ? `<p>${esc(p.n)} is an old Army Painter Warpaints colour. Army Painter's Warpaints Fanatic conversion chart lists <a href="${paintUrl(p.now)}">${esc(p.now.n)}</a> as its replacement in Warpaints Fanatic, a close match but not always exact. The swatch shown here is ${esc(p.now.n)}'s.</p>` : ''}
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;own=1" rel="nofollow">＋ Add ${esc(p.n)} to My paints</a></p>
 ${stdLinksHTML(D, p)}
@@ -444,7 +457,7 @@ const TYPE_SEC = { op: 'base-paints', met: 'metallic-paints', pearl: 'pearl-and-
 const TYPE_ONE = { op: 'an opaque base/layer paint', met: 'a metallic', pearl: 'a pearl paint', con: 'a one-coat contrast-style paint', wash: 'a wash/shade', ink: 'an ink, glaze or transparent paint', fx: 'a fluorescent or effect paint', tech: 'a technical paint or medium' };
 
 // The pairs the site links to and lists in the sitemap: for each paint, its nearest same-type paint in its own brand
-// (people compare e.g. two Citadel shades) and its closest match in Citadel, Vallejo and Army Painter, when under ΔE 15.
+// (people compare e.g. two Citadel shades) and its closest match in Citadel, Vallejo and Army Painter, when under ΔE 11.
 // Pairs people search for as "X vs Y" (Search Console, Nov 2026) that the nearest-paint rule doesn't pick on its own.
 const EXTRA_VS = [['citadel/carroburg-crimson', 'citadel/berserker-bloodshade'], ['citadel/pallid-wych-flesh', 'citadel/rakarth-flesh'],
   ['citadel/tesseract-glow', 'citadel/striking-scorpion-green'], ['pro-acryl/ivory', 'pro-acryl/bright-ivory'],
@@ -457,12 +470,12 @@ function vsOf(D, p) {
   if (D.vsOf.has(p)) return D.vsOf.get(p);
   const mine = [];
   const own = D.brands[p.b].paints.filter(q => q !== p && q.n !== p.n && q.t === p.t && (q.g !== 'p' || p.g === 'p')).map(q => ({ p: q, d: dE(p, q) })).sort((a, b) => a.d - b.d)[0];
-  if (own && own.d < 15) mine.push(own.p);
+  if (own && own.d < 11) mine.push(own.p);
   ['citadel', 'vallejo', 'army-painter'].forEach(sl => {
     const bi = D.brands.findIndex(b => b.slug === sl);
     if (bi < 0 || bi === p.b) return;
     const m = bestIn(D, p, bi, noTone(D, p, bi)).best;
-    if (m && m.d < 15 && !mine.includes(m.p)) mine.push(m.p);
+    if (m && m.d < 11 && !mine.includes(m.p)) mine.push(m.p);
   });
   EXTRA_VS.forEach(([x, y]) => {
     const a = bySlugPath(D, x), b = bySlugPath(D, y), q = a === p ? b : b === p ? a : null;
@@ -503,7 +516,7 @@ function comparePage(D, a, b) {
   const who = p => `${short(D.brands[p.b])} ${p.n}`;
   const path = vsUrl(a, b);
   const title = same ? `${a.n} vs ${b.n} (${short(A)}): compared side by side` : `${a.n} vs ${b.n}: ${short(A)} vs ${short(B)} compared`;
-  const verdict = d < 2 ? 'perfect: as near the same colour as our swatches can tell' : d < 6 ? 'very close: most people won’t see a difference side by side' : d < 10 ? 'close: similar, with a visible difference side by side' : d < 15 ? 'fair: the same colour family, but not a straight swap' : d < 20 ? 'loose: different enough that you should pick on purpose' : d < 30 ? 'very loose: only the same broad colour, expect an obvious difference' : 'poor: a clearly different colour, so not a substitute';
+  const verdict = d < 1.5 ? 'perfect: as near the same colour as our swatches can tell' : d < 4 ? 'very close: most people won’t see a difference side by side' : d < 7 ? 'close: similar, with a visible difference side by side' : d < 11 ? 'fair: the same colour family, but not a straight swap' : d < 15 ? 'loose: different enough that you should pick on purpose' : d < 22 ? 'very loose: only the same broad colour, expect an obvious difference' : 'poor: a clearly different colour, so not a substitute';
   const typeNote = a.t !== b.t ? ` They are different kinds of paint: ${esc(who(a))} is ${TYPE_ONE[a.t]} and ${esc(who(b))} is ${TYPE_ONE[b.t]}, so they won’t behave the same on the model even where the colour is close.` : '';
   const desc = `${who(a)} vs ${who(b)}: ΔE ${d.toFixed(0)} (${closeness(d)})${words.length ? `; ${b.n} is ${words.join(', ')}` : ''}${chart ? '; listed as equivalents in a conversion chart' : ''}. Swatches side by side, plus closer alternatives. Swatch colours are estimates.`;
   const ans = `${closeness(d)[0].toUpperCase() + closeness(d).slice(1)} match (ΔE ${d.toFixed(0)}).` + (words.length ? ` ${b.n} is ${words.join(', ')} than ${a.n}.` : ` The swatches are almost the same.`) + (a.t !== b.t ? ' They are different kinds of paint.' : '');
@@ -519,7 +532,7 @@ function comparePage(D, a, b) {
 <section class="panel prose"><h2>How close are they?</h2>
 <p><b>ΔE ${d.toFixed(1)}, ${verdict}.</b> ${words.length ? `${esc(b.n)} is ${words.join(', ')} than ${esc(a.n)}.` : 'Our swatches for the two are almost the same.'}${typeNote}</p>
 ${chart ? `<p><span class="ck">✓</span> ${esc(D.msrc[chart[1]] || 'A conversion chart')} lists these two as equivalents.</p>` : ''}
-<h3>Can I use ${esc(b.n)} instead of ${esc(a.n)}?</h3><p>${d < 6 ? 'Yes, for most jobs.' : d < 10 ? 'Usually, if you are not matching paint already on the model.' : d < 15 ? 'Only where an exact match doesn’t matter, such as a new unit or a highlight.' : 'Not as a straight swap; see the closer alternatives below.'} ${esc(ans)}</p>
+<h3>Can I use ${esc(b.n)} instead of ${esc(a.n)}?</h3><p>${d < 4 ? 'Yes, for most jobs.' : d < 7 ? 'Usually, if you are not matching paint already on the model.' : d < 11 ? 'Only where an exact match doesn’t matter, such as a new unit or a highlight.' : 'Not as a straight swap; see the closer alternatives below.'} ${esc(ans)}</p>
 <h3>Can I use ${esc(a.n)} instead of ${esc(b.n)}?</h3><p>The same difference applies the other way round${wordsB.length ? `: ${esc(a.n)} is ${wordsB.join(', ')}` : ''}.</p>
 <p class="s">ΔE is the colour difference between our two swatch estimates: ${CLOSE_TXT}. Real paints also differ in finish, coverage and how they thin, so test before you commit.</p></section>
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(a.g + '|' + a.c + '|' + a.n)}">See ${esc(a.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(b.g + '|' + b.c + '|' + b.n)}">See ${esc(b.n)} on the colour wheel</a></p>
@@ -729,7 +742,7 @@ function compareHTML(D, br, other) {
   const ops = br.paints.filter(p => p.t === 'op'), theirs = other.paints.filter(p => p.t === 'op');
   if (!ops.length || !theirs.length) return '';
   const nearest = ops.map(p => { let m = null, md = 1e9; theirs.forEach(q => { const d = dE(p, q); if (d < md) { md = d; m = q } }); return { p, q: m, d: md } });
-  const close = nearest.filter(x => x.d < 6).length, fair = nearest.filter(x => x.d < 10).length;
+  const close = nearest.filter(x => x.d < 4).length, fair = nearest.filter(x => x.d < 7).length;
   const charted = br.paints.filter(p => (L.get(p.i) || []).some(([j]) => D.P[j].b === oi)).length;
   // Examples: the closest pair in each of six hue slices, so the list isn't all greys.
   const ex = [];
@@ -740,8 +753,8 @@ function compareHTML(D, br, other) {
   const conv = GUIDES.find(g => g.conv && g.conv[0] === br.slug && g.conv[1] === other.slug) || GUIDES.find(g => g.conv && g.conv[0] === other.slug && g.conv[1] === br.slug);
   const sw = p => `<i class="sw" style="background:${p.h}"></i>`;
   return `<section class="panel"><h2>How ${esc(short(br))} compares to ${esc(short(other))}</h2>
-<div class="stats"><div><b>${pct(close, ops.length)}</b>of ${ops.length} opaque paints have a ${esc(short(other))} match under ΔE 6</div><div><b>${pct(fair, ops.length)}</b>have one under ΔE 10</div><div><b>${median(nearest.map(x => x.d)).toFixed(1)}</b>median ΔE to the nearest ${esc(short(other))} paint</div><div><b>${charted}</b>paints with a chart-listed ${esc(short(other))} equivalent</div></div>
-<p class="s">ΔE is the colour difference between two swatches (CIE76): ${CLOSE_TXT}. These figures compare our estimated swatches, so treat them as a guide, not a guarantee.</p>
+<div class="stats"><div><b>${pct(close, ops.length)}</b>of ${ops.length} opaque paints have a ${esc(short(other))} match under ΔE 4</div><div><b>${pct(fair, ops.length)}</b>have one under ΔE 7</div><div><b>${median(nearest.map(x => x.d)).toFixed(1)}</b>median ΔE to the nearest ${esc(short(other))} paint</div><div><b>${charted}</b>paints with a chart-listed ${esc(short(other))} equivalent</div></div>
+<p class="s">ΔE is the colour difference between two swatches (ΔE2000): ${CLOSE_TXT}. These figures compare our estimated swatches, so treat them as a guide, not a guarantee.</p>
 ${ex.length ? `<p>Some of the closest pairs:</p><ul class="m">${ex.map(x => `<li>${sw(x.p)}<span><a href="${x.p.url}">${esc(label(x.p))}</a> ≈ <a href="${x.q.url}">${esc(short(other))} ${esc(label(x.q))}</a><em>ΔE ${x.d.toFixed(0)}, ${closeness(x.d)}</em></span></li>`).join('')}</ul>` : ''}
 ${conv ? `<p><a class="btn" href="/guides/${conv.slug}">${esc(conv.title)}</a></p>` : ''}</section>`;
 }
@@ -840,15 +853,15 @@ function convPage(D, g) {
   const groups = A.groups.map(x => ({ g: x, ps: A.paints.filter(p => p.g === x) })).filter(x => x.ps.length);
   const rows = A.paints.map(p => ({ p, ...bestIn(D, p, bi, g.bg) }));
   const by = new Map(rows.map(r => [r.p, r]));
-  const close = rows.filter(r => r.best && r.best.d < 6).length, charted = rows.filter(r => r.doc).length;
+  const close = rows.filter(r => r.best && r.best.d < 4).length, charted = rows.filter(r => r.doc).length;
   const cell = m => m ? `<i class="sw" style="background:${m.p.h}"></i>${m.s ? `<span class="ck" title="${esc(D.msrc[m.s] || 'Conversion chart')}">✓</span> ` : '≈ '}<a href="${m.p.url}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}</em>` : '–';
   const path = '/guides/' + g.slug;
   const title = g.title;
   const desc = `${short(A)} to ${short(B)} paint conversion chart: the closest ${short(B)} match for all ${A.paints.length} ${short(A)} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} paint on The Painters Desk and its closest ${esc(short(B))} paints. The first column (<span class="ck">✓</span>) is the equivalent a manufacturer or community conversion chart lists, where there is one; the second (≈) is the nearest swatch colour of the same paint type (shade for shade, metallic for metallic), worked out from our swatch estimates. When the two disagree, either the chart pairing is a loose one or our swatch estimate is off, so compare the real paints.
-ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
-${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>${close} of ${A.paints.length} paints (${pct(close, A.paints.length)}) have a ${esc(short(B))} match under ΔE 6, and ${charted} have a chart-listed equivalent. Tap any paint for its matches in every other brand.</p></div>
+ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>${close} of ${A.paints.length} paints (${pct(close, A.paints.length)}) have a ${esc(short(B))} match under ΔE 4, and ${charted} have a chart-listed equivalent. Tap any paint for its matches in every other brand.</p></div>
 ${groups.map(x => `<section class="panel"><h2>${esc(short(A))} ${esc(D.GL[x.g])}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(short(A))}</th><th>Chart-listed ${esc(short(B))}</th><th>Nearest ${esc(short(B))} colour</th></tr></thead><tbody>${x.ps.map(p => { const r = by.get(p); return `<tr><td><i class="sw" style="background:${p.h}"></i><a href="${p.url}">${esc(label(p))}</a></td><td>${cell(r.doc)}</td><td>${cell(r.near)}</td></tr>` }).join('')}</tbody></table></div></section>`).join('')}
 ${guideLinks(g)}`;
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc)] });
@@ -864,7 +877,7 @@ function multiConvPage(D, g) {
   const desc = `${short(A)} ${rng} conversion chart: the closest ${Bs.map(short).join(', ')} match for all ${ps.length} ${rng} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} ${esc(rng)} paint on The Painters Desk and its closest match in ${Bs.map(B => esc(short(B))).join(', ')}. A <span class="ck">✓</span> means a manufacturer or community conversion chart lists that pairing; ≈ means it is the nearest swatch colour of the same paint type, worked out from our swatch estimates.
-ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 25, otherwise the nearest paint of the same type within ΔE 12. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
 ${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>Tap any paint for its matches in every brand.</p></div>
 <section class="panel"><h2>${esc(short(A))} ${esc(rng)}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(rng)}</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr><td><i class="sw" style="background:${r.p.h}"></i><a href="${r.p.url}">${esc(label(r.p))}</a></td>${r.m.map(m => `<td>${cell(m)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
 ${guideLinks(g)}`;
@@ -940,7 +953,7 @@ function fit(T, pool) {
     let m = null, md = 1e9;
     pool.forEach(q => { if (used.has(q)) return; const d = w(q.lab, x.t); if (d < md) { md = d; m = q } });
     if (m) used.add(m);
-    return { ...x, p: m, d: m ? Math.hypot(m.lab[0] - x.t[0], m.lab[1] - x.t[1], m.lab[2] - x.t[2]) : 99 };
+    return { ...x, p: m, d: m ? de00(m.lab, x.t) : 99 };
   });
 }
 
@@ -1021,7 +1034,7 @@ ${table}
 
 <section class="panel prose"><h2>${onWheel ? 'How the Ramps mode builds it' : 'How we built the ramp'}</h2>
 ${g.wheel.map(p => `<p>${p}</p>`).join('')}
-<p>${onWheel ? 'Every technique then picks' : 'The paint lists below then pick'} real paints the same way${onWheel ? '' : ' as the Ramps mode'}: for each step it finds the nearest paint among the ones shown on the wheel, by ΔE with lightness counted 1.6 times as much as colour (value contrast is what sells a ramp), and never uses the same paint twice. Only opaque paints are used: no metallics, washes, contrast paints, inks, glazes, primers or fluorescents. Each step is graded Close (ΔE under 6), Fair (under 12) or Loose.</p>
+<p>${onWheel ? 'Every technique then picks' : 'The paint lists below then pick'} real paints the same way${onWheel ? '' : ' as the Ramps mode'}: for each step it finds the nearest paint among the ones shown on the wheel, by ΔE with lightness counted 1.6 times as much as colour (value contrast is what sells a ramp), and never uses the same paint twice. Only opaque paints are used: no metallics, washes, contrast paints, inks, glazes, primers or fluorescents. Each step is graded by ΔE2000 from Perfect (under 1.5) through Very close (under 4), Close (under 7) and Fair (under 11) to Loose and beyond.</p>
 ${onWheel ? `<h3>Using it on the wheel</h3>
 <ol><li>Open <a href="/">the colour wheel</a> and pick <b>Ramps</b> above the wheel, then <b>${esc(D.tqFull[g.q] || g.short)}</b> under Technique (or <a href="${wheel}">open it straight in this mode</a>).</li>
 <li>Choose ${g.q === 'edge' ? '2 or 3 edges' : g.q === 'dry' ? '2 or 3 drybrush layers' : '5 or 7 steps'}${g.q === 'edge' || g.q === 'dry' ? '' : '; 5 steps leaves out some of the in-between steps for a quicker ramp'}.</li>
@@ -1033,7 +1046,7 @@ ${onWheel ? `<h3>Using it on the wheel</h3>
 <section class="panel prose"><h2>Common mistakes</h2><ul>${g.mistakes.map(x => `<li>${x}</li>`).join('')}</ul></section>
 
 <section class="panel prose" id="paints"><h2>The best paints for ${esc(g.name)}, brand by brand</h2>
-<p>Each ramp below is built the way the Ramps mode builds one: ${onWheel ? 'the same target colours' : 'the target colours above'}, then the nearest opaque paint in each brand for each step. ΔE says how far each paint is from its target: close is under 6, fair under 12. Swatch colours are estimates, so test the ramp on a spare model first. ${onWheel ? 'On the wheel you can build the same ramp from any paint, or only from the paints you own.' : ''}</p></section>
+<p>Each ramp below is built the way the Ramps mode builds one: ${onWheel ? 'the same target colours' : 'the target colours above'}, then the nearest opaque paint in each brand for each step. ΔE says how far each paint is from its target: very close is under 4, close under 7, fair under 11. Swatch colours are estimates, so test the ramp on a spare model first. ${onWheel ? 'On the wheel you can build the same ramp from any paint, or only from the paints you own.' : ''}</p></section>
 ${sections.join('')}
 ${guideLinks(g)}`;
   const desc = g.desc + ' Swatch colours are estimates.';
@@ -1055,8 +1068,8 @@ function hslOf(h) {
   return { H, S: d ? d / (1 - Math.abs(2 * L - 1)) : 0, L };
 }
 const hueD = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d };
-// Same test as app.js: HSL saturation 0.14+ or Lab chroma 8+, and not too dark or light.
-const onWheel = p => (p.S >= .14 || Math.hypot(p.lab[1], p.lab[2]) >= 8) && p.L > .07 && p.L < .95;
+// Same test as app.js for non-metallic paints: Lab chroma 6.5+, and Lab lightness between 3 and 98.
+const onWheel = p => Math.hypot(p.lab[1], p.lab[2]) >= 6.5 && p.lab[0] > 3 && p.lab[0] < 98;
 // Point on a wheel of radius r around (c, c), 0 degrees at the top and going clockwise, as on the site.
 const pol = (c, r, deg) => [c + r * Math.cos((deg - 90) * Math.PI / 180), c + r * Math.sin((deg - 90) * Math.PI / 180)].map(v => +v.toFixed(1));
 
@@ -1145,7 +1158,7 @@ ${hueRing(c, 168, 6)}<circle cx="${c}" cy="${c}" r="24" fill="none" stroke="curr
 <div class="grid"><div><h3>Complements</h3>${comp.length ? chipList(comp) : '<p class="s">None within 22°.</p>'}</div><div><h3>Neighbours</h3>${ana.length ? chipList(ana) : '<p class="s">None within 25°.</p>'}</div></div>
 <p><b>The centre disc.</b> The disc in the middle of the wheel blends from the complements, through your paint, out to its neighbours. Each side runs from dark to light and the two sides meet where their shades match, so you can see how the colours would grade into each other on a model.</p>
 <p><b>Ramps and Blends.</b> Ramps mode turns colour theory into steps: for <a href="/guides/best-paints-for-nmm">non-metallic metal</a>, <a href="/guides/best-paints-for-osl">object source lighting</a>, <a href="/guides/best-paints-for-gems">gems</a>, <a href="/guides/best-paints-for-skin-tones">skin</a>, <a href="/guides/zenithal-highlighting">zenithal</a> and <a href="/guides/edge-highlighting">edge highlights</a> and <a href="/guides/glazing">glazes</a> it sets a target colour for each step (shifting hue and saturation as well as lightness, as described above) and finds the nearest opaque paint for each one. Blends mode lets you pin a few paints and fills the steps between them. Each technique has its own step-by-step guide with example ramps.</p>
-<p><b>Matches between brands.</b> When you tap a paint, its matches in other brands come two ways. A <span class="ck">✓</span> means a published conversion chart lists the pair (the Two Thin Coats comparison chart, Army Painter's Fanatic conversion chart, AK's 3rd Generation equivalence table and the Herrick Games chart). A ≈ means the nearest swatch colour, measured as ΔE: the straight-line distance between the two colours in CIELAB, a colour space built so equal distances look roughly equally different (the 1976 formula, often written ΔE76). ${CLOSE_TXT[0].toUpperCase() + CLOSE_TXT.slice(1)}. Unlike complements, matches use lightness and saturation as well as hue.</p>
+<p><b>Matches between brands.</b> When you tap a paint, its matches in other brands come two ways. A <span class="ck">✓</span> means a published conversion chart lists the pair (the Two Thin Coats comparison chart, Army Painter's Fanatic conversion chart, AK's 3rd Generation equivalence table and the Herrick Games chart). A ≈ means the nearest swatch colour, measured as ΔE2000 (CIEDE2000): the colour difference formula built to match how different two colours look to the eye, more evenly than the plain CIELAB distance (ΔE76), which overstates gaps between strong blues, greens and yellows. ${CLOSE_TXT[0].toUpperCase() + CLOSE_TXT.slice(1)}. Unlike complements, matches use lightness and saturation as well as hue.</p>
 <p><b>Swatches are estimates.</b> Every swatch is an estimate taken from manufacturer charts, swatch photos and comparison charts, and every screen shows colour a little differently. Finish (matt, satin, metallic), coverage and how a paint dries change how it looks too. Use the wheel to narrow down your choices, then check the real paints before you commit to a whole army.</p>
 <p><a class="btn" href="/">Try it on the colour wheel</a></p>
 </div></section>
@@ -1248,9 +1261,9 @@ function picksTable(D, { steps, pool = 'op' }) {
   const [ok, min] = CRAFT_POOL[pool], grade = closeness;
   const T = steps.map(([r, h, rx]) => ({ r, t: hexLab(h), h, rx }));
   // A step with a name pattern (a black base should be a paint called black) takes the nearest such paint when one is
-  // within ΔE 15, before the other steps are fitted.
+  // within ΔE 11, before the other steps are fitted.
   const fitNamed = pool => {
-    const pre = T.map(x => x.rx ? pool.filter(q => x.rx.test(q.n)).map(q => ({ ...x, p: q, d: dE({ lab: x.t }, q) })).sort((a, b) => a.d - b.d)[0] : null).map(m => m && m.d < 15 ? m : null);
+    const pre = T.map(x => x.rx ? pool.filter(q => x.rx.test(q.n)).map(q => ({ ...x, p: q, d: dE({ lab: x.t }, q) })).sort((a, b) => a.d - b.d)[0] : null).map(m => m && m.d < 11 ? m : null);
     const rest = fit(T.filter((x, i) => !pre[i]), pool.filter(q => !pre.some(m => m && m.p === q)));
     return T.map((x, i) => pre[i] || rest.shift());
   };
@@ -1258,7 +1271,7 @@ function picksTable(D, { steps, pool = 'op' }) {
     .map(x => [`<a href="/paints/${x.br.slug}">${esc(short(x.br))}</a>`, ...fitNamed(x.pool).map(s => !s.p ? '–' : s.d > 20 ? `<em>No close match</em>` :
       `<a class="pr" href="${s.p.url}"><i class="sw" style="background:${s.p.h}"></i>${esc(s.p.n)}</a><em>${esc(D.GL[s.p.g])} · ΔE ${s.d.toFixed(0)}, ${grade(s.d)}</em>`)]);
   return `<div class="tw"><table class="cv pk"><thead><tr><th>Brand</th>${T.map(x => `<th><i class="sw" style="background:${x.h}"></i>${esc(x.r)}</th>`).join('')}</tr></thead><tbody>${rows.map(row).join('')}</tbody></table></div>
-<p class="s" style="margin-top:8px">Target colours along the top; under each, the closest paint in that brand by swatch colour (ΔE under 6 is close, under 12 fair). Swatch colours are estimates, so check against the real pots.</p>`;
+<p class="s" style="margin-top:8px">Target colours along the top; under each, the closest paint in that brand by swatch colour (ΔE under 4 is very close, under 7 close, under 11 fair). Swatch colours are estimates, so check against the real pots.</p>`;
 }
 
 // Ranges of one kind (airbrush or contrast-style) with how many paints each has on the site.
