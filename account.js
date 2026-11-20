@@ -4,6 +4,13 @@
 (function(){
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Turn web links in user-written text into safe clickable links. Text is escaped first; only http(s) and www. links count.
+const URL_RE=/\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+function linkify(s){s=String(s??'');let out='',last=0;for(const m of s.matchAll(URL_RE)){let u=m[0];
+ for(;;){const c=u.slice(-1);if(/[.,;:!?'*]/.test(c)){u=u.slice(0,-1);continue}const o={')':'(',']':'['}[c];if(o&&u.split(c).length>u.split(o).length){u=u.slice(0,-1);continue}break}
+ if(m.index>0&&/[\w@.\/-]/.test(s[m.index-1]))continue;let href=/^www\./i.test(u)?'https://'+u:u;try{const p=new URL(href);if(!/^https?:$/.test(p.protocol)||!p.hostname.includes('.'))continue;href=p.href}catch{continue}
+ out+=esc(s.slice(last,m.index))+`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer nofollow ugc">${esc(u)}</a>`;last=m.index+u.length}
+ return out+esc(s.slice(last))}
 const BYKEY=new Map(P.map(p=>[p.k,p]));
 // Paints renamed after people had already saved them: old key -> current key. Migration 0014 rewrites the stored keys;
 // until it runs, a collection still holding an old key is moved across the first time it loads.
@@ -359,7 +366,7 @@ async function renderProfile(id){
  el.innerHTML=`<div class="prof">${avHTML(p,'av huge')}<div><h1>${esc(p.name)}</h1><p class="s">Painting with us since ${fmtDate(p.created_at)}${F?` · <span id="pFc">${fc(F.followers)}</span> · following ${F.following}`:''}</p>
  ${p.link?`<p><a href="${esc(p.link)}" target="_blank" rel="noopener nofollow ugc">${esc(p.link.replace(/^https?:\/\/(www\.)?/i,'').replace(/\/$/,''))}</a></p>`:''}
  ${mine?'<a class="btn" href="#/account">Edit profile</a>':`${(F&&INFO.follows)||(p.canMessage&&INFO.messages)?`<p class="row">${F&&INFO.follows?(ME?`<button class="btn${F.followed?'':' pri'}" type="button" id="pFol" aria-pressed="${F.followed}">${F.followed?'✓ Following':'+ Follow'}</button>`:'<a class="btn pri" href="#/account">+ Follow</a>'):''}${p.canMessage&&INFO.messages?`<a class="btn" href="#/inbox/u/${esc(p.id)}">✉ Message</a>`:''}</p>`:''}<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
- ${p.bio?`<div class="panel"><div class="steps">${esc(p.bio)}</div></div>`:''}
+ ${p.bio?`<div class="panel"><div class="steps">${linkify(p.bio)}</div></div>`:''}
  ${d.commission?commissionHTML(d.commission,p,mine):''}
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
  <h2>Public recipes &amp; tutorials</h2>
@@ -807,14 +814,14 @@ async function renderRecipe(id){
  const r=d.recipe;r.paints=r.paints.filter(k=>k!==WATER.k);const mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
  const rec=r.kind!=='tutorial',pal=r.kind==='palette',K=kindOf(r),L=d.linked||{};
  // A recipe reads as one colour: a strip of its layers, then each layer's paints. A tutorial reads as a model, step by step.
- const layersHTML=(ls,cls='',W='Layer')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||W+' '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${esc(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank" data-big="${esc(s.image)}"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
+ const layersHTML=(ls,cls='',W='Layer')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||W+' '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${linkify(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank" data-big="${esc(s.image)}"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
  const linkHTML=id=>{const l=L[id];return l?`<div class="lrec"><a href="#/recipe/${esc(l.id)}">${stripHTML(l.layers.map(x=>x.mix))}<b>Recipe: ${esc(l.title)}</b> <span class="s">by ${esc(l.author.name)}</span></a>${layersHTML(l.layers,'sm')}</div>`:'<p class="s">This step used a recipe that is no longer shared.</p>'};
  el.innerHTML=`<p><a href="#/recipes">← Recipes &amp; tutorials</a></p><h1>${esc(r.title)}</h1>
  <p class="s"><span class="tag ${K.c}">${K.t}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>${rec?'':metaTags(r.meta)}by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
  ${voteHTML(r,mine)}
  ${rec&&r.steps.length?stripHTML(r.steps.map(s=>s.mix),'tall'):''}
  ${r.cover?`<a href="${imgURL(r.cover)}" target="_blank" data-big="${esc(r.cover)}"><img class="ph cover${rec?' rcov':''}" src="${imgURL(r.cover)}" alt="${esc(r.title)}"></a>`:''}
- ${r.summary?`<p>${esc(r.summary)}</p>`:''}
+ ${r.summary?`<p>${linkify(r.summary)}</p>`:''}
  ${r.link?videoEmbed(r.link):''}
  ${rec&&r.steps.length?`<div class="panel"><h2>${pal?'Colours':'Layers'}</h2>${layersHTML(r.steps,'',pal?'Colour':'Layer')}</div>`:''}
  ${rec&&r.steps.length&&r.paints.every(k=>r.steps.some(s=>s.mix.some(m=>m.k===k)))?(r.paints.length?'<div class="row"><button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>'+(ME?`<a class="btn" href="#/paints?plan=rec:${esc(r.id)}">Plan it with my paints</a>`:'')+'</div>':'')
@@ -822,8 +829,8 @@ async function renderRecipe(id){
  ${r.paints.length?'<button class="btn" id="rWheel" type="button">Show these paints on the wheel</button>':''}</div>`}
  ${rec?'':r.steps.map((s,i)=>`<div class="panel step"><h2>Step ${i+1}${s.title?' · '+esc(s.title):''}</h2>
   ${s.image?`<a href="${imgURL(s.image)}" target="_blank" data-big="${esc(s.image)}"><img class="ph" src="${imgURL(s.image)}" alt="Step ${i+1}" loading="lazy"></a>`:''}
-  ${s.recipe?linkHTML(s.recipe):''}${mixHTML(s.mix)}${s.text?`<div class="steps">${esc(s.text)}</div>`:''}</div>`).join('')}
- ${r.body?`<div class="panel"><h2>${r.steps.length?'Notes':rec?'How to paint it':'Steps'}</h2><div class="steps">${esc(r.body)}</div></div>`:''}
+  ${s.recipe?linkHTML(s.recipe):''}${mixHTML(s.mix)}${s.text?`<div class="steps">${linkify(s.text)}</div>`:''}</div>`).join('')}
+ ${r.body?`<div class="panel"><h2>${r.steps.length?'Notes':rec?'How to paint it':'Steps'}</h2><div class="steps">${linkify(r.body)}</div></div>`:''}
  ${rec&&d.usedIn?.length?`<div class="panel"><h2>Used in tutorials</h2><ul class="used">${d.usedIn.map(t=>`<li><a href="#/recipe/${esc(t.id)}">${esc(t.title)}</a></li>`).join('')}</ul></div>`:''}
  ${mine||ME?.admin?`<div class="row">${mine?`<a class="btn" href="#/recipe/${esc(r.id)}/edit">Edit</a>`:''}<button class="btn dan" id="rDel" type="button">Delete</button></div>`:''}
  ${r.visibility==='public'&&!mine?`<p><button class="lnk rpb" type="button" id="rRep">⚑ Report this ${K.t.toLowerCase()}</button></p>`:''}
@@ -849,7 +856,7 @@ async function renderRecipe(id){
  if($('cGo'))$('cGo').onclick=async()=>{const t=$('cBody').value.trim();if(!t)return;$('cGo').disabled=true;$('cErr').textContent='';
   try{const c=(await api(`/recipes/${r.id}/comments`,{method:'POST',body:{body:t}})).comment;$('nocm')?.remove();$('cms').insertAdjacentHTML('beforeend',cmHTML(c,true));$('cBody').value='';wireDel()}
   catch(e){$('cErr').textContent=e.message}$('cGo').disabled=false}}
-const cmHTML=(c,del)=>`<div class="cm"><div class="who"><b>${who(c.author)}</b> · ${fmtDate(c.created_at)}${del?` <button class="lnk" data-dc="${esc(c.id)}" type="button">delete</button>`:''}</div><p>${esc(c.body)}</p></div>`;
+const cmHTML=(c,del)=>`<div class="cm"><div class="who"><b>${who(c.author)}</b> · ${fmtDate(c.created_at)}${del?` <button class="lnk" data-dc="${esc(c.id)}" type="button">delete</button>`:''}</div><p>${linkify(c.body)}</p></div>`;
 
 /* ---------- create / edit ---------- */
 const STEP_NAMES=['Prime','Zenithal','Base coat','Wash / shade','Layer','Highlight','Edge highlight','Glaze','Drybrush','Details','Freehand','Weathering','Basing','Varnish'];
@@ -1014,8 +1021,8 @@ async function renderPainters(){
 // The listing panel at the top of a public profile.
 function commissionHTML(c,p,mine){
  return `<div class="panel cmp"><h2>Commissions ${openTag(c)}</h2>
- ${c.pitch?`<div class="steps">${esc(c.pitch)}</div>`:''}
- <dl class="cmf">${c.styles?`<dt>Styles</dt><dd>${esc(c.styles)}</dd>`:''}${c.price?`<dt>Prices</dt><dd>${esc(c.price)}</dd>`:''}${c.turnaround?`<dt>Turnaround</dt><dd>${esc(c.turnaround)}</dd>`:''}</dl>
+ ${c.pitch?`<div class="steps">${linkify(c.pitch)}</div>`:''}
+ <dl class="cmf">${c.styles?`<dt>Styles</dt><dd>${linkify(c.styles)}</dd>`:''}${c.price?`<dt>Prices</dt><dd>${linkify(c.price)}</dd>`:''}${c.turnaround?`<dt>Turnaround</dt><dd>${linkify(c.turnaround)}</dd>`:''}</dl>
  ${c.photos.length?`<div class="pgal">${c.photos.map(id=>`<a href="${imgURL(id)}" target="_blank" rel="noopener" data-big="${esc(id)}"><img src="${imgURL(id)}" alt="Painted by ${esc(p.name)}" loading="lazy"></a>`).join('')}</div>`:''}
  <div class="row">${mine?'<a class="btn" href="#/account?commission">Edit your listing</a>':c.contact?(ME?`<button class="btn pri" type="button" id="cmMsg">✉ Message ${esc(p.name)}</button>`:`<a class="btn pri" href="#/account">Sign in to message ${esc(p.name)}</a>`):''}
  ${c.links.map(l=>`<a class="btn" href="${esc(l)}" target="_blank" rel="noopener nofollow ugc">${esc(linkLabel(l))} ↗</a>`).join('')}</div>
@@ -1109,10 +1116,10 @@ async function renderAdmin(){
  const by=r=>r.kind==='upload'?'':r.reporter?` · reported by ${pers(r.reporter)}`:' · reported by someone not signed in';
  const repCard=r=>`<div class="panel mrep" data-rep="${esc(r.id)}"><h3>${esc(r.label)}</h3>
   <p class="s">${what(r)} · ${fmtDate(r.created_at)}${by(r)}</p>
-  ${r.message?`<div class="msg them">${esc(r.message.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
-  ${r.post?.body?`<div class="msg them">${esc(r.post.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
-  ${r.chat?.body?`<div class="msg them">${esc(r.chat.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
-  ${r.kind!=='upload'&&r.note?`<div class="steps">${esc(r.note)}</div>`:''}
+  ${r.message?`<div class="msg them">${linkify(r.message.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
+  ${r.post?.body?`<div class="msg them">${linkify(r.post.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
+  ${r.chat?.body?`<div class="msg them">${linkify(r.chat.body)}</div>${r.note?'<p class="s">Reporter\'s note:</p>':''}`:''}
+  ${r.kind!=='upload'&&r.note?`<div class="steps">${linkify(r.note)}</div>`:''}
   ${r.images.length?`<div class="mgrid">${r.images.map(imgCard).join('')}</div>`:''}
   <div class="row">${r.post?`<button class="btn sm${r.post.hidden?'':' dan'}" type="button" data-fhide="${esc(r.post.id)}" data-on="${r.post.hidden?0:1}">${r.post.hidden?'Restore post':'Remove post'}</button>`:''}${r.chat?`<button class="btn sm${r.chat.hidden?'':' dan'}" type="button" data-chide="${esc(r.chat.id)}" data-on="${r.chat.hidden?0:1}">${r.chat.hidden?'Restore message':'Remove message'}</button>${r.user&&r.user.id!==ME.id?`<button class="btn sm" type="button" data-cmute="${esc(r.user.id)}" data-h="${r.user.muted?0:24}">${r.user.muted?'Lift chat mute':'Mute in chat for a day'}</button>`:''}`:''}${r.kind==='recipe'&&r.target?`<button class="btn sm dan" type="button" data-delrec="${esc(r.target.id)}">Delete this ${esc(r.target.kind)}</button>`:''}${blockBtn(r.user)}<button class="btn sm pri" type="button" data-done>Mark as dealt with</button></div></div>`;
  el.innerHTML=`<h1>Moderation</h1>${INFO.messages?'<p><a class="btn" href="#/inbox?team">Read and answer feedback</a></p>':''}<p class="s">Hiding a photo stops it loading for everyone but admins, and you can show it again later. Removing a forum post or chat message hides it from everyone but admins, and you can restore it. Muting someone in chat lets them read but not write until it runs out. Deleting is for good. Blocking an account makes all its recipes private, hides its picture, profile text and comments, and stops it uploading, commenting or sharing.</p>
@@ -1237,7 +1244,7 @@ async function inboxConv(id,asTeam){
   <p class="s">${c.other.id?'They see your reply in Messages when they visit, signed as The Painters Desk team.':c.feedback.onSite?'Sent without signing in. They see your reply in Messages on the browser they used.':'Sent without signing in.'}${c.feedback.email?' Each reply is also emailed to them'+(c.other.id?' if they have no confirmed account email':'')+'.':''}</p>`
   :fb?'<p class="s">You sent this with the Feedback button. Replies come from The Painters Desk team.</p>':direct&&w.id&&!w.gone?`<p><a href="#/u/${esc(w.id)}">See their profile</a></p>`:'';
  const pics=m=>m.images&&m.images.length?`<div class="mpg">${m.images.map((id,i)=>`<a href="${imgURL(id)}" target="_blank" rel="noopener" data-big="${esc(id)}"><img src="${imgURL(id)}" alt="Photo ${i+1}" loading="lazy"></a>`).join('')}</div>`:'';
- const msg=m=>`<div class="msg ${m.mine?'me':'them'}">${esc(m.body)}${pics(m)}<span class="mtm">${m.mine?'You':esc(fb&&!team?'The Painters Desk team':w.name)} · ${ago(m.created_at)}${direct&&!m.mine?` · <button class="lnk" type="button" data-rep="${esc(m.id)}">Report</button>`:''}</span></div>`;
+ const msg=m=>`<div class="msg ${m.mine?'me':'them'}">${linkify(m.body)}${pics(m)}<span class="mtm">${m.mine?'You':esc(fb&&!team?'The Painters Desk team':w.name)} · ${ago(m.created_at)}${direct&&!m.mine?` · <button class="lnk" type="button" data-rep="${esc(m.id)}">Report</button>`:''}</span></div>`;
  el.innerHTML=`<p><a href="${back}">← ${team?'All feedback':'All messages'}</a></p><div class="prof">${avHTML(w,'av big')}<div><h1>${esc(title)}</h1>${team?(c.status==='done'?'<span class="tag">dealt with</span>':'<span class="tag warn">open</span>'):''}</div></div>${info}
  <div class="msgs" id="mList">${d.messages.map(msg).join('')}</div>
  ${d.why?`<p class="s">${esc(d.why)}</p>`:composeHTML('')}
@@ -1270,7 +1277,6 @@ async function msgPanel(){
 // #/forum lists the categories and the latest threads, with a search box. #/forum/c/<id> is one category,
 // #/forum/t/<id> one thread, #/forum/new/<category> starts a thread, and #/forum/following lists the threads you follow.
 const F_PHOTOS=6,F_PAINTS=12,F_RECIPES=3;
-const linkify=s=>esc(s).replace(/\bhttps?:\/\/[^\s<]+[^\s<.,;:!?)\]]/g,u=>`<a href="${u}" target="_blank" rel="noopener nofollow ugc">${u}</a>`);
 const nReplies=n=>`${n.toLocaleString()} ${n===1?'reply':'replies'}`;
 const fNotOpen='<h1>Forum</h1><p class="s">The forum isn\'t open yet. Check back soon.</p>';
 let fCats=null;
@@ -1336,7 +1342,7 @@ async function forumList(cid,following){
   let d;try{d=await api(`/forum/threads?c=${encodeURIComponent(cid)}&sort=${fSort}&offset=${off}${following?'&following=1':''}`)}
   catch(e){el.innerHTML=`<p><a href="#/forum">← Forum</a></p><p class="err">${esc(e.message)}</p>`;return}
   if(first){first=false;const c=d.category;
-   el.innerHTML=`<p><a href="#/forum">← Forum</a></p><h1>${following?'Threads I follow':esc(c.name)}</h1>${c?.description?`<p class="s">${esc(c.description)}</p>`:''}
+   el.innerHTML=`<p><a href="#/forum">← Forum</a></p><h1>${following?'Threads I follow':esc(c.name)}</h1>${c?.description?`<p class="s">${linkify(c.description)}</p>`:''}
    ${following?'<p class="s">You follow threads you start or reply to, and any you press Follow on. New replies show in Messages.</p>':''}
    <div class="row">${sb('active','Latest activity')}${sb('new','Newest')}${sb('top','Most upvoted')}<span class="sp" style="flex:1"></span>${ME?`<a class="btn pri" href="#/forum/new${c?'/'+esc(c.id):''}">+ New thread</a>`:'<a class="btn" href="#/account">Sign in to post</a>'}</div>
    <div class="convs" id="fList"></div><div class="row" id="fMoreR" hidden><button class="btn" type="button" id="fMore">Show more</button></div>`;
@@ -1476,7 +1482,7 @@ const CT={ready:false,open:false,pending:null,ws:null,poll:0,rooms:[],room:null,
  reply:null,images:[],paints:[],ment:new Map(),cache:new Map(),boxFor:null,pre:false,busy:0,readT:0,seq:0,act:Date.now(),hidAt:0,state:'active'};
 const chatTime=t=>{const d=new Date(t),hm=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?hm:d.toLocaleDateString([],{month:'short',day:'numeric'})+', '+hm};
 // The text with links, and the painters it mentions picked out (you in yellow).
-function chatBody(m){let h=linkify(m.body);for(const x of m.mentions){const t='@'+esc(x.name);h=h.split(t).join(`<span class="at${x.id===ME.id?' me':''}">${t}</span>`)}return h}
+function chatBody(m){return linkify(m.body).split(/(<a [^>]*>.*?<\/a>)/).map((h,i)=>{if(i%2)return h;for(const x of m.mentions){const t='@'+esc(x.name);h=h.split(t).join(`<span class="at${x.id===ME.id?' me':''}">${t}</span>`)}return h}).join('')}
 // One message. A message straight after another from the same painter (within 5 minutes) drops the name and picture.
 function chatMsgHTML(m,prev){
  const mine=m.author.id===ME.id,grp=prev&&prev.author.id===m.author.id&&!m.reply&&m.created_at-prev.created_at<300000,atme=m.mentions.some(x=>x.id===ME.id);
@@ -1513,7 +1519,7 @@ function chatOnline(){const O=$('chOn'),B=$('chOnB');if(!O)return;
 function chatRooms(){const R=$('chRooms');if(!R)return;
  R.innerHTML=CT.rooms.filter(r=>!r.archived||ME.admin).map(r=>`<button type="button" class="croom${r.id===CT.room?.id?' on':''}${r.unread&&r.id!==CT.room?.id?' new':''}${r.archived?' arch':''}" data-room="${esc(r.id)}"><span># ${esc(r.name)}</span>${r.id!==CT.room?.id&&r.mentions?`<b class="bdg" title="Mentions you">${r.mentions}</b>`:r.unread&&r.id!==CT.room?.id?'<i title="New messages"></i>':''}</button>`).join('')}
 function chatTop(){const r=CT.room,T=$('chTopic');if(!T||!r)return;
- $('chName').textContent='# '+r.name;T.textContent=(r.topic||'')+(r.slow?` · slow mode: one message every ${r.slow} s`:'')+(r.archived?' · archived':'');T.title=T.textContent}
+ $('chName').textContent='# '+r.name;T.innerHTML=linkify((r.topic||'')+(r.slow?` · slow mode: one message every ${r.slow} s`:'')+(r.archived?' · archived':''));T.title=T.textContent}
 // The 💬 button shows how many messages mention you, or a dot when a room has something new.
 function chatBadge(){const D=$('chatD');if(!D)return;const rs=CT.rooms.filter(r=>!r.archived&&!(CT.open&&r.id===CT.room?.id)),n=rs.reduce((a,r)=>a+(r.mentions||0),0),u=rs.some(r=>r.unread);
  D.hidden=!n&&!u;D.textContent=n?(n>99?'99+':n):'';D.classList.toggle('dot',!n&&u);$('chatN').title=n?`Chat (${n} mention${n===1?'':'s'})`:u?'Chat (new messages)':'Chat'}
