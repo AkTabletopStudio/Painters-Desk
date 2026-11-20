@@ -72,6 +72,7 @@ const PROVIDERS = {
 
 // Security headers on every response (pages, files, API, redirects). The CSP is report-only for now: the page has inline
 // scripts and handlers, so it allows those and only reports anything else in the browser console until it is switched on.
+// Also set for static files in _headers; keep the two in step.
 const SECURITY = {
   'Strict-Transport-Security': 'max-age=31536000',
   'X-Content-Type-Options': 'nosniff',

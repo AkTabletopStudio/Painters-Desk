@@ -8,10 +8,14 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
-    // Every request runs the Worker first so www.paintersdesk.com can redirect to paintersdesk.com;
-    // non-API paths are then served from the static files.
-    "run_worker_first": true
+    // Only the paths the Worker builds itself run it first; every other file comes straight from the static files at
+    // the location nearest the visitor (anything that isn't a file, like a missing page, still reaches the Worker).
+    // www.paintersdesk.com -> paintersdesk.com is a Cloudflare Redirect Rule on the zone (since 2026-11-20).
+    "run_worker_first": ["/api/*", "/paints", "/paints/*", "/guides", "/guides/*", "/sitemap.xml", "/.well-known/*"]
   },
+  // Smart Placement runs the Worker near the D1 database (ENAM) when that is faster, so a request's several
+  // database queries are short hops and only the visitor's one trip to the Worker is long. Remove to turn it off.
+  "placement": { "mode": "smart" },
   "d1_databases": [
     {
       "binding": "DB",
