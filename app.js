@@ -677,9 +677,10 @@ const K0=P.findIndex(p=>p.n==='Doom Death Black'),wasK=p=>p.i>=K0&&p.i<K0+42;
 // Paints renamed after people saved a selection: new key -> old key.
 const WAS={'S||Tidal Wave':'S||Tidal Navy','d||Golgfag Brown':'d||Golfag Brown','u|72.060|Tinny Tin':'u|72.060|','6|4112|Dead Flesh':'6|4112|Dead Flush'};
 function selApply(w){const g=new Set(w.g||[]),k=new Set(w.k||[]);P.forEach(p=>p.on=g.has(p.g)||k.has(p.k)||k.has(WAS[p.k])||wasK(p)&&(g.has('k')||k.has('k'+p.k.slice(1))))}
-let onSelSave=null;
-function remember(){const w=selNow();try{localStorage.setItem(WK,JSON.stringify(w))}catch(e){}if(onSelSave)onSelSave(w)}
-const W0=selLocal();if(W0)selApply(W0);else P.forEach(p=>p.on=!!on[p.g]);
+// u = the account a saved selection belongs to ('' = picked while signed out), so signing in can tell guest picks from the account's own.
+let onSelSave=null,SEL_U='';
+function remember(){const w=selNow();w.u=SEL_U;try{localStorage.setItem(WK,JSON.stringify(w))}catch(e){}if(onSelSave)onSelSave(w)}
+const W0=selLocal();if(W0){selApply(W0);if(W0.u)SEL_U=W0.u}else P.forEach(p=>p.on=!!on[p.g]);
 const tree=document.getElementById('tree');
 tree.innerHTML=treeHTML('data-gc','data-bc',bi=>TREE[bi][1].some(x=>x.ps.some(i=>on[P[i].g])));
 const qv=()=>document.getElementById('q').value.trim().toLowerCase(),match=(p,q)=>(p.n+' '+p.c).toLowerCase().includes(q);
@@ -1069,7 +1070,7 @@ const TOUR_ON=false;
   {t:'Choose your paints',x:'Tap <b>＋ Change paints</b>, tick the ranges you own or want to compare, then <b>Show on wheel</b>. You can mix any brands.',d:7600,run(){base({paints:false});
    mv(500,'.tuchg');tap(1300,()=>pop('.tupick',true));mv(2100,'.tuck[data-r="0"]');tap(2800,()=>q('.tuck[data-r="0"]').classList.add('on'));mv(3300,'.tuck[data-r="1"]');tap(4000,()=>q('.tuck[data-r="1"]').classList.add('on'));
    mv(4600,'.tuok');tap(5400,()=>{pop('.tupick',false);S.paints=true;st.classList.add('tuin');render();setTimeout(()=>st.classList.remove('tuin'),1600)})}},
-  {t:'Save them to My paints',x:'Signed in? <b>Add ticked paints to my collection</b> saves the ticked paints to <b>My paints</b>. After that, <b>My collection</b> puts just your own paints on the wheel.',d:6400,run(){base({});
+  {t:'Save them to My paints',x:'Signed in? <b>Add ticked paints to my collection</b> saves the ticked paints to <b>My paints</b>. After that, <b>Show my collection</b> puts just your own paints on the wheel.',d:6400,run(){base({});
    mv(500,'.tuchg');tap(1300,()=>pop('.tupick',true));mv(2200,'.tuadd');tap(3100,()=>{const a=q('.tuadd');a.textContent='Added 140 paints ✓';a.classList.add('ok');toast('Saved to My paints')});mv(4300,'.tuok');tap(5100,()=>pop('.tupick',false))}},
   {t:'Tap any paint',x:'Its <b>complements</b> sit opposite and its <b>neighbours</b> either side. The panel lists <b>matches</b> from other brands and mixes from your own paints.',d:6000,run(){base({});
    mv(600,()=>dot(202.5,1).c);tap(1600,()=>{S.sel=202.5;render()})}},

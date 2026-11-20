@@ -111,16 +111,51 @@ function showOnWheel(keys){const s=new Set(keys);P.forEach(p=>p.on=s.has(p.k));s
 
 /* ---------- session ---------- */
 // The wheel opens on the newest of this browser's and the account's last selection; with neither, on the user's collection.
+// Nothing is dropped without asking: paints picked while signed out are added to the account's saved wheel on sign-in,
+// and an empty selection never replaces one that has paints in it.
 let selTimer=null;
+const selHas=w=>!!w&&!!((w.g&&w.g.length)||(w.k&&w.k.length)),selOnN=()=>P.filter(p=>p.on&&!p.mix).length;
+function selStore(w){try{localStorage.setItem(WK,JSON.stringify(Object.assign({},w,{u:SEL_U})))}catch(e){}}
 function wheelSync(r){
  const srv=r?r.wheel:null,ok=!!r&&!r.unavailable;
- const loc=selLocal();
+ let loc=selLocal();
+ // Another account's picks left in this browser stay out of this one.
+ if(loc&&loc.u&&loc.u!==ME.id)loc=null;
+ const guest=!!loc&&loc.u==='';
+ SEL_U=ME.id;
  onSelSave=ok?w=>{clearTimeout(selTimer);selTimer=setTimeout(()=>api('/me/wheel',{method:'PUT',body:w}).catch(()=>{}),1500)}:null;
- if(srv&&srv.t&&(!loc||srv.t>loc.t)){selApply(srv);try{localStorage.setItem(WK,JSON.stringify(srv))}catch(e){}boxes();refresh()}
- else if(loc){if(ok&&(!srv||loc.t>srv.t))api('/me/wheel',{method:'PUT',body:loc}).catch(()=>{})}
+ if(guest&&selHas(loc)&&selHas(srv)){
+  // First sign-in in this browser: keep the guest picks and add the account's saved wheel to them.
+  selApply(srv);const before=selOnN();
+  const m={t:Date.now(),g:[...new Set([...(srv.g||[]),...(loc.g||[])])],k:[...new Set([...(srv.k||[]),...(loc.k||[])])]};
+  selApply(m);const added=selOnN()-before;
+  boxes();refresh();
+  if(added>0){remember();wheelNote(`Kept the ${added} paint${added===1?'':'s'} you picked before signing in, together with your account's saved wheel.`,'Show saved wheel only',()=>{selApply(srv);sync()})}
+  else selStore(srv)}
+ else if(guest&&selHas(loc))remember();// nothing saved on the account yet: the guest picks become the account's wheel
+ else if(selHas(srv)&&srv.t&&(!selHas(loc)||srv.t>loc.t)){selApply(srv);selStore(srv);boxes();refresh()}
+ else if(selHas(loc)){selStore(loc);if(ok&&(!selHas(srv)||loc.t>srv.t))api('/me/wheel',{method:'PUT',body:loc}).catch(()=>{})}
  else if(OWN.size){P.forEach(p=>p.on=OWN.has(p.k));boxes();refresh()}}
 
-function wheelReset(){try{localStorage.removeItem(WK)}catch(e){}P.forEach(p=>p.on=!!on[p.g]);boxes();refresh()}
+// A short note above the wheel, with an optional button (e.g. undo).
+let wNoteT=0;
+function wheelNote(msg,lbl,fn){const n=$('wNote');if(!n)return;$('wNoteM').textContent=msg;const b=$('wNoteB');b.hidden=!lbl;b.textContent=lbl||'';
+ b.onclick=()=>{n.hidden=true;if(fn)fn()};$('wNoteX').onclick=()=>n.hidden=true;n.hidden=false;clearTimeout(wNoteT);wNoteT=setTimeout(()=>n.hidden=true,20000)}
+
+// Show my collection keeps whatever was on the wheel before (in this browser), and the button turns into Back to my picks to put it back.
+const WPK='pd-wprev';
+function wPrev(){try{const w=JSON.parse(localStorage.getItem(WPK));return selHas(w)?w:null}catch(e){return null}}
+function mineLbl(){const b=$('mineBtn'),u=$('useMine'),back=!!wPrev();
+ b.textContent=back?'↩ Back to my picks':'Show my collection';b.title=back?'Put back the paints you had on the wheel before showing your collection':'Show only the paints in My paints';
+ u.textContent=back?'↩ Back to my picks':'Show my collection'}
+function showMine(){if(!OWN)return;
+ if(!OWN.size){addTicked(true);return}
+ if(!wPrev()){const w=selNow();if(selHas(w)&&!P.every(p=>p.mix||p.g==='B'||p.on===OWN.has(p.k)))try{localStorage.setItem(WPK,JSON.stringify(w))}catch(e){}}
+ showOnWheel([...OWN]);mineLbl()}
+function backToPicks(){const w=wPrev();try{localStorage.removeItem(WPK)}catch(e){}if(w){selApply(w);sync()}mineLbl()}
+const mineTap=()=>wPrev()?backToPicks():showMine();
+
+function wheelReset(){try{localStorage.removeItem(WK);localStorage.removeItem(WPK)}catch(e){}P.forEach(p=>p.on=!!on[p.g]);boxes();refresh()}
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
  let got=false;try{INFO=await api('/me');ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
@@ -134,11 +169,11 @@ async function loadMe(){
   MIXOK=!!mx&&!mx.unavailable;MIXES=mx&&mx.mixes||[];
   WANTOK=!!wn&&!wn.unavailable;WANT=new Set(wn&&wn.paints||[]);
   meAt=Date.now()}
- else{OWN=null;DET=new Map();DETOK=false;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;MIXOK=false;MIXES=[];WANTOK=false;WANT=new Set()}
+ else{OWN=null;DET=new Map();DETOK=false;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;SEL_U='';MIXOK=false;MIXES=[];WANTOK=false;WANT=new Set()}
  window.pdSetMixes&&pdSetMixes(MIXES);
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
- $('mine').hidden=!ME;$('mineBtn').hidden=!ME;
+ $('mine').hidden=!ME;$('mineBtn').hidden=!ME;if(ME)mineLbl();
  $('navForum').hidden=!INFO?.forum;
  chatStart();
  $('fbBtn').hidden=!API;
@@ -692,16 +727,21 @@ function renderPaints(){
  tr.addEventListener('change',sugLater);
  setTimeout(sugGo,0);
  $('pq').oninput=filt;$('pOwned').onchange=filt;
- $('pWheel').onclick=()=>showOnWheel([...OWN]);
+ $('pWheel').onclick=showMine;
  counts();filt()}
 
 // Wheel page buttons for signed-in users.
-$('useMine').onclick=()=>{if(OWN)showOnWheel([...OWN])};
-$('mineBtn').onclick=()=>{if(OWN)showOnWheel([...OWN])};
+// Show my collection / Back to my picks (wheel bar and Change paints pop-up).
+$('useMine').onclick=mineTap;
+$('mineBtn').onclick=mineTap;
 const addLbl=t=>{$('addMine').textContent=t;setTimeout(()=>$('addMine').textContent='Add ticked paints to my collection',2500)};
-$('addMine').onclick=()=>{if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix).map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));if(!ks.length)return;if(!nw.length)return addLbl('Already in your collection ✓');
- const d=$('addDlg'),n=nw.length,had=ks.length-n;$('addDlgM').textContent=`This adds ${n} paint${n===1?'':'s'} to your collection`+(had?` (${had} ticked already in it).`:'.');d.returnValue='';
- d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(nw,true);addLbl(`Added ${n} paint${n===1?'':'s'} ✓`);renderNeu();draw()};d.showModal();$('addNo').focus()};
+// empty = came from Show my collection with nothing in My paints yet: explain instead of clearing the wheel.
+function addTicked(empty){if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix&&p.g!=='B').map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));
+ if(!ks.length){if(empty)location.hash='#/paints';return}if(!nw.length)return addLbl('Already in your collection ✓');
+ const d=$('addDlg'),n=nw.length,had=ks.length-n,s=n===1?'':'s';
+ $('addDlgM').textContent=empty?`Your collection (My paints) is empty, so there's nothing to show yet. Your picks stay on the wheel. Add the ${n} paint${s} on the wheel to your collection now?`:`This adds ${n} paint${s} to your collection`+(had?` (${had} ticked already in it).`:'.');d.returnValue='';
+ d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(nw,true);addLbl(`Added ${n} paint${s} ✓`);if(empty)wheelNote(`Added ${n} paint${s} to My paints.`);renderNeu();draw()};d.showModal();$('addNo').focus()}
+$('addMine').onclick=()=>addTicked(false);
 $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
 
 /* ---------- recipes list ---------- */
