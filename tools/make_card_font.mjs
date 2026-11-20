@@ -21,7 +21,7 @@ const FACES = {
 let CH = '';
 for (let c = 32; c < 127; c++) CH += String.fromCharCode(c);
 for (let c = 160; c < 256; c++) CH += String.fromCharCode(c);
-CH += '‘’“”–—…•·€™ŒœŠšŽžŸ';
+CH += '‘’“”–—…•·€™ŒœŠšŽžŸΔ';
 
 const srv = createServer((q, s) => {
   if (q.url.startsWith('/fonts/')) { s.setHeader('content-type', 'font/woff2'); s.end(readFileSync('.' + q.url)); return }

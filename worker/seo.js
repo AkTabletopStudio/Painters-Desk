@@ -71,6 +71,14 @@ export async function seo(request, env, url) {
   } else if (MOVED.some(([a]) => movedRe(a).test(p))) {
     // Renamed paints: old paint and compare-page addresses move to the new name for good.
     return Response.redirect(url.origin + MOVED.reduce((q, [a, b]) => q.replace(movedRe(a), '/' + b + '$1'), p), 301);
+  } else if (/^\/paints\/[^/]+\/[^/]+(\/vs\/[^/]+\/[^/]+)?\/card\.png$/.test(p)) {
+    // Share pictures for paint pages and comparison pages.
+    const [, b, s, vs, b2, s2] = p.split('/').slice(1);
+    const br = D.brands.find(x => x.slug === b), paint = br && br.bySlug.get(s);
+    const br2 = vs === 'vs' && D.brands.find(x => x.slug === b2), other = br2 && br2.bySlug.get(s2);
+    const card = paint && (vs === 'vs' ? other && other !== paint && vsCard(D, paint, other) : paintCard(D, paint));
+    if (!card) return send('Not found', 'text/plain; charset=utf-8', 404);
+    return cardResponse(request, () => cardPNG(card), url.searchParams.get('v') === cardVer(card));
   } else {
     const [, b, s, vs, b2, s2, extra] = p.split('/').slice(1);
     const br = D.brands.find(x => x.slug === b);
@@ -475,11 +483,29 @@ ${allHTML}
 ${compareLinksHTML(D, p)}
 ${usedInHTML(p, rs)}`;
   return page({
-    title, desc, path: paintUrl(p), body,
+    title, desc, path: paintUrl(p), body, img: `${SITE}${paintUrl(p)}/card.png?v=${cardVer(paintCard(D, p, best.map(o => o.m)))}`, imgAlt: `${brandName} ${p.n} swatch and its closest matches`,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
     ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` } })],
   });
 }
+
+// Share pictures (worker/card.js). A paint: its swatch, wide, then the closest match in up to 5 other brands.
+// best: each brand's best match, as the paint page works it out (passed in so the page doesn't do it twice).
+function paintCard(D, p, best = matches(D, p).map(o => [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0]).filter(Boolean)) {
+  const br = D.brands[p.b];
+  best = [...best].sort((a, b) => a.d - b.d);
+  const hs = [...new Set(best.map(m => m.p.h))].filter(h => h !== p.h).slice(0, 5);
+  return { kind: `${short(br)} · ${D.GL[p.g] || ''}`, title: p.n, sub: (p.c && p.c !== p.n ? p.c + ' · ' : '') + (best.length ? `Closest matches in ${best.length} other brand${best.length === 1 ? '' : 's'}` : 'Paint page'),
+    colours: [p.h, ...hs], lead: hs.length ? 2.5 : 1, note: 'Swatch colours are estimates' };
+}
+// Two paints compared: both swatches side by side.
+function vsCard(D, a, b) {
+  const A = D.brands[a.b], B = D.brands[b.b], d = dE(a, b);
+  return { kind: 'Paint comparison', title: `${a.n} vs ${b.n}`, sub: `${A === B ? short(A) : short(A) + ' vs ' + short(B)} · ΔE ${d.toFixed(0)}, ${closeness(d)}`,
+    colours: [a.h, b.h], note: 'Swatch colours are estimates' };
+}
+// The picture's version: changes with anything drawn on it, so link previews fetch the new one.
+const cardVer = c => { let h = 0; for (const ch of JSON.stringify(c)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h.toString(36) };
 
 // The paint pop-up on guide pages (/paints/<brand>/<paint>?look=1): the paint and its best match in up to 8 brands, the
 // most-searched brands first, the same picks as the paint page.
@@ -586,7 +612,7 @@ ${alts(a, b)}${alts(b, a)}
     { '@type': 'Question', name: `Can I use ${b.n} instead of ${a.n}?`, acceptedAnswer: { '@type': 'Answer', text: ans } },
     { '@type': 'Question', name: `What is the difference between ${a.n} and ${b.n}?`, acceptedAnswer: { '@type': 'Answer', text: `ΔE ${d.toFixed(0)} (${closeness(d)}).${words.length ? ` ${b.n} is ${words.join(', ')}.` : ''} Swatch colours are estimates.` } }] };
   return page({
-    title, desc, path, body,
+    title, desc, path, body, img: `${SITE}${path}/card.png?v=${cardVer(vsCard(D, a, b))}`, imgAlt: `${who(a)} and ${who(b)} swatches side by side`,
     crumbs: [['Paints', '/paints'], [A.name, '/paints/' + A.slug], [a.n, a.url], [`vs ${b.n}`, path]],
     ld: [webPage(path, title, desc), faq],
   });

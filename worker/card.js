@@ -89,7 +89,8 @@ class Canvas {
 
 const hexRGB = h => /^#[0-9a-f]{6}$/i.test(h || '') ? [1, 3, 5].map(o => parseInt(h.slice(o, o + 2), 16)) : null;
 
-// card: { kind: 'Recipe' | 'Tutorial' | 'Palette', title, author, colours: ['#rrggbb', ...], note: 'N layers · M paints' }
+// card: { kind: 'Recipe' | 'Tutorial' | 'Palette' | ..., title, author (the line under the title, after 'by '), sub (that line as is),
+//   colours: ['#rrggbb', ...], lead (width of the first colour, in blocks), note: 'N layers · M paints' }
 export async function cardPNG(card) {
   const B = await bitmaps(), F = FACES, cv = new Canvas(CARD_W, CARD_H, BG), X = 64, R = CARD_W - 64;
   // Label, like the main share picture's red caps line.
@@ -104,7 +105,7 @@ export async function cardPNG(card) {
   cv.rect(X + 420, y + 27, 300, 2, INK);
   // Author.
   let by = y + 30;
-  const au = card.author && wrap(F.bold, 'by ' + card.author, R - X, 1)[0];
+  const au = (card.author || card.sub) && wrap(F.bold, card.sub || 'by ' + card.author, R - X, 1)[0];
   if (au) { by += 18 + F.bold.cap; cv.text(F.bold, au, X, by, [58, 53, 45], B) }
 
   // Swatch strip: one block per colour, framed in ink. It fills the space between the title and the footer.
@@ -112,8 +113,10 @@ export async function cardPNG(card) {
   const sy = by + 48, sh = 522 - sy;
   if (cols.length) {
     cv.rect(X - 4, sy - 4, R - X + 8, sh + 8, INK);
-    const n = cols.length, gap = n > 1 ? 4 : 0, bw = (R - X - gap * (n - 1)) / n;
-    cols.forEach((c, i) => { const a = X + i * (bw + gap); cv.rect(a, sy, Math.round(a + bw) - Math.round(a), sh, c) });
+    // card.lead: the first colour is drawn wider (a paint page's own paint, ahead of its matches).
+    const n = cols.length, gap = n > 1 ? 4 : 0, wt = cols.map((c, i) => i === 0 && card.lead ? card.lead : 1), W = wt.reduce((a, b) => a + b, 0);
+    let a = X;
+    cols.forEach((c, i) => { const bw = (R - X - gap * (n - 1)) * wt[i] / W; cv.rect(a, sy, Math.round(a + bw) - Math.round(a), sh, c); a += bw + gap });
   } else {
     cv.rect(X - 4, sy - 4, R - X + 8, sh + 8, INK);
     cv.rect(X, sy, R - X, sh, PAPER);
