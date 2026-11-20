@@ -885,7 +885,7 @@ async function renderRecipe(id){
   :(mine?'<p class="s">This is private, so only you can see it. Make it public to share it and open the discussion.</p>':'')}`;
  el.querySelectorAll('#rp .chip,.mix .chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p)paintLook(p)});
  if($('rWheel'))$('rWheel').onclick=()=>showOnWheel(r.paints);
- if($('rShare'))$('rShare').onclick=async()=>{const m=await pdShare({title:r.title,text:`${r.title} by ${r.author.name} on The Painters Desk`,url:`${location.origin}/#/recipe/${r.id}`});$('rShM').textContent=m==='copied'?'Link copied.':m==='fail'?'Could not share here.':''};
+ if($('rShare'))$('rShare').onclick=async()=>{const m=await pdShare({title:r.title,text:`${r.title} by ${r.author.name} on The Painters Desk`,url:shareURL(r.id)});$('rShM').textContent=m==='copied'?'Link copied.':m==='fail'?'Could not share here.':''};
  if($('rRep'))$('rRep').onclick=()=>openReport('recipe',r.id,r.title);
  countView(r);
  if($('rSave'))$('rSave').onclick=async()=>{const b=$('rSave');b.disabled=true;
@@ -1914,6 +1914,9 @@ loadMe().then(route);
 window.pdLinkToken=async()=>ME?(await api('/auth/link-token',{method:'POST'})).token:'';
 })();
 
+// A recipe, tutorial or palette's share link: /r/<id> shows its own title and swatch picture in link previews, then opens it here.
+// The phone apps share the website's address.
+window.shareURL=id=>{const C=window.Capacitor,o=C&&C.isNativePlatform&&C.isNativePlatform()||!/^https?:$/.test(location.protocol)?'https://paintersdesk.com':location.origin;return o+'/r/'+encodeURIComponent(id)};
 // Share a link: the iPhone app's share sheet, else the browser's (phones), else copy it.
 window.pdShare=async d=>{const C=window.Capacitor;
  try{if(C&&C.isNativePlatform&&C.isNativePlatform()&&C.nativePromise){await C.nativePromise('Share','share',{...d,dialogTitle:'Share'});return 'shared'}

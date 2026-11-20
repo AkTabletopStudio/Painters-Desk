@@ -1,6 +1,7 @@
 // The Painters Desk API: accounts (OAuth sign-in), paint collections, recipes/tutorials and comments.
 // Static files are served from the assets binding; only /api/* and the paint pages and guides (/paints, /guides, /sitemap.xml, see seo.js) run through this Worker.
 import { isSeoPath, seo, pageNotFound } from './seo.js';
+import { isSharePath, share } from './share.js';
 
 const SESSION_COOKIE = 'pd_session';
 const OAUTH_COOKIE = 'pd_oauth';
@@ -115,6 +116,12 @@ async function handle(request, env, ctx) {
   if (isSeoPath(url.pathname)) {
     const r = await seo(request, env, url);
     if (r.status === 200 && request.method === 'GET' && url.pathname !== '/sitemap.xml') ctx?.waitUntil(countVisit(request, env, url.pathname, request.headers.get('Referer'), url));
+    return r;
+  }
+  if (isSharePath(url.pathname)) {
+    const r = await share(request, env, url);
+    // Shared-link visits are counted together (with where they came from), not one row per item.
+    if (r.status === 200 && request.method === 'GET' && !url.pathname.endsWith('.png')) ctx?.waitUntil(countVisit(request, env, '/r', request.headers.get('Referer'), url));
     return r;
   }
   if (!url.pathname.startsWith('/api/')) {

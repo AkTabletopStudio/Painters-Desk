@@ -7,6 +7,7 @@
 import { TECH_TEXT } from './tech-guides.js';
 import { ANATOMY, HAIR, SHAPES, JOBS, CARE, MISTAKES, PICKS } from './brush-guides.js';
 import { CRAFT, CRAFT_DATE } from './craft-guides.js';
+import { cardPNG, cardResponse } from './card.js';
 
 const SITE = 'https://paintersdesk.com';
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
@@ -50,6 +51,12 @@ export async function seo(request, env, url) {
   }
   else if (p === '/guides') r = send(guidesPage(D));
   else if (p === '/guides/palettes') r = send(palettesPage(D));
+  else if (/^\/guides\/palettes\/[\w-]+\/card\.png$/.test(p)) {
+    // The palette's share picture: its colours and name.
+    const x = PALS.find(x => `/guides/palettes/${x.s}/card.png` === p);
+    if (!x) return send('Not found', 'text/plain; charset=utf-8', 404);
+    return cardResponse(request, () => cardPNG(palCard(x)), url.searchParams.get('v') === palVer(x));
+  }
   else if (p.startsWith('/guides/palettes/')) {
     const x = PALS.find(x => '/guides/palettes/' + x.s === p);
     r = x ? send(palettePage(D, x)) : send(notFound(), 'text/html; charset=utf-8', 404);
@@ -64,6 +71,14 @@ export async function seo(request, env, url) {
   } else if (MOVED.some(([a]) => movedRe(a).test(p))) {
     // Renamed paints: old paint and compare-page addresses move to the new name for good.
     return Response.redirect(url.origin + MOVED.reduce((q, [a, b]) => q.replace(movedRe(a), '/' + b + '$1'), p), 301);
+  } else if (/^\/paints\/[^/]+\/[^/]+(\/vs\/[^/]+\/[^/]+)?\/card\.png$/.test(p)) {
+    // Share pictures for paint pages and comparison pages.
+    const [, b, s, vs, b2, s2] = p.split('/').slice(1);
+    const br = D.brands.find(x => x.slug === b), paint = br && br.bySlug.get(s);
+    const br2 = vs === 'vs' && D.brands.find(x => x.slug === b2), other = br2 && br2.bySlug.get(s2);
+    const card = paint && (vs === 'vs' ? other && other !== paint && vsCard(D, paint, other) : paintCard(D, paint));
+    if (!card) return send('Not found', 'text/plain; charset=utf-8', 404);
+    return cardResponse(request, () => cardPNG(card), url.searchParams.get('v') === cardVer(card));
   } else {
     const [, b, s, vs, b2, s2, extra] = p.split('/').slice(1);
     const br = D.brands.find(x => x.slug === b);
@@ -91,7 +106,7 @@ function send(body, type = 'text/html; charset=utf-8', status = 200) {
 
 /* ---------- data (parsed once per Worker instance) ---------- */
 
-async function load(env, url) {
+export async function load(env, url) {
   if (DATA) return DATA;
   const get = f => env.ASSETS.fetch(new Request(new URL(f, url.origin))).then(r => r.text());
   const [data, app, index, pals] = await Promise.all([get('/data.js'), get('/app.js'), get('/'), get('/palettes.js')]);
@@ -244,7 +259,7 @@ const mCount = md => md.reduce((a, o) => a + o.ch.length + o.near.length + o.xch
 
 /* ---------- pages ---------- */
 
-const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const paintUrl = p => p.url;
 const label = p => p.n + (p.c ? ' (' + p.c + ')' : '');
 // Match closeness scale, the same cut-offs as MQS in app.js.
@@ -276,7 +291,8 @@ g.addEventListener('click',function(ev){if(ev.target!==g)return;var r=g.getBound
 g.addEventListener('close',function(){n++})})()</script>`;
 
 // ld: extra schema.org objects for this page (the breadcrumb trail is always added). og: 'website' or 'article'.
-function page({ title, desc, path, crumbs, body, ld = [], og = 'website', q = '' }) {
+// img: a share picture of this page's own (default: the site's), with imgAlt, and its size when it isn't 1200x630.
+export function page({ title, desc, path, crumbs, body, ld = [], og = 'website', q = '', img = OG_IMAGE, imgAlt = 'The Painters Desk: a colour wheel of miniature paints', imgSize = [1200, 630] }) {
   const graph = {
     '@context': 'https://schema.org',
     '@graph': [{
@@ -292,11 +308,11 @@ function page({ title, desc, path, crumbs, body, ld = [], og = 'website', q = ''
 <link rel="canonical" href="${SITE}${path}">
 <meta property="og:type" content="${og}"><meta property="og:site_name" content="The Painters Desk">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}">
-<meta property="og:url" content="${SITE}${path}"><meta property="og:image" content="${OG_IMAGE}">
-<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Painters Desk: a colour wheel of miniature paints">
+<meta property="og:url" content="${SITE}${path}"><meta property="og:image" content="${esc(img)}">
+${imgSize ? `<meta property="og:image:width" content="${imgSize[0]}"><meta property="og:image:height" content="${imgSize[1]}">` : ''}
+<meta property="og:image:alt" content="${esc(imgAlt)}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(title)}">
-<meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${OG_IMAGE}">
+<meta name="twitter:description" content="${esc(desc)}"><meta name="twitter:image" content="${esc(img)}">
 <link rel="icon" type="image/png" href="/icons/favicon-32.png"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="theme-color" content="#fff4de">
 ${THEME.js}
@@ -467,11 +483,29 @@ ${allHTML}
 ${compareLinksHTML(D, p)}
 ${usedInHTML(p, rs)}`;
   return page({
-    title, desc, path: paintUrl(p), body,
+    title, desc, path: paintUrl(p), body, img: `${SITE}${paintUrl(p)}/card.png?v=${cardVer(paintCard(D, p, best.map(o => o.m)))}`, imgAlt: `${brandName} ${p.n} swatch and its closest matches`,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
     ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` } })],
   });
 }
+
+// Share pictures (worker/card.js). A paint: its swatch, wide, then the closest match in up to 5 other brands.
+// best: each brand's best match, as the paint page works it out (passed in so the page doesn't do it twice).
+function paintCard(D, p, best = matches(D, p).map(o => [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0]).filter(Boolean)) {
+  const br = D.brands[p.b];
+  best = [...best].sort((a, b) => a.d - b.d);
+  const hs = [...new Set(best.map(m => m.p.h))].filter(h => h !== p.h).slice(0, 5);
+  return { kind: `${short(br)} · ${D.GL[p.g] || ''}`, title: p.n, sub: (p.c && p.c !== p.n ? p.c + ' · ' : '') + (best.length ? `Closest matches in ${best.length} other brand${best.length === 1 ? '' : 's'}` : 'Paint page'),
+    colours: [p.h, ...hs], lead: hs.length ? 2.5 : 1, note: 'Swatch colours are estimates' };
+}
+// Two paints compared: both swatches side by side.
+function vsCard(D, a, b) {
+  const A = D.brands[a.b], B = D.brands[b.b], d = dE(a, b);
+  return { kind: 'Paint comparison', title: `${a.n} vs ${b.n}`, sub: `${A === B ? short(A) : short(A) + ' vs ' + short(B)} · ΔE ${d.toFixed(0)}, ${closeness(d)}`,
+    colours: [a.h, b.h], note: 'Swatch colours are estimates' };
+}
+// The picture's version: changes with anything drawn on it, so link previews fetch the new one.
+const cardVer = c => { let h = 0; for (const ch of JSON.stringify(c)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h.toString(36) };
 
 // The paint pop-up on guide pages (/paints/<brand>/<paint>?look=1): the paint and its best match in up to 8 brands, the
 // most-searched brands first, the same picks as the paint page.
@@ -578,7 +612,7 @@ ${alts(a, b)}${alts(b, a)}
     { '@type': 'Question', name: `Can I use ${b.n} instead of ${a.n}?`, acceptedAnswer: { '@type': 'Answer', text: ans } },
     { '@type': 'Question', name: `What is the difference between ${a.n} and ${b.n}?`, acceptedAnswer: { '@type': 'Answer', text: `ΔE ${d.toFixed(0)} (${closeness(d)}).${words.length ? ` ${b.n} is ${words.join(', ')}.` : ''} Swatch colours are estimates.` } }] };
   return page({
-    title, desc, path, body,
+    title, desc, path, body, img: `${SITE}${path}/card.png?v=${cardVer(vsCard(D, a, b))}`, imgAlt: `${who(a)} and ${who(b)} swatches side by side`,
     crumbs: [['Paints', '/paints'], [A.name, '/paints/' + A.slug], [a.n, a.url], [`vs ${b.n}`, path]],
     ld: [webPage(path, title, desc), faq],
   });
@@ -1491,5 +1525,10 @@ ${palChip(x, true)}
 <section class="panel"><h2>Paints for ${esc(x.n)} in every brand</h2><div class="tw"><table class="cv pk"><thead><tr><th>Colour</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${x.c.map(c => `<tr><td><i class="sw" style="background:${c.h}"></i><b>${esc(c.r)}</b><em>${esc(c.u)}</em></td>${Bs.map(B => `<td>${cell(palNear(D, B, c))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
 ${others.length ? `<section class="panel"><h2>Similar palettes</h2><ul class="m gl">${others.map(y => `<li><a href="/guides/palettes/${y.s}"><b>${esc(y.n)}</b></a>${palChip(y)}<em>${esc(y.b)}</em></li>`).join('')}</ul><p><a href="/guides/palettes">All ${PALS.length} palettes</a></p></section>` : ''}
 ${guideLinks(null)}`;
-  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], ['Colour palettes', '/guides/palettes'], [x.n, path]], ld: [article(path, title, desc, PAL_DATE)] });
+  return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], ['Colour palettes', '/guides/palettes'], [x.n, path]], ld: [article(path, title, desc, PAL_DATE)],
+    img: `${SITE}${path}/card.png?v=${palVer(x)}`, imgAlt: `${x.n} palette colours` });
 }
+
+// Share picture for an inspiration palette (worker/card.js). The version changes when its name or colours do.
+const palCard = x => ({ kind: 'Palette', title: x.n + ' colour scheme', author: '', colours: x.c.map(c => c.h), note: x.c.length + ' colours' });
+const palVer = x => { let h = 0; for (const ch of x.n + x.c.map(c => c.h).join('')) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h.toString(36) };
