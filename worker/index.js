@@ -141,7 +141,7 @@ async function handle(request, env, ctx) {
 async function route(request, env, url) {
   const m = request.method, p = url.pathname;
   let r;
-  if (p === '/api/me' && m === 'GET') return me(request, env);
+  if (p === '/api/me' && m === 'GET') return me(request, env, url);
   if (p === '/api/me' && m === 'DELETE') return deleteAccount(request, env);
   if (p === '/api/me/profile' && m === 'PUT') return saveProfile(request, env);
   if (p === '/api/me/password' && m === 'PUT') return setPassword(request, env);
@@ -309,7 +309,10 @@ const AVATAR = `CASE WHEN u.blocked = 1 THEN NULL
   WHEN u.avatar_image != '' AND NOT EXISTS (SELECT 1 FROM images i WHERE i.id = u.avatar_image AND i.hidden = 1) THEN '/api/images/' || u.avatar_image
   ELSE u.avatar END`;
 
+// Requests that bundle several replies (GET /api/me?boot=1) look the signed-in user up once and share it.
+const BOOT_USER = new WeakMap();
 async function currentUser(request, env) {
+  if (BOOT_USER.has(request)) return BOOT_USER.get(request);
   const token = cookies(request)[SESSION_COOKIE];
   if (!token) return null;
   // dm/dm_mail (message settings) come with migration 0015.
@@ -369,9 +372,19 @@ const safeReturn = r => {
 
 /* ---------- accounts ---------- */
 
-async function me(request, env) {
+async function me(request, env, url) {
   const user = await currentUser(request, env);
   const providers = Object.entries(PROVIDERS).filter(([, p]) => p.id(env) && p.secret(env)).map(([k, p]) => ({ id: k, label: p.label }));
+  // ?boot=1 (the site's first call on every page load): a signed-in user also gets their collection, wheel, mixes,
+  // shopping list, chat rooms and blocked painters in this one reply, each looked up side by side. The page used to
+  // ask for these one request after another, and every request is a trip to the database.
+  let boot = null;
+  if (user && url?.searchParams.get('boot') === '1') {
+    BOOT_USER.set(request, Promise.resolve(user));
+    const part = f => f(request, env).then(r => r.ok ? r.json() : null).catch(() => null);
+    boot = Promise.all([part(getCollection), part(getWheel), part(getMixes), part(getWants), part(chatHome), part(listBlocks)])
+      .then(([collection, wheel, mixes, wants, chat, blocks]) => ({ collection, wheel, mixes, wants, chat, blocks }));
+  }
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
   // messages: the Messages pages work (migration 0015).
@@ -381,7 +394,7 @@ async function me(request, env) {
   const messages = await hasMessages(env), msgPhotos = messages && await hasMsgPhotos(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: env.DEV_LOGIN === '1' });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: env.DEV_LOGIN === '1', ...(boot ? { boot: await boot } : {}) });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -964,9 +977,26 @@ async function getCollection(request, env) {
 }
 
 // Pots, SKU and colour per paint (migration 0024). Until it is applied the site hides the count and imports keys only.
+// Which optional tables and columns exist (each arrives with a migration). One database query answers every
+// check at once, instead of one query per feature on the first request a fresh Worker handles. Something still
+// missing is looked up again after a minute, so an applied migration takes effect without a redeploy.
+let schemaP = null, schemaAt = 0;
+const loadSchema = env => {
+  schemaAt = Date.now();
+  return schemaP = env.DB.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
+    UNION ALL SELECT 'users.' || name FROM pragma_table_info('users')
+    UNION ALL SELECT 'collection.' || name FROM pragma_table_info('collection')
+    UNION ALL SELECT 'messages.' || name FROM pragma_table_info('messages')`).all()
+    .then(r => new Set(r.results.map(x => x.name)), e => { schemaP = null; throw e; });
+};
+async function hasSchema(env, key) {
+  if ((await (schemaP || loadSchema(env))).has(key)) return true;
+  return Date.now() - schemaAt > 60000 ? (await loadSchema(env)).has(key) : false;
+}
+
 let collDetailsReady = false;
 async function hasCollDetails(env) {
-  if (!collDetailsReady) collDetailsReady = !!(await env.DB.prepare("SELECT 1 FROM pragma_table_info('collection') WHERE name = 'qty'").first().catch(() => null));
+  if (!collDetailsReady) collDetailsReady = await hasSchema(env, 'collection.qty');
   return collDetailsReady;
 }
 function collDetails(v) {
@@ -1633,7 +1663,7 @@ const COMMISSION_PHOTOS = 12, COMMISSION_LINKS = 4, MESSAGES_PER_HOUR = 5, MESSA
 let commissionsReady = false;
 // The tables come with migration 0013. Until it is applied, listings are simply missing instead of breaking profiles.
 async function hasCommissions(env) {
-  if (!commissionsReady) commissionsReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'commissions'").first());
+  if (!commissionsReady) commissionsReady = await hasSchema(env, 'commissions');
   return commissionsReady;
 }
 async function needCommissions(env) {
@@ -1759,7 +1789,7 @@ async function messagePainter(request, env, url, id) {
 const FOLLOWS_PER_DAY = 100;
 let followsReady = false;
 async function hasFollows(env) {
-  if (!followsReady) followsReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'follows'").first());
+  if (!followsReady) followsReady = await hasSchema(env, 'follows');
   return followsReady;
 }
 
@@ -1794,7 +1824,7 @@ async function setFollow(request, env, id) {
 // The column comes with migration 0016. Until it is applied everyone is listed and the setting to hide is missing.
 let findableReady = false;
 async function hasFindable(env) {
-  if (!findableReady) findableReady = !!(await env.DB.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'findable'").first());
+  if (!findableReady) findableReady = await hasSchema(env, 'users.findable');
   return findableReady;
 }
 
@@ -1853,13 +1883,13 @@ const MSG_MAX = 2000, MSG_PHOTOS = 4, DM_PER_HOUR = 30, DM_PER_DAY = 200, NEW_CH
 const TEAM = { id: null, name: 'The Painters Desk team', avatar: '/icons/icon-192.png', team: true };
 let messagesReady = false;
 async function hasMessages(env) {
-  if (!messagesReady) messagesReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversations'").first());
+  if (!messagesReady) messagesReady = await hasSchema(env, 'conversations');
   return messagesReady;
 }
 // Photos in messages (migration 0023 adds messages.images). Until it is applied, messages are text only.
 let msgPhotosReady = false;
 async function hasMsgPhotos(env) {
-  if (!msgPhotosReady) msgPhotosReady = !!(await env.DB.prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name = 'images'").first().catch(() => null));
+  if (!msgPhotosReady) msgPhotosReady = await hasSchema(env, 'messages.images');
   return msgPhotosReady;
 }
 async function needMessages(env) {
@@ -2198,7 +2228,7 @@ const THREADS_PER_HOUR = 5, THREADS_PER_DAY = 20, POSTS_PER_HOUR = 30, POSTS_PER
 const THREAD_PAGE = 30, THREAD_POSTS = 500, FORUM_MAILS = 50;
 let forumReady = false;
 async function hasForum(env) {
-  if (!forumReady) forumReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'forum_threads'").first());
+  if (!forumReady) forumReady = await hasSchema(env, 'forum_threads');
   return forumReady;
 }
 // The forum is paused for everyone, admins included (owner asked 2026-11-19), until the FORUM_OPEN variable is set to 1. Its data stays as it is.
@@ -2938,7 +2968,7 @@ const CHAT_GAP = 2000, CHAT_PER_MINUTE = 15, CHAT_PER_HOUR = 200, CHAT_PER_DAY =
 const CHAT_EMOJI = ['👍', '❤️', '😂', '😮', '🔥', '🎨'];
 let chatReady = false;
 async function hasChat(env) {
-  if (!chatReady) chatReady = !!(await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'").first());
+  if (!chatReady) chatReady = await hasSchema(env, 'chat_messages');
   return chatReady;
 }
 async function needChat(env) {
@@ -3014,14 +3044,15 @@ async function chatOne(env, id) {
 async function chatHome(request, env) {
   if (!await hasChat(env)) return json({ unavailable: true, rooms: [] });
   const u = await requireUser(request, env);
-  const rows = (await env.DB.prepare(`SELECT r.*,
+  const [res, why] = await Promise.all([env.DB.prepare(`SELECT r.*,
     (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.room_id = r.id AND m.hidden = 0) AS last_at,
     (SELECT read_at FROM chat_reads x WHERE x.room_id = r.id AND x.user_id = ?1) AS read_at,
     (SELECT COUNT(*) FROM chat_mentions n WHERE n.room_id = r.id AND n.user_id = ?1 AND n.read = 0) AS mentions
-    FROM chat_rooms r ${u.admin ? '' : 'WHERE r.archived = 0'} ORDER BY r.archived, r.sort, r.name`).bind(u.id).all()).results;
+    FROM chat_rooms r ${u.admin ? '' : 'WHERE r.archived = 0'} ORDER BY r.archived, r.sort, r.name`).bind(u.id).all(), chatBlocker(env, u, null)]);
+  const rows = res.results;
   return json({
     rooms: rows.map(r => ({ ...roomOut(r), unread: !!r.last_at && r.last_at > (r.read_at || 0), mentions: r.mentions })),
-    why: await chatBlocker(env, u, null), emoji: CHAT_EMOJI, live: !!env.CHAT,
+    why, emoji: CHAT_EMOJI, live: !!env.CHAT,
   });
 }
 

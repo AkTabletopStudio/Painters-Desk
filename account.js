@@ -156,14 +156,19 @@ function backToPicks(){const w=wPrev();try{localStorage.removeItem(WPK)}catch(e)
 const mineTap=()=>wPrev()?backToPicks():showMine();
 
 function wheelReset(){try{localStorage.removeItem(WK);localStorage.removeItem(WPK)}catch(e){}P.forEach(p=>p.on=!!on[p.g]);boxes();refresh()}
+// The account's collection, wheel, mixes, shopping list, chat rooms and blocks come in the same reply as who is signed in
+// (/api/me?boot=1); the first page load uses the copy index.html started asking for before the scripts arrived.
+let BOOT=null;
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
- let got=false;try{INFO=await api('/me');ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
+ let got=false;try{const early=window.pdMe;window.pdMe=null;INFO=await (early?early.catch(()=>api('/me?boot=1')):api('/me?boot=1'));ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
+ BOOT=INFO&&INFO.boot||null;if(INFO)delete INFO.boot;
  // Remember who is signed in (name and picture only) so the next page load shows it in the nav straight away (inline script in index.html).
- if(got)try{if(ME)localStorage.setItem('pd-me',JSON.stringify({name:ME.name||'',avatar:ME.avatar||''}));else localStorage.removeItem('pd-me')}catch(e){}
+ if(got)try{if(ME)localStorage.setItem('pd-me',JSON.stringify({name:ME.name||'',avatar:ME.avatar||'',chat:!!INFO.chat}));else localStorage.removeItem('pd-me')}catch(e){}
  if(ME){
   // The account's collection, wheel, mixes and shopping list load side by side, so the page settles sooner.
-  const no=()=>null,[col,wh,mx,wn]=await Promise.all([api('/collection').catch(no),api('/me/wheel').catch(no),api('/mixes').catch(no),api('/wants').catch(no)]);
+  const no=()=>null,B=BOOT||{},got=(k,path)=>B[k]?Promise.resolve(B[k]):api(path).catch(no);
+  const [col,wh,mx,wn]=await Promise.all([got('collection','/collection'),got('wheel','/me/wheel'),got('mixes','/mixes'),got('wants','/wants')]);
   if(col){const ks=col.paints;OWN=ownSet(ks);DETOK=col.details!=null;DET=new Map(Object.entries(col.details||{}));const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}else OWN=new Set();
   wheelSync(wh);
   MIXOK=!!mx&&!mx.unavailable;MIXES=mx&&mx.mixes||[];
@@ -194,7 +199,8 @@ document.addEventListener('visibilitychange',()=>{const busy=pend.add.size||pend
 
 /* ---------- router ---------- */
 // First-time visitors (nothing remembered in this browser) land on the welcome page and get the theme picker; everyone else on the wheel.
-let FIRST=false,PREV='';try{FIRST=!localStorage.getItem('pd-seen')&&!localStorage.getItem(WK);localStorage.setItem('pd-seen','1')}catch(e){}
+// PREV starts as the page being loaded, so opening chat before the account has loaded keeps you on it.
+let FIRST=false,PREV=/^#\/?chat/.test(location.hash)?'':location.hash;try{FIRST=!localStorage.getItem('pd-seen')&&!localStorage.getItem(WK);localStorage.setItem('pd-seen','1')}catch(e){}
 function route(){
  if(FIRST){FIRST=false;if(!location.hash.replace(/^#\/?/,''))history.replaceState(null,'','#/welcome');window.pdThemeFirst&&pdThemeFirst()}
  const h=location.hash.replace(/^#\/?/,''),[v,id,sub]=h.split(/[/?]/);
@@ -1617,21 +1623,28 @@ setInterval(chatState,20000);
 async function chatStart(){
  chatDisconnect();CT.ready=false;CT.cache.clear();CT.boxFor=null;CT.pre=false;
  $('chatN').hidden=!(INFO&&INFO.chat&&API);$('wChat').hidden=$('chatN').hidden;
- if(!ME||!INFO?.chat){CT.rooms=[];chatBadge();if(CT.open||CT.pending)chatShell();return}
- try{const d=await api('/chat');if(d.unavailable)return;Object.assign(CT,{rooms:d.rooms,emoji:d.emoji,live:d.live,why:d.why});
-  if(INFO.messages)CT.blocks=new Set((await api('/blocks')).blocks.map(b=>b.id))}catch(e){return}
+ if(!ME||!INFO?.chat){CT.rooms=[];chatBadge();if(CT.open||CT.pending){CT.pending=null;chatShell()}return}
+ // The first load after sign-in uses the rooms and blocks that came with the account (/api/me?boot=1).
+ const B=BOOT||{};BOOT=null;
+ try{const [d,bl]=await Promise.all([B.chat||api('/chat'),INFO.messages?(B.blocks||api('/blocks')):null]);if(d.unavailable)return chatFail();Object.assign(CT,{rooms:d.rooms,emoji:d.emoji,live:d.live,why:d.why});
+  if(bl)CT.blocks=new Set(bl.blocks.map(b=>b.id))}catch(e){return chatFail()}
  CT.ready=true;chatBadge();chatConnect();
  let open=false;try{open=localStorage.getItem(CHO)==='1'}catch(e){}
  if(CT.pending){const p=CT.pending;CT.pending=null;chatShow(p.room,p.m)}else if(open)chatShow()}
 
 // Open the popup (on a room, and scrolled to a message), or close it.
+// While the account or the rooms are still loading, the popup opens at once with a loading note and fills in when they arrive.
 function chatShow(room,m){
- if(!CT.ready&&ME&&INFO?.chat){CT.pending={room,m};return}
+ if(!INFO||(!CT.ready&&ME&&INFO.chat)){CT.pending={room,m};chatLoading();return}
  CT.open=true;try{localStorage.setItem(CHO,'1')}catch(e){}document.body.classList.add('chat-on');$('chatN').classList.add('on');
  chatShell();if(ME&&CT.ready)chatRoom(room||CT.room?.id,m)}
+function chatFail(){if(!CT.pending)return;CT.pending=null;const M=$('chatPop').querySelector('.cpmsg');if(M&&!$('chatPop').dataset.on)M.innerHTML='<p class="err">Chat couldn\'t load. Please try again in a moment.</p>'}
+function chatLoading(){const P=$('chatPop');if(P.dataset.on)return;P.hidden=false;document.body.classList.add('chat-on');$('chatN').classList.add('on');
+ P.innerHTML='<div class="cphead"><b class="cpn">💬 Chat</b><span class="sp"></span><button class="cpx" type="button" id="chX" aria-label="Close chat">×</button></div><div class="cpmsg"><p class="s">Loading…</p></div>';
+ $('chX').onclick=()=>{CT.pending=null;chatHide()}}
 function chatHide(){CT.open=false;CT.seq++;try{localStorage.setItem(CHO,'0')}catch(e){}$('chatPop').hidden=true;document.body.classList.remove('chat-on');$('chatN').classList.remove('on');
  if(!CT.ws)chatPolling(false);chatBadge()}
-window.pdChat=()=>CT.open?chatHide():chatShow();
+window.pdChat=()=>CT.open||CT.pending?(CT.pending=null,chatHide()):chatShow();
 // The popup's frame: header, rooms, messages and the writing box (filled in by chatRoom).
 function chatShell(){const P=$('chatPop');P.hidden=false;
  if(!ME||!INFO?.chat){P.innerHTML=`<div class="cphead"><b class="cpn">💬 Chat</b><span class="sp"></span><button class="cpx" type="button" id="chX" aria-label="Close chat">×</button></div>
