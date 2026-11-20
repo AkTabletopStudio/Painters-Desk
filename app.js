@@ -5,12 +5,15 @@ const AB={Dark:'Dk',Bright:'Br',Yellow:'Yel',Orange:'Orng',Green:'Grn',Brown:'Br
 const RYB_K=[[0,0],[30,60],[60,120],[120,180],[180,210],[240,240],[280,300],[320,330],[360,360]],
  rybMap=(h,i,j)=>{h=(h%360+360)%360;for(let k=1;k<RYB_K.length;k++){const a=RYB_K[k-1][i],b=RYB_K[k][i];if(h<=b){const x=RYB_K[k-1][j],y=RYB_K[k][j];return x+(h-a)/(b-a)*(y-x)}}return h},
  rybH=h=>rybMap(h,0,1),hslH=w=>rybMap(w,1,0);
+// 'Traditional wheel' checkbox (localStorage pd-trad=1): W is then the plain screen hue, as before the painter's wheel. Painter's wheel is the default.
+let TRAD=false;try{TRAD=localStorage.getItem('pd-trad')==='1'}catch(e){}
+const wH=h=>TRAD?h:rybH(h),wHsl=w=>TRAD?w:hslH(w);
 let g='M';const P=[];
 RAW.split('\n').forEach(l=>{if(l[0]==='#'){g=l[1];return}const[n,c,h]=l.split('|');const r=parseInt(h.slice(1,3),16)/255,gg=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255;
 const mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;let H=0;
 if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
 const S=d?d/(1-Math.abs(2*L-1)):0;
-P.push({n,c,h,g,H,W:rybH(H),S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n,i:P.length})});
+P.push({n,c,h,g,H,W:wH(H),S,L,lum:.299*r+.587*gg+.114*b,k:g+'|'+c+'|'+n,i:P.length})});
 // Signed-in user's paint collection (set of paint keys), filled in by account.js. null when signed out.
 let OWN=null,ONLY_MINE=false;const own=p=>!!p.mix||!!OWN&&OWN.has(p.k),star=p=>own(p)?'<b class="own" title="In your collection">★</b> ':'';
 let CH=[],NE=[],U=h=>h;const on={p:1},CX=500,CY=500;
@@ -463,10 +466,10 @@ schUI();
 
 function draw(){let s='';OFF=[];
 for(let h=0;h<360;h+=10){const a0=U(h-5)*Math.PI/180-Math.PI/2,a1=U(h+5)*Math.PI/180-Math.PI/2,R=480,r=110;
-s+=`<path d="M${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}L${CX+R*Math.cos(a0)} ${CY+R*Math.sin(a0)}A${R} ${R} 0 0 1 ${CX+R*Math.cos(a1)} ${CY+R*Math.sin(a1)}L${CX+r*Math.cos(a1)} ${CY+r*Math.sin(a1)}A${r} ${r} 0 0 0 ${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}Z" fill="hsl(${Math.round(hslH(h))},65%,50%)" opacity=".16"/>`}
+s+=`<path d="M${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}L${CX+R*Math.cos(a0)} ${CY+R*Math.sin(a0)}A${R} ${R} 0 0 1 ${CX+R*Math.cos(a1)} ${CY+R*Math.sin(a1)}L${CX+r*Math.cos(a1)} ${CY+r*Math.sin(a1)}A${r} ${r} 0 0 0 ${CX+r*Math.cos(a0)} ${CY+r*Math.sin(a0)}Z" fill="hsl(${Math.round(wHsl(h))},65%,50%)" opacity=".16"/>`}
 [.2,.5,.8].forEach(l=>s+=`<circle cx="${CX}" cy="${CY}" r="${140+l*300}" fill="none" stroke="currentColor" opacity=".18" stroke-dasharray="4 6"/>`);
 if(!sel)s+=`<text x="${CX}" y="${CY-8}" text-anchor="middle" fill="currentColor" opacity=".5" font-size="15">darker ←</text><text x="${CX}" y="${CY+14}" text-anchor="middle" fill="currentColor" opacity=".5" font-size="15">→ lighter (rim)</text>`;
-const hn={0:'Red',60:'Orange',120:'Yellow',180:'Green',240:'Blue',300:'Violet',330:'Magenta'};
+const hn=TRAD?{0:'Red',30:'Orange',60:'Yellow',120:'Green',180:'Cyan',240:'Blue',280:'Violet',320:'Magenta'}:{0:'Red',60:'Orange',120:'Yellow',180:'Green',240:'Blue',300:'Violet',330:'Magenta'};
 for(const h in hn){const a=U(+h)*Math.PI/180-Math.PI/2;s+=`<text x="${CX+492*Math.cos(a)}" y="${CY+492*Math.sin(a)+4}" text-anchor="middle" font-size="13" fill="currentColor" opacity=".6">${hn[h]}</text>`}
 let comp=[],ana=[];const NBp=MODE==='nmm'?NB:null,R=NBp?nmmRamp(NBp):null,MB=MODE==='mix'?NB:null;
 if(MB&&(!BL||BL.b!==MB))blendSeed(MB);if(MB)blendAuto();const MX=MB?BL.s.map(x=>x.p):null;
@@ -501,6 +504,7 @@ if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to sta
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):SEL0;if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
 function pick(p){window.pdHaptic&&pdHaptic();if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
+(()=>{const t=document.getElementById('trad');if(!t)return;t.checked=TRAD;t.onchange=()=>{TRAD=t.checked;try{TRAD?localStorage.setItem('pd-trad','1'):localStorage.removeItem('pd-trad')}catch(e){}P.forEach(p=>p.W=wH(p.H));layout();draw()}})();
 function renderNeu(){document.getElementById('neu').innerHTML=NE.map((p,i)=>`<span class="chip" data-i="${p.i}"><i style="background:${p.h}"></i>${star(p)}${p.n} <span style="color:var(--mut)">${p.c}</span></span>`).join('');
 document.querySelectorAll('#neu .chip').forEach(e=>e.onclick=()=>neutralShow(P[+e.dataset.i]));neuMark()}
 // Marks the neutrals list chips that the ramp or blend on the wheel uses, and counts them in the panel header.
@@ -648,7 +652,7 @@ window.pdSetMixes=list=>{P.length=P0;
  (list||[]).forEach(x=>{const m=(x.parts||[]).map(y=>[KEY[y.k],y.parts]).filter(y=>y[0]);if(m.length<2)return;m.forEach(([q])=>{if(!q.ks)q.ks=KSv(q.h)});
   const h=m.length===x.parts.length?kmHex(m):x.hex,r=parseInt(h.slice(1,3),16)/255,gg=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255,mx=Math.max(r,gg,b),mn=Math.min(r,gg,b),d=mx-mn,L=(mx+mn)/2;
   let H=0;if(d){H=mx===r?((gg-b)/d)%6:mx===gg?(b-r)/d+2:(r-gg)/d+4;H=(H*60+360)%360}
-  const p={n:x.name,c:'My mix',h,g:'µ',H,W:rybH(H),S:d?d/(1-Math.abs(2*L-1)):0,L,lum:.299*r+.587*gg+.114*b,k:'µ|'+x.id+'|'+x.name,i:P.length,lab:hexLab(h),mix:{id:x.id,m}};
+  const p={n:x.name,c:'My mix',h,g:'µ',H,W:wH(H),S:d?d/(1-Math.abs(2*L-1)):0,L,lum:.299*r+.587*gg+.114*b,k:'µ|'+x.id+'|'+x.name,i:P.length,lab:hexLab(h),mix:{id:x.id,m}};
   Object.defineProperty(p,'on',{get:()=>true,set(){},enumerable:true});P.push(p)});
  const gone=q=>q&&q.mix&&!P.includes(q);if(gone(sel))sel=null;if(gone(NB))NB=null;if(BL&&(gone(BL.b)||BL.s.some(x=>gone(x.p))))BL=null;
  MIXC=null;layout();renderNeu();draw()};
