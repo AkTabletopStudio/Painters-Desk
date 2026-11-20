@@ -71,6 +71,7 @@ summary{cursor:pointer}
 #v-wheel>h1{font-size:clamp(26px,4vw,36px);margin:4px 0 0}
 .wshow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 14px;margin:12px 0 8px}
 .wsl{font-size:15px}.wchips{display:contents}
+.wnote{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:8px 14px;margin:0 0 8px;font-size:14px}.wnote[hidden]{display:none}#wNoteM{flex:1 1 220px}
 .wchip{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 12px;border:2px solid var(--ink);border-radius:999px;background:var(--soft);color:var(--fg);font-weight:600;font-size:14px;line-height:1.3}
 .wchip button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:0 6px;opacity:.7;border-radius:50%}.wchip button:hover,.wchip button:focus-visible{opacity:1}
 .wchip.more{padding-right:12px;cursor:pointer}
@@ -929,6 +930,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>20 November 2026</h2><ul>
+<li data-a="wheel"><span class="tg fx">Fixed</span><b>Your wheel paints are kept when you sign in.</b> Paints you put on the wheel before signing in used to be swapped for the wheel saved on your account. Now they are kept and your saved wheel is added to them, and an empty wheel can never replace one with paints on it. The <b>My collection</b> button is now <b>Show my collection</b>, and once pressed it turns into <b>Back to my picks</b> to put your previous paints back. If My paints is still empty it offers to add the paints on the wheel instead of clearing it.</li>
 <li data-a="community"><span class="tg up">Better</span><b>Links you can click.</b> Web links in messages, chat, comments, forum posts, recipes, tutorials, palettes, profiles and commission details now open in a new tab when tapped.</li>
 <li data-a="wheel"><span class="tg nw">New</span><b>Traditional wheel option.</b> Prefer the old colour wheel? Tick <b>Traditional wheel</b> above the wheel to go back to screen colours, where red sits opposite cyan and yellow opposite blue. Complements, neighbours and colour schemes follow whichever wheel you pick, and your choice is remembered. The painter's wheel stays the default.</li>
 <li data-a="guides"><span class="tg up">Better</span><b>Paints open in a pop-up on guide pages.</b> Tapping a paint in a guide or conversion chart now shows it over the page, with its closest matches in other brands, instead of taking you away from the guide. <b>View paint page</b> opens the full page, and <b>Show on wheel</b> puts it on the colour wheel.</li>
@@ -1175,7 +1177,8 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <section id="v-wheel">
 <h1>Paint colour wheel</h1>
 <p class="s">Tap any paint on the wheel to see its complement, neighbours and matches from every brand. <a href="guides/colour-theory">How to read the wheel</a> <button class="btn tourb" type="button" id="tourBtn" hidden>▶ Watch the tour</button></p>
-<div class="panel wshow" id="wshow"><b class="wsl">Showing:</b><span class="wchips" id="wchips"></span><button class="btn pri" type="button" id="pickBtn" aria-haspopup="dialog">＋ Change paints</button><button class="btn" type="button" id="mineBtn" hidden>My collection</button><span class="s" id="cnt2"></span></div>
+<div class="panel wshow" id="wshow"><b class="wsl">Showing:</b><span class="wchips" id="wchips"></span><button class="btn pri" type="button" id="pickBtn" aria-haspopup="dialog">＋ Change paints</button><button class="btn" type="button" id="mineBtn" hidden>Show my collection</button><span class="s" id="cnt2"></span></div>
+<div class="panel wnote" id="wNote" hidden role="status"><span id="wNoteM"></span><button class="btn sm" type="button" id="wNoteB" hidden></button><button class="btn sm" type="button" id="wNoteX" aria-label="Close note">✕</button></div>
 <dialog class="pd pickdlg" id="pickDlg" aria-labelledby="pickT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div id="pickd"><div class="pkh"><h2 id="pickT">Choose paints for the wheel</h2><span class="s" id="cnt"></span></div>
 <div class="bar"><input id="q" type="search" placeholder="Search paints (name or code)"> <button id="clr" type="button">Clear all</button></div>
 <p class="s">Tick a whole range, or open it and tick individual paints. Selections from different ranges and brands show on the wheel together. While searching, a range checkbox selects only the matches.</p>
