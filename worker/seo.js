@@ -70,6 +70,7 @@ export async function seo(request, env, url) {
     const paint = br && s && br.bySlug.get(s);
     const br2 = vs === 'vs' && D.brands.find(x => x.slug === b2), other = br2 && s2 && br2.bySlug.get(s2);
     if (br && !s) r = send(brandPage(D, br));
+    else if (paint && !vs && url.searchParams.has('look')) return send(JSON.stringify(paintLook(D, paint)), 'application/json; charset=utf-8');
     else if (paint && !vs) r = send(paintPage(D, paint, await usedIn(env, paint)));
     else if (paint && other && !extra && paint !== other) {
       // One address per pair: the other order redirects, so search engines see a single page.
@@ -254,6 +255,26 @@ const OG_IMAGE = SITE + '/icons/og-image-2026-11-17.jpg';
 const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painters Desk', url: SITE + '/', publisher: { '@id': SITE + '/#org' } };
 const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png' };
 
+// Paint pop-up on guide pages: tapping a paint opens this instead of leaving the guide, with a button to the full paint page.
+// Paint links are /paints/<brand>/<paint>; ctrl/shift/middle clicks still open the page as normal.
+const PL_DLG = `<dialog class="pd pl" id="plDlg" aria-labelledby="plT"><button class="plx" type="button" aria-label="Close">×</button><div id="plB"></div></dialog>
+<script>(function(){var d=document,g=d.getElementById('plDlg'),B=d.getElementById('plB'),C={},n=0;if(!g||!g.showModal)return;
+function e(t){return String(t).replace(/[&<>"']/g,function(c){return'&#'+c.charCodeAt(0)+';'})}
+function show(u,x){B.innerHTML='<div class="plh"><span class="pls" style="background:'+e(x.h)+'"></span><div><h2 id="plT">'+e(x.n)+'</h2><p class="s">'+e(x.b)+' · '+e(x.r)+(x.c?' · '+e(x.c):'')+'</p></div></div>'
+ +'<div class="row"><a class="btn pri" href="'+e(x.u)+'">View paint page</a><a class="btn" href="'+e(x.w)+'">Show on wheel</a></div>'
+ +(x.m.length?'<h3>Closest in other brands</h3><ul class="m">'+x.m.map(function(m){return'<li><i class="sw" style="background:'+e(m.h)+'"></i><span>'+(m.ck?'<span class="ck" title="Listed in a conversion chart">✓</span> ':'≈ ')+'<a href="'+e(m.u)+'">'+e(m.n)+'</a><em>'+e(m.b)+' · ΔE '+m.d+', '+e(m.q)+'</em></span></li>'}).join('')+'</ul>':'')
+ +'<p class="s">✓ = listed in a conversion chart, ≈ = closest swatch colour. Swatch colours are estimates, so check the paint in person.</p>';
+ g.scrollTop=0;if(!g.open)g.showModal();g.querySelector('.plx').focus()}
+function open(u){var k=++n;if(C[u])return show(u,C[u]);
+ fetch(u+'?look=1').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(x){C[u]=x;if(k===n)show(u,x)}).catch(function(){location.href=u})}
+d.addEventListener('click',function(ev){if(ev.defaultPrevented||ev.button||ev.ctrlKey||ev.metaKey||ev.shiftKey||ev.altKey)return;
+ var a=ev.target.closest&&ev.target.closest('a[href]');if(!a||a.target||a.origin!==location.origin)return;
+ var q=a.pathname.split('/');if(q.length!==4||q[1]!=='paints'||!q[3]||a.pathname.indexOf('/paints/colour-standards/')===0||a.closest('#plDlg .row'))return;
+ ev.preventDefault();open(a.pathname)});
+g.querySelector('.plx').onclick=function(){g.close()};
+g.addEventListener('click',function(ev){if(ev.target!==g)return;var r=g.getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)g.close()});
+g.addEventListener('close',function(){n++})})()</script>`;
+
 // ld: extra schema.org objects for this page (the breadcrumb trail is always added). og: 'website' or 'article'.
 function page({ title, desc, path, crumbs, body, ld = [], og = 'website', q = '' }) {
   const graph = {
@@ -346,6 +367,10 @@ svg.wheel{width:100%;max-width:340px;height:auto;color:var(--ink);flex:none}
 .prose h3{font-size:17px;margin:4px 0 6px}.prose ul,.prose ol{margin:0 0 12px;padding-left:22px;max-width:720px}.prose li{margin:0 0 6px}
 figure{margin:0;flex:0 1 320px;text-align:center}svg.pic{width:100%;max-width:320px;height:auto;color:var(--ink);display:block;margin:0 auto 6px}svg.chart{width:100%;max-width:520px;height:auto;color:var(--fg);flex:none}
 ol.steps li{padding:8px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ol.steps li:first-child{border-top:0}ol.steps em{font-size:15px;color:var(--fg);margin-top:2px}ol.steps .sw{width:30px;height:30px}.chip.tall{height:32px;border-radius:12px;max-width:520px}
+dialog.pl{max-width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;background:linear-gradient(var(--card),var(--card)),var(--bg)}
+.plx{position:sticky;top:-10px;float:right;margin:-10px -10px 4px 8px;z-index:3;width:36px;height:36px;border-radius:50%;border:3px solid var(--ink);background:var(--card);color:var(--fg);font:700 20px/1 Rubik,sans-serif;cursor:pointer;box-shadow:2px 2px 0 var(--sh)}
+.plh{display:flex;gap:14px;align-items:center;padding-right:36px}.plh h2{margin:0}dialog.pl .plh p{margin:4px 0 0}.pls{flex:none;width:64px;height:64px;border-radius:50%;border:3px solid var(--ink)}
+dialog.pl .row{justify-content:flex-start;margin:14px 0 4px}dialog.pl h3{margin:14px 0 6px;font-size:16px}dialog.pl ul.m li{padding:4px 0}dialog.pl p.s{margin:8px 0 0;font-size:13px}.btn.pri{background:var(--yel)}
 ${THEME.css}</style></head>
 <body><div class="wrap navw">${path === '/' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
 ${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
@@ -356,6 +381,7 @@ The Painters Desk is unofficial and not affiliated with or endorsed by any paint
 <a href="/paints">All brands</a> · <a href="/guides">Guides</a> · <a href="/privacy">Privacy policy</a> · <a href="/terms">Site rules</a></p></footer>
 </div>
 ${THEME.dlg}
+${path.startsWith('/guides') ? PL_DLG : ''}
 <script>(function(){var d=document,h=d.documentElement,g=d.getElementById('thDlg'),os=g?g.querySelectorAll('.tho'):[];
 function ic(){var l=h.dataset.look;d.querySelectorAll('img.pdi').forEach(function(m){m.src=l?'/icons/themes/'+l+'.svg':m.dataset.def})}ic();
 var s=d.querySelector('nav.top .secs'),o=s&&s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8;
@@ -445,6 +471,16 @@ ${usedInHTML(p, rs)}`;
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
     ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` } })],
   });
+}
+
+// The paint pop-up on guide pages (/paints/<brand>/<paint>?look=1): the paint and its best match in up to 8 brands, the
+// most-searched brands first, the same picks as the paint page.
+function paintLook(D, p) {
+  const br = D.brands[p.b];
+  const best = matches(D, p).map(o => { const m = [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0]; return m && { br: o.br, m, ck: o.ch.includes(m) } }).filter(Boolean)
+    .sort((a, b) => popRank(a.br) - popRank(b.br)).slice(0, 8);
+  return { n: p.n, c: p.c || '', b: br.name, r: D.GL[p.g] || '', h: p.h, u: paintUrl(p), w: '/#/?paint=' + encodeURIComponent(p.g + '|' + p.c + '|' + p.n),
+    m: best.map(x => ({ b: short(x.br), n: label(x.m.p), h: x.m.p.h, u: paintUrl(x.m.p), d: Math.round(x.m.d), q: closeness(x.m.d), ck: x.ck ? 1 : 0 })) };
 }
 
 /* ---------- "X vs Y" comparison pages: /paints/<brand>/<paint>/vs/<brand>/<paint> ---------- */
