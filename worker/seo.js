@@ -91,7 +91,8 @@ export async function seo(request, env, url) {
       // One address per pair: the other order redirects, so search engines see a single page.
       const c = vsUrl(paint, other);
       if (c !== p) return Response.redirect(url.origin + c, 301);
-      r = send(comparePage(D, paint, other));
+      const html = comparePage(D, paint, other);
+      r = send(vsKept(D, paint, other) ? html : html.replace('<meta name="description"', '<meta name="robots" content="noindex, follow"><meta name="description"'));
     }
     else r = send(notFound(), 'text/html; charset=utf-8', 404);
   }
@@ -535,6 +536,48 @@ const EXTRA_VS = [['citadel/carroburg-crimson', 'citadel/berserker-bloodshade'],
 const bySlugPath = (D, x) => { const [b, s] = x.split('/'), br = D.brands.find(y => y.slug === b); return br && br.bySlug.get(s) };
 // Tone Pro tones (T1-T7 of one colour) are only compared with each other, so they don't crowd out plain paints.
 const noTone = (D, p, bi) => p.g === 'p' ? undefined : D.brands[bi].groups.filter(g => g !== 'p');
+// Comparison pages Google may index: the ones that had Google search impressions (Search Console, 24 Oct-18 Nov 2026)
+// plus EXTRA_VS. On 12 Nov 2026 Google stopped ranking the site, nine days after ~13,000 generated comparison pages went
+// into the sitemap, so every other pair is marked noindex and left out of the sitemap. Visitors still see and reach them all.
+const KEEP_VS = new Set([
+  '/paints/ak-interactive/imperial-blue/vs/citadel/macragge-blue', '/paints/ak-interactive/ral-8020-braun/vs/citadel/baneblade-brown',
+  '/paints/ak-interactive/ultramarine/vs/citadel/macragge-blue', '/paints/ammo-by-mig/blood-red/vs/vallejo/scarlet-blood',
+  '/paints/army-painter/algae-green/vs/army-painter/desolate-brown', '/paints/army-painter/blue-flux/vs/army-painter/shieldwall-blue',
+  '/paints/army-painter/chimera-red/vs/citadel/word-bearers-red', '/paints/army-painter/greenskin-warpaints-air/vs/citadel/orruk-flesh',
+  '/paints/army-painter/grim-black/vs/citadel/black-templar', '/paints/army-painter/grimdark-shadow/vs/citadel/agrax-earthshade',
+  '/paints/army-painter/heavy-metal/vs/mr-hobby/burnt-iron-n-76', '/paints/army-painter/magecast-magenta/vs/citadel/genestealer-purple',
+  '/paints/army-painter/matt-white/vs/tamiya/flat-white', '/paints/army-painter/olive-drab/vs/citadel/ogryn-camo',
+  '/paints/army-painter/pale-sand/vs/pro-acryl/bright-ivory', '/paints/army-painter/runic-grey/vs/citadel/space-wolves-grey',
+  '/paints/army-painter/sepia-tone/vs/citadel/agrax-earthshade', '/paints/army-painter/strong-tone/vs/citadel/agrax-earthshade',
+  '/paints/army-painter/voodoo-shade/vs/citadel/mortarion-grime', '/paints/army-painter/warm-skin-shade/vs/citadel/reikland-fleshshade',
+  '/paints/citadel/abaddon-black/vs/mr-hobby/black', '/paints/citadel/agrax-earthshade/vs/citadel/reikland-fleshshade',
+  '/paints/citadel/astorath-red/vs/citadel/evil-sunz-scarlet-colour-air',
+  '/paints/citadel/balthasar-gold-colour-air/vs/vallejo/arcane-gold-77-177-airbrush',
+  '/paints/citadel/balthasar-gold-colour-air/vs/vallejo/imperial-gold-77-143-shade', '/paints/citadel/balthasar-gold/vs/vallejo/bronze',
+  '/paints/citadel/berserker-bloodshade/vs/citadel/carroburg-crimson', '/paints/citadel/brass-scorpion/vs/reaper/tarnished-brass',
+  '/paints/citadel/corvus-black-colour-air/vs/mr-hobby/black', '/paints/citadel/corvus-black/vs/mr-hobby/flat-black-h-12',
+  '/paints/citadel/cygor-brown/vs/citadel/wyldwood', '/paints/citadel/dawnstone-colour-air/vs/vallejo/concrete',
+  '/paints/citadel/dawnstone-colour-dry/vs/vallejo/concrete', '/paints/citadel/flash-gitz-yellow/vs/mr-hobby/yellow-h-4',
+  '/paints/citadel/hawkshroud-yellow-t4/vs/citadel/yriel-yellow', '/paints/citadel/iron-hands-steel/vs/mr-hobby/burnt-iron',
+  '/paints/citadel/kakophoni-purple/vs/two-thin-coats/spectral-purple', '/paints/citadel/khorne-red/vs/citadel/word-bearers-red',
+  '/paints/citadel/khorne-red/vs/vallejo/nocturnal-red', '/paints/citadel/moot-green/vs/citadel/warpstone-glow',
+  '/paints/citadel/phoenician-purple/vs/vallejo/magenta', '/paints/citadel/pink-horror/vs/two-thin-coats/cyber-pink',
+  '/paints/citadel/screaming-skull/vs/vallejo/aged-white', '/paints/citadel/ulthuan-grey/vs/mr-hobby/light-gull-gray',
+  '/paints/citadel/white-scar/vs/formula-p3/underbelly-blue', '/paints/citadel/wrack-white/vs/pro-acryl/bright-ivory',
+  '/paints/formula-p3/morrow-white/vs/vallejo/dead-white', '/paints/kimera-kolors/phthalo-blue-gs/vs/kimera-kolors/phthalo-blue-rs',
+  '/paints/mr-hobby/chocolate-brown/vs/mr-hobby/mahogany', '/paints/mr-hobby/metal-black/vs/vallejo/gunmetal',
+  '/paints/pro-acryl/bright-ivory/vs/pro-acryl/heavy-warm-white', '/paints/pro-acryl/bright-ivory/vs/pro-acryl/ivory',
+  '/paints/reaper/ruby-red/vs/vallejo/forged-red-77-125-base', '/paints/tamiya/royal-blue/vs/tamiya/sea-blue',
+  '/paints/vallejo/grey-blue-70-943/vs/vallejo/pastel-blue'
+]);
+const vsKept = (D, a, b) => KEEP_VS.has(vsUrl(a, b)) || EXTRA_VS.some(([x, y]) => { const u = bySlugPath(D, x), v = bySlugPath(D, y); return (u === a && v === b) || (u === b && v === a) });
+// The indexable comparison pages for the sitemap: the kept pairs the site links to, plus kept addresses (searched pairs)
+// that still point at two real paints.
+function keptVsUrls(D) {
+  const out = new Set(vsPairs(D).filter(([a, b]) => vsKept(D, a, b)).map(([a, b]) => vsUrl(a, b)));
+  KEEP_VS.forEach(u => { const [x, y] = u.slice(8).split('/vs/'), a = bySlugPath(D, x), b = bySlugPath(D, y); if (a && b && a !== b && vsUrl(a, b) === u) out.add(u) });
+  return [...out];
+}
 function vsOf(D, p) {
   if (!D.vsOf) D.vsOf = new Map();
   if (D.vsOf.has(p)) return D.vsOf.get(p);
@@ -623,7 +666,7 @@ export function renderExtra(D) {
   const pairs = vsPairs(D), sts = standards(D);
   standardsPage(D); sts.forEach(st => standardPage(D, st));
   pairs.filter((x, i) => i % 50 === 0).forEach(([a, b]) => { if (!comparePage(D, a, b).includes('FAQPage')) throw new Error('Bad compare page') });
-  return `${pairs.length} comparison pages, ${sts.length} colour standards (${Object.keys(STD).map(k => k + ' ' + sts.filter(x => x.k === k).length).join(', ')})`;
+  return `${pairs.length} comparison pages (${pairs.filter(([a, b]) => vsKept(D, a, b)).length} indexable), ${sts.length} colour standards (${Object.keys(STD).map(k => k + ' ' + sts.filter(x => x.k === k).length).join(', ')})`;
 }
 
 /* ---------- colour standards: RAL, RLM and FS numbers named by the paint makers ---------- */
@@ -1464,7 +1507,7 @@ export async function pageNotFound(request, env, url) {
 
 function sitemap(D) {
   const u = ['/', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...(PALS.length ? ['/guides/palettes', ...PALS.map(x => '/guides/palettes/' + x.s)] : []), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
-    '/paints/colour-standards', ...standards(D).map(x => '/paints/colour-standards/' + x.slug), ...vsPairs(D).map(([a, b]) => vsUrl(a, b))];
+    '/paints/colour-standards', ...standards(D).map(x => '/paints/colour-standards/' + x.slug), ...keptVsUrls(D)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     u.map(x => `<url><loc>${SITE}${esc(x)}</loc></url>`).join('\n') + '\n</urlset>\n';
 }
