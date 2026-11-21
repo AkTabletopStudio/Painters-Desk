@@ -6981,6 +6981,7 @@ Wyvern Leather|9492|#642e29
 Gargoyle Grey|9493|#93a5b1
 Gnome Flesh|9494|#d28877
 Drow Silver|9495|#957fa0
+Reliquary Gold|9496|#b8b069
 Mermaid Scale|9497|#246c6e
 Doxy Blush|9498|#f16271
 Treasure Map|9499|#f3ce91

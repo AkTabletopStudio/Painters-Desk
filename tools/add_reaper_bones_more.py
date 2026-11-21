@@ -3,12 +3,14 @@
 Usage: ffmpeg -i reaper-screen-recording-2026-11-21.mp4 -vf fps=15 <frames>/a%03d.png
        ffmpeg -i reaper-screen-recording-2026-11-21b.mp4 -vf fps=15 <frames2>/a%03d.png
        ffmpeg -i reaper-screen-recording-2026-11-21c.mp4 -vf fps=15 <frames3>/a%03d.png
-       python3 -I tools/add_reaper_bones_more.py <frames dir> <frames2 dir> <frames3 dir> [check.png]
+       python3 -I tools/add_reaper_bones_more.py <frames dir> <frames2 dir> <frames3 dir> <09496 screenshot> [check.png]
 Needs Pillow.
 
 Source: a screen recording by the owner (2026-11-21, data/reaper/bones-2/) scrolling reapermini.com's Bones paint
 listing, and two more recordings (…-21b.mp4, …-21c.mp4) of the same store in its two-column grid for 09455-09481.
 Solid White is a white tile on the white page, so it is taken as #ffffff.
+09496 Reliquary Gold comes from the owner's screenshot of Reaper's same tile on a retailer page (talon.games),
+data/reaper/bones-2/09496-reliquary-gold-talon-games.png (left-edge strip median).
 09455-09495 are flat square tiles (median of a strip down the tile's left edge, clear of the text);
 09497-09508 are glossy round tiles (median of the whole ball, leaving out the white text and highlight and the black
 text outline). These are Reaper's web tile colours, not photos of paint, so every colour is an estimate.
@@ -75,6 +77,9 @@ def main():
         assert 430 < b - a < 560, (code, a, b)
         px = [im.getpixel((i, j)) for i in range(x, x + 40, 2) for j in range(a + 16, b - 16, 2)]
         out.append((code, name, med(px), im.crop((x - 12, a, x + 512, b)).resize((60, int(60 * (b - a) / 524)))))
+    shot = Image.open(sys.argv[4]).convert('RGB')  # 924 x 1999 phone screenshot, tile at x 33-891, y 440-1299
+    px = [shot.getpixel((i, j)) for i in range(45, 105, 2) for j in range(460, 1280, 4)]
+    out.append((9496, 'Reliquary Gold', med(px), shot.crop((33, 440, 891, 1299)).resize((60, 60))))
     for code, name, n, y in T:
         im = Image.open(f'{d}/a{n:03d}.png').convert('RGB')
         if code < 9497:
@@ -98,7 +103,7 @@ def main():
     lines = ['#Ŷ'] + [f'{nm}|{c}|{h}' for c, nm, h, _ in sorted(out, key=lambda o: o[0])]
     open('data.js', 'w', encoding='utf-8').write(head + body.rstrip('\n') + '\n' + '\n'.join(lines) + tail)
     print('added', len(out))
-    if len(sys.argv) > 4:
+    if len(sys.argv) > 5:
         H = 56
         sheet = Image.new('RGB', (760, H * 32), 'white')
         dr = ImageDraw.Draw(sheet)
@@ -107,7 +112,7 @@ def main():
             sheet.paste(cr, (ox, oy))
             dr.rectangle((ox + 66, oy + 4, ox + 116, oy + H - 6), fill=h)
             dr.text((ox + 122, oy + 20), f'{c} {nm} {h}', fill='black')
-        sheet.save(sys.argv[4])
+        sheet.save(sys.argv[5])
 
 
 if __name__ == '__main__':
