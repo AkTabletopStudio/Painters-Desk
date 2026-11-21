@@ -571,10 +571,12 @@ const KEEP_VS = new Set([
   '/paints/vallejo/grey-blue-70-943/vs/vallejo/pastel-blue'
 ]);
 const vsKept = (D, a, b) => KEEP_VS.has(vsUrl(a, b)) || EXTRA_VS.some(([x, y]) => { const u = bySlugPath(D, x), v = bySlugPath(D, y); return (u === a && v === b) || (u === b && v === a) });
-// The indexable comparison pages for the sitemap: the kept pairs the site links to, plus kept addresses (searched pairs)
-// that still point at two real paints.
+// The indexable comparison pages for the sitemap: the EXTRA_VS pairs plus the kept addresses (searched pairs) that still
+// point at two real paints.
 function keptVsUrls(D) {
-  const out = new Set(vsPairs(D).filter(([a, b]) => vsKept(D, a, b)).map(([a, b]) => vsUrl(a, b)));
+  // Built from the short kept lists only: working out every paint's pairs (vsPairs) takes seconds, too slow for a request.
+  const out = new Set();
+  EXTRA_VS.forEach(([x, y]) => { const a = bySlugPath(D, x), b = bySlugPath(D, y); if (a && b && a !== b) out.add(vsUrl(a, b)) });
   KEEP_VS.forEach(u => { const [x, y] = u.slice(8).split('/vs/'), a = bySlugPath(D, x), b = bySlugPath(D, y); if (a && b && a !== b && vsUrl(a, b) === u) out.add(u) });
   return [...out];
 }
