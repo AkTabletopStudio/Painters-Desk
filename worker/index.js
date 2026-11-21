@@ -95,6 +95,8 @@ export default {
     if (r.status === 101 || r.webSocket) return r;
     const out = new Response(r.body, r);
     for (const [k, v] of Object.entries(SECURITY)) if (!out.headers.has(k)) out.headers.set(k, v);
+    // The workers.dev address (and preview builds) serve the same pages as paintersdesk.com: keep them out of search results.
+    if (new URL(request.url).hostname !== 'paintersdesk.com') out.headers.set('x-robots-tag', 'noindex');
     return out;
   },
 };
