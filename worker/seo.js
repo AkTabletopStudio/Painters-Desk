@@ -10,6 +10,9 @@ import { CRAFT, CRAFT_DATE } from './craft-guides.js';
 import { cardPNG, cardResponse } from './card.js';
 
 const SITE = 'https://paintersdesk.com';
+// The all-brands conversion chart (allChartPage): its address, the colour-match cut-off, the 'closer by colour' gap and the default columns.
+const ALL_NEAR = 11, ALL_ALT = 5, ALL_SLUG = 'conversion-chart';
+const ALL_COLS = ['citadel', 'army-painter', 'vallejo', 'pro-acryl', 'ak-interactive', 'scale75'];
 const BRAND_SLUG = { 'Citadel / Warhammer': 'citadel' };
 // Renamed paints, [old 'brand/paint' slug, new one]. Only paths under /paints/ reach this.
 const MOVED = [['army-painter/tidal-navy', 'army-painter/tidal-wave'], ['citadel/golfag-brown', 'citadel/golgfag-brown'],
@@ -50,6 +53,19 @@ export async function seo(request, env, url) {
     return Response.redirect(url.origin + (paint && paint.url ? paint.url : '/paints'), 302);
   }
   else if (p === '/guides') r = send(guidesPage(D));
+  else if (p === `/guides/${ALL_SLUG}.json` || p === `/guides/${ALL_SLUG}.csv`) {
+    // The all-brands chart as data (for its brand picker) or as a spreadsheet. Built once per Worker and kept in the edge cache.
+    const f = url.searchParams.get('from') || 'citadel', from = brandBy(D, f), csv = p.endsWith('.csv');
+    if (!from && !(csv && f === 'all')) return send('Unknown brand', 'text/plain; charset=utf-8', 404);
+    const key = new Request(`${url.origin}${p}?from=${f}&n=${D.P.length}-${Object.keys(D.MT).length}`), cache = typeof caches !== 'undefined' ? caches.default : null;
+    const hit = cache && await cache.match(key).catch(() => null);
+    if (hit) return hit;
+    const r2 = csv ? new Response(allChartCSV(D, from), { headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="painters-desk-conversion-chart-${f}.csv"`, 'cache-control': 'public, max-age=3600' } })
+      : new Response(allChartJSON(D, from), { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+    if (cache) await cache.put(key, r2.clone()).catch(() => {});
+    return request.method === 'HEAD' ? new Response(null, r2) : r2;
+  }
+  else if (p === `/guides/${ALL_SLUG}`) r = send(allChartPage(D, GUIDES.find(g => g.all), url));
   else if (p === '/guides/palettes') r = send(palettesPage(D));
   else if (/^\/guides\/palettes\/[\w-]+\/card\.png$/.test(p)) {
     // The palette's share picture: its colours and name.
@@ -894,7 +910,7 @@ function brandPage(D, br) {
   const body = `<h1>${esc(br.name)} paint equivalents</h1>
 <p>Every ${esc(br.name)} paint on The Painters Desk (${br.paints.length} in all). Pick one to see its closest matches in the other brands. Swatch colours are estimates.</p>
 ${brandGuide(D, br)}
-${guides.length ? `<section class="panel"><h2>Conversion charts</h2><ul class="m">${guides.map(g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`).join('')}</ul></section>` : ''}
+<section class="panel"><h2>Conversion charts</h2><ul class="m"><li><a href="/guides/${ALL_SLUG}?from=${br.slug}">${esc(short(br))} to every other brand</a></li>${guides.map(g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`).join('')}</ul></section>
 ${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="list">${x.ps.map(p => `<li><i class="sw" style="background:${p.h}"></i><a href="${paintUrl(p)}">${esc(label(p))}</a></li>`).join('')}</ul></section>`).join('')}`;
   return page({
     title, desc, path: '/paints/' + br.slug, body,
@@ -938,6 +954,9 @@ const GUIDES = [
   conv('two-thin-coats', 'citadel', 'Two Thin Coats', 'Citadel'),
   conv('ak-interactive', 'citadel', 'AK Interactive', 'Citadel'),
   conv('tamiya', 'vallejo', 'Tamiya', 'Vallejo', { bg: ['Z', 'Y'], note: 'Matches come from Vallejo Model Color and Model Air, the ranges scale modellers use alongside Tamiya.' }),
+  // Every paint against every other brand, one page with a brand picker (allChartPage).
+  { slug: ALL_SLUG, page: allChartPage, all: 1, title: 'Miniature paint conversion chart for every brand', label: 'Every brand, every paint',
+    blurb: 'Pick any brand and see the closest match for each paint in all the other brands, with chart equivalents marked.' },
   // One Citadel range against several brands at once: conv has only the source brand, ag picks its ranges, to lists the targets.
   { slug: 'tone-pro-conversion-chart', conv: ['citadel'], ag: ['p'], to: ['army-painter', 'vallejo', 'ak-interactive', 'pro-acryl', 'two-thin-coats'],
     title: 'Citadel Tone Pro conversion chart', label: 'Tone Pro → other brands',
@@ -997,6 +1016,154 @@ ${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>Tap any paint for its matches in ever
 <section class="panel"><h2>${esc(short(A))} ${esc(rng)}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(rng)}</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr><td><i class="sw" style="background:${r.p.h}"></i><a href="${r.p.url}">${esc(label(r.p))}</a></td>${r.m.map(m => `<td>${cell(m)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
 ${guideLinks(g)}`;
   return page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc, '2026-11-03')] });
+}
+
+/* ---------- one conversion chart for every paint: /guides/conversion-chart (+ .json and .csv) ---------- */
+
+// Every paint gets one answer per other brand. Rules (agreed with the owner, 2026-11-21):
+// - a ✓ only where one conversion chart names that exact pair (no chaining through a third brand);
+// - a chart made by one of the two brands before anyone else's (CHART_MAKER), then the nearer swatch;
+// - when the chart pick is ΔE 5+ further than the nearest same-type swatch, that swatch is shown too ("closer by colour");
+// - without a chart link, the nearest same-type swatch under ΔE 11 (Fair or better), else the cell is left empty.
+// Warpaints Legacy (old names) are never an answer, and Citadel Tone Pro only answers for other Tone Pro paints.
+const allTarget = (p, q) => q.slug && q.g !== 'Ŵ' && (q.g !== 'p' || p.g === 'p') && clearOf(q) === clearOf(p);
+function allPools(D) {
+  if (D.allPools) return D.allPools;
+  const byL = a => a.sort((x, y) => x.lab[0] - y.lab[0]);
+  return D.allPools = D.brands.map(br => {
+    const byT = {};
+    br.paints.forEach(q => { if (q.g !== 'Ŵ') (byT[q.t] = byT[q.t] || []).push(q) });
+    Object.values(byT).forEach(byL);
+    return { all: byL(br.paints.filter(q => q.g !== 'Ŵ')), byT };
+  });
+}
+// Nearest paint in a list sorted by lightness: walk out from p's lightness and stop once the lightness gap alone
+// (ΔE2000 is at least |ΔL| / 1.75) is bigger than the best found, so most of the brand is never compared.
+function allNearest(p, arr) {
+  const L = p.lab[0];
+  let lo = 0, hi = arr.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m].lab[0] < L) lo = m + 1; else hi = m }
+  let best = null, bd = 1e9, i = lo - 1, j = lo, any = false;
+  const tryQ = q => { if (!allTarget(p, q)) return; any = true; const d = dE(p, q); if (d < bd || d === bd && q.i < best.i) { bd = d; best = q } };
+  while (i >= 0 || j < arr.length) {
+    const di = i >= 0 ? (L - arr[i].lab[0]) / 1.75 : 1e9, dj = j < arr.length ? (arr[j].lab[0] - L) / 1.75 : 1e9;
+    if (Math.min(di, dj) > bd) break; // equal swatches tie on data order, as the other charts do
+    if (di <= dj) tryQ(arr[i--]); else tryQ(arr[j++]);
+  }
+  return any ? { q: best, d: bd } : null;
+}
+// Who made each chart. A chart made by one of the two brands being compared wins over a third party's (Herrick, or
+// Two Thin Coats' chart between two other brands).
+const CHART_MAKER = { t: 'Two Thin Coats', f: 'Army Painter', L: 'Army Painter', w: 'Army Painter', k: 'AK Interactive', r: 'AK Interactive', m: 'AMMO by Mig' };
+const allOwn = (D, s, p, bi) => { const mk = CHART_MAKER[s]; return mk === D.brands[p.b].name || mk === D.brands[bi].name ? 1 : 0 };
+function allCell(D, p, bi) {
+  const pool = allPools(D)[bi];
+  const n = (pool.byT[p.t] && allNearest(p, pool.byT[p.t])) || allNearest(p, pool.all);
+  const near = n && n.q, nd = n ? n.d : 1e9;
+  const doc = (links(D).get(p.i) || []).map(([j, s]) => ({ p: D.P[j], s, d: dE(p, D.P[j]) }))
+    .filter(m => m.p.b === bi && allTarget(p, m.p)).sort((a, b) => allOwn(D, b.s, p, bi) - allOwn(D, a.s, p, bi) || a.d - b.d)[0];
+  if (doc) return { m: doc, alt: near && near !== doc.p && nd < ALL_NEAR && doc.d - nd >= ALL_ALT ? { p: near, d: nd } : null };
+  return near && nd < ALL_NEAR ? { m: { p: near, d: nd } } : null;
+}
+// Rows for every paint of one brand: cells[bi] for each other brand (null for its own brand or no match). Cached per Worker.
+function allRows(D, fi) {
+  D.allRows = D.allRows || new Map();
+  if (!D.allRows.has(fi)) D.allRows.set(fi, D.brands[fi].paints.map(p => ({ p, cells: D.brands.map((_, bi) => bi === fi ? null : allCell(D, p, bi)) })));
+  return D.allRows.get(fi);
+}
+const allSw = p => `<i class="sw" style="background:${p.h}"></i>`;
+function allCellHTML(D, c) {
+  if (!c) return '<td class="nm">–</td>';
+  const { m, alt } = c;
+  const src = m.s ? esc(D.msrc[m.s] || 'a conversion chart') : '';
+  return `<td>${allSw(m.p)}${m.s ? `<span class="ck" title="Listed in ${src}">✓</span> ` : '≈ '}<a href="${m.p.url}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${m.s ? ' · ' + src : ''}</em>${alt ? `<span class="alt">${allSw(alt.p)}≈ <a href="${alt.p.url}">${esc(label(alt.p))}</a><em>closer by colour · ΔE ${alt.d.toFixed(0)}, ${closeness(alt.d)}</em></span>` : ''}</td>`;
+}
+function allStats(D) {
+  if (D.allStats) return D.allStats;
+  const L = links(D), linked = D.P.filter(p => p.slug && (L.get(p.i) || []).some(([j]) => D.P[j].b !== p.b)).length;
+  const noChart = D.brands.filter(br => !br.paints.some(p => (L.get(p.i) || []).some(([j]) => D.P[j].b !== br.paints[0].b))).map(short);
+  return D.allStats = { n: D.brands.reduce((a, b) => a + b.paints.length, 0), linked, noChart };
+}
+function allChartPage(D, g, url) {
+  const q = url ? url.searchParams : new URLSearchParams();
+  const from = brandBy(D, q.get('from') || 'citadel') || brandBy(D, 'citadel'), fi = D.brands.indexOf(from);
+  let cols = (q.get('to') || '').split(',').map(s => brandBy(D, s)).filter(b => b && b !== from);
+  if (!cols.length) cols = ALL_COLS.map(s => brandBy(D, s)).filter(b => b && b !== from).slice(0, 5);
+  const ci = cols.map(b => D.brands.indexOf(b)), rows = allRows(D, fi), st = allStats(D);
+  const path = '/guides/' + g.slug, title = g.title;
+  const desc = `One paint conversion chart for all ${st.n.toLocaleString('en')} miniature paints on The Painters Desk: pick a brand and see its closest match in every other brand, with conversion-chart equivalents marked. Swatch colours are estimates.`;
+  const groups = from.groups.map(x => ({ g: x, rs: rows.filter(r => r.p.g === x) })).filter(x => x.rs.length);
+  const opt = (b, sel) => `<option value="${b.slug}"${sel ? ' selected' : ''}>${esc(b.name)}</option>`;
+  const body = `<h1>${esc(title)}</h1>
+<div class="prose"><p>Every paint on The Painters Desk against every other brand, in one chart. Pick the brand you're converting from, then tick the brands you want to see. A <span class="ck">✓</span> means a manufacturer or community conversion chart lists that pairing. ≈ means no chart covers it, so it shows the nearest swatch colour of the same paint type (shade for shade, metallic for metallic).</p>
+<p>When a chart's pick is well away from the nearest swatch (ΔE 5 or more), the nearer paint is shown underneath as <b>closer by colour</b>. Either the chart pairing is a loose one or our swatch estimate is off, so compare them in person. Where two charts disagree, a chart made by one of the two brands wins over another company's chart, then the nearer swatch. A – means no chart link and nothing in that brand within ΔE ${ALL_NEAR}.</p>
+<p>ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Swatch colours are estimates, so treat every match as close, never exact. ${st.linked.toLocaleString('en')} paints have at least one conversion-chart equivalent in another brand. ${esc(st.noChart.slice(0, -1).join(', ') + ' and ' + st.noChart.slice(-1))} have no conversion chart yet, so their matches are all by colour.</p></div>
+<section class="panel" id="acc"><h2>Choose the chart</h2>
+<form class="acf" method="get" action="${path}"><label>Convert from <select name="from" id="acFrom">${D.brands.map(b => opt(b, b === from)).join('')}</select></label>
+<label>Range <select id="acRange"><option value="">All ranges</option>${groups.map(x => `<option value="${esc(x.g)}">${esc(D.GL[x.g])}</option>`).join('')}</select></label>
+<label>Find a paint <input type="search" id="acQ" placeholder="e.g. Mephiston Red" autocomplete="off"></label>
+<fieldset class="acb"><legend>Brands to show</legend>${D.brands.map(b => b === from ? '' : `<label><input type="checkbox" name="to" value="${b.slug}"${cols.includes(b) ? ' checked' : ''}> ${esc(short(b))}</label>`).join('')}</fieldset>
+<noscript><button class="btn" type="submit">Show chart</button></noscript></form>
+<p class="s"><a class="btn" id="acDl" href="${path}.csv?from=${from.slug}">Download ${esc(short(from))} chart (CSV)</a> <a class="btn" href="${path}.csv?from=all">Download every brand (CSV)</a> Spreadsheets open in Excel, Google Sheets or Numbers, with every brand as a column.</p></section>
+<section class="panel"><h2 id="acH">${esc(short(from))} to ${cols.length} brands</h2><p class="s" id="acN">${rows.length} paints</p>
+<div class="tw ac"><table class="cv"><thead id="acHead"><tr><th>${esc(short(from))}</th>${cols.map(b => `<th>${esc(short(b))}</th>`).join('')}</tr></thead>
+<tbody id="acBody">${groups.map(x => `<tr class="rg"><th colspan="${cols.length + 1}">${esc(D.GL[x.g])}</th></tr>` + x.rs.map(r => `<tr><td>${allSw(r.p)}<a href="${r.p.url}">${esc(label(r.p))}</a></td>${ci.map(bi => allCellHTML(D, r.cells[bi])).join('')}</tr>`).join('')).join('')}</tbody></table></div></section>
+<style>.acf{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end}.acf>label{display:grid;gap:2px;font-size:13px;font-weight:700;color:var(--mut)}
+.acf select,.acf input[type=search]{font:15px Rubik,sans-serif;padding:6px 8px;border:2px solid var(--ink);border-radius:8px;background:var(--card);color:var(--fg);min-width:0;max-width:100%}
+.acb{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%}.acb legend{font-size:13px;font-weight:700;color:var(--mut);padding:0 0 4px}
+.acb label{display:flex;gap:5px;align-items:center;font-size:14px;padding:2px 10px;border:2px solid var(--ink);border-radius:999px;background:var(--card);cursor:pointer}
+.tw.ac{max-height:75vh;overflow:auto}.ac table.cv{width:auto;min-width:100%}.ac table.cv td{min-width:170px;max-width:240px}.ac table.cv td:first-child{min-width:160px}
+.ac thead th{position:sticky;top:0;background:var(--card);z-index:2}.ac tr.rg th{background:var(--soft);color:var(--fg);font-size:14px;padding:8px 6px}
+.ac td.nm{color:var(--mut)}.ac .alt{display:block;margin-top:6px;padding-top:6px;border-top:1px dashed color-mix(in srgb,var(--ink) 35%,transparent)}</style>
+<script>(function(){var d=document,F=d.getElementById('acFrom'),R=d.getElementById('acRange'),Q=d.getElementById('acQ'),B=d.getElementById('acBody'),H=d.getElementById('acHead'),N=d.getElementById('acN'),T=d.getElementById('acH'),DL=d.getElementById('acDl'),X=null,cache={};
+function e(t){return String(t).replace(/[&<>"']/g,function(c){return'&#'+c.charCodeAt(0)+';'})}
+function cl(x){return x<1.5?'perfect':x<4?'very close':x<7?'close':x<11?'fair':x<15?'loose':x<22?'very loose':'poor'}
+function sw(p){return'<i class="sw" style="background:'+p[2]+'"></i>'}
+function lk(p){return'<a href="'+p[3]+'">'+e(p[0]+(p[1]?' ('+p[1]+')':''))+'</a>'}
+function cell(c){if(!c)return'<td class="nm">–</td>';var p=X.p[c[0]],s=c[1]?X.s[c[1]]||'a conversion chart':'',h='<td>'+sw(p)+(c[1]?'<span class="ck" title="Listed in '+e(s)+'">✓</span> ':'≈ ')+lk(p)+'<em>'+e(p[4])+' · ΔE '+Math.round(c[2])+', '+cl(c[2])+(c[1]?' · '+e(s):'')+'</em>';
+ if(c[3]!=null){var a=X.p[c[3]];h+='<span class="alt">'+sw(a)+'≈ '+lk(a)+'<em>closer by colour · ΔE '+Math.round(c[4])+', '+cl(c[4])+'</em></span>'}return h+'</td>'}
+function cols(){return[].map.call(d.querySelectorAll('.acb input:checked'),function(i){return i.value})}
+function draw(){if(!X)return;var cs=cols().map(function(s){return X.b.indexOf(s)}).filter(function(i){return i>=0}),r=R.value,q=Q.value.trim().toLowerCase(),n=0,g=null,out=[];
+ H.innerHTML='<tr><th>'+e(X.name)+'</th>'+cs.map(function(i){return'<th>'+e(X.bn[i])+'</th>'}).join('')+'</tr>';
+ X.rows.forEach(function(w){var p=X.p[w[0]];if(r&&w[1]!==r)return;if(q&&(p[0]+' '+p[1]).toLowerCase().indexOf(q)<0)return;n++;
+  if(w[1]!==g){g=w[1];out.push('<tr class="rg"><th colspan="'+(cs.length+1)+'">'+e(X.gl[g])+'</th></tr>')}
+  out.push('<tr><td>'+sw(p)+lk(p)+'</td>'+cs.map(function(i){return cell(w[2][i])}).join('')+'</tr>')});
+ B.innerHTML=out.join('')||'<tr><td>No paints match that search.</td></tr>';N.textContent=n+' paints';T.textContent=X.name+' to '+cs.length+' brand'+(cs.length===1?'':'s')}
+function load(s,first){if(cache[s]){X=cache[s];if(!first)draw();return}fetch('${path}.json?from='+encodeURIComponent(s)).then(function(r){return r.json()}).then(function(x){cache[s]=x;if(F.value===s){X=x;if(!first)draw()}}).catch(function(){N.textContent='The chart could not load. Check your connection and try again.'})}
+F.addEventListener('change',function(){var s=F.value,keep=cols();DL.href='${path}.csv?from='+s;DL.textContent='Download '+F.options[F.selectedIndex].text.replace(' / Warhammer','')+' chart (CSV)';
+ fetch('${path}.json?from='+encodeURIComponent(s)).then(function(r){return r.json()}).then(function(x){cache[s]=x;X=x;
+  R.innerHTML='<option value="">All ranges</option>'+x.gs.map(function(g){return'<option value="'+e(g)+'">'+e(x.gl[g])+'</option>'}).join('');
+  var fs=d.querySelector('.acb');fs.innerHTML='<legend>Brands to show</legend>'+x.b.map(function(b,i){if(i===x.fi)return'';var on=keep.indexOf(b)>=0||!keep.length&&i<6;return'<label><input type="checkbox" value="'+b+'"'+(on?' checked':'')+'> '+e(x.bn[i])+'</label>'}).join('');
+  if(!cols().length){var f=fs.querySelector('input');if(f)f.checked=true}draw();try{history.replaceState(null,'','?from='+s)}catch(_){}})});
+d.querySelector('.acb').addEventListener('change',function(){if(X)draw();else load(F.value)});
+R.addEventListener('change',function(){X?draw():load(F.value)});Q.addEventListener('input',function(){X?draw():load(F.value)});
+load(F.value,true)})();</script>
+${guideLinks(g)}`;
+  const html = page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc, '2026-11-21')] });
+  return q.toString() ? html.replace('<meta name="description"', '<meta name="robots" content="noindex, follow"><meta name="description"') : html;
+}
+// The same chart as data for the page's brand picker: rows [paint, range, cells by brand], cells [paint, source, ΔE, alt paint, alt ΔE].
+function allChartJSON(D, from) {
+  const fi = D.brands.indexOf(from), used = new Map(), id = p => { if (!used.has(p)) used.set(p, used.size); return used.get(p) };
+  const rows = allRows(D, fi).map(r => [id(r.p), r.p.g, r.cells.map(c => c ? [id(c.m.p), c.m.s || '', +c.m.d.toFixed(1), ...(c.alt ? [id(c.alt.p), +c.alt.d.toFixed(1)] : [])] : 0)]);
+  const p = [...used.keys()].map(q => [q.n, q.c, q.h, q.url, D.GL[q.g]]);
+  const gs = from.groups.filter(g => from.paints.some(q => q.g === g));
+  return JSON.stringify({ fi, name: short(from), b: D.brands.map(b => b.slug), bn: D.brands.map(short), gs, gl: Object.fromEntries(gs.map(g => [g, D.GL[g]])), s: D.msrc, p, rows });
+}
+// Spreadsheet download: one row per paint, one column per other brand. from=all puts every brand in one sheet.
+function allChartCSV(D, from) {
+  const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const txt = c => {
+    if (!c) return '';
+    const { m, alt } = c;
+    return (m.s ? '✓ ' : '≈ ') + label(m.p) + ' · ΔE ' + m.d.toFixed(0) + ' ' + closeness(m.d) + (m.s ? ' · ' + (D.msrc[m.s] || 'conversion chart') : ' · nearest colour')
+      + (alt ? ' | closer by colour: ' + label(alt.p) + ' · ΔE ' + alt.d.toFixed(0) : '');
+  };
+  const fis = from ? [D.brands.indexOf(from)] : D.brands.map((_, i) => i);
+  const head = ['Brand', 'Range', 'Paint', 'Code', 'Swatch', ...D.brands.map(b => b.name)];
+  const lines = [head.map(q).join(',')];
+  fis.forEach(fi => allRows(D, fi).forEach(r => lines.push([D.brands[fi].name, D.GL[r.p.g], r.p.n, r.p.c, r.p.h, ...r.cells.map(txt)].map(v => q(String(v))).join(','))));
+  return '﻿' + 'The Painters Desk conversion chart (paintersdesk.com/guides/conversion-chart). ✓ = listed in a conversion chart; ≈ = nearest swatch colour. Swatch colours are estimates.\n' + lines.join('\n') + '\n';
 }
 
 // Technique ramps: the same targets as the Ramps mode on the wheel (TQ in app.js, 7 steps, no tint).
@@ -1461,7 +1628,7 @@ export function renderGuides(D) {
 // techniques that use them), techniques from easiest to hardest, then conversion charts (from Citadel, then to Citadel).
 // Inspiration palettes live in the Palettes tab of Tutorials & Community, so they are not listed with the guides.
 const guideOrder = () => [...GUIDES.filter(g => g.learn), ...GUIDES.filter(g => g.basic).sort((a, b) => a.basic - b.basic),
-  ...GUIDES.filter(g => g.brush).sort((a, b) => a.brush - b.brush), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level), ...GUIDES.filter(g => g.conv)];
+  ...GUIDES.filter(g => g.brush).sort((a, b) => a.brush - b.brush), ...GUIDES.filter(g => g.q).sort((a, b) => a.level - b.level), ...GUIDES.filter(g => g.all), ...GUIDES.filter(g => g.conv)];
 
 function guideLinks(cur) {
   const li = g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`;
@@ -1480,7 +1647,7 @@ function guidesPage(D) {
 <section class="panel"><h2>Painting basics</h2><p class="s">The groundwork every model needs: what each paint type is, thinning, priming and varnishing, airbrushing, contrast paints, black and white, bases and weathering.</p><ul class="m gl">${guideOrder().filter(g => g.basic).map(card).join('')}</ul></section>
 <section class="panel"><h2>Brushes</h2><p class="s">What to paint with: brush types, and the brushes worth buying for each job.</p><ul class="m gl">${guideOrder().filter(g => g.brush).map(card).join('')}</ul></section>
 <section class="panel"><h2>Painting techniques</h2><p class="s">Easiest first. Each guide goes step by step, explains the colour behind the ramp and lists the best paints in every brand.</p><ul class="m gl">${guideOrder().filter(g => g.q).map(card).join('')}</ul></section>
-<section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}<div><h3>Other charts</h3><ul class="m">${GUIDES.filter(g => g.conv && !g.conv.slice(0, 2).includes('citadel')).map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div></div></section>
+<section class="panel"><h2>Conversion charts</h2><p class="s">Every paint in one brand with its closest match in another.</p><p><a class="btn" href="/guides/${ALL_SLUG}">One chart for every brand</a> Pick any brand and see its closest match in all the others, or download it as a spreadsheet.</p><div class="grid">${charts(0, 'From Citadel')}${charts(1, 'To Citadel')}<div><h3>Other charts</h3><ul class="m">${GUIDES.filter(g => g.conv && !g.conv.slice(0, 2).includes('citadel')).map(g => `<li><a href="/guides/${g.slug}">${esc(g.label)}</a></li>`).join('')}</ul></div></div></section>
 <p>Looking for one paint? <a href="/paints">Browse every brand</a>.${PALS.length ? ` Looking for a colour scheme? <a href="/#/recipes/palette">Browse the ${PALS.length} inspiration palettes</a> in Tutorials &amp; Community.` : ''}</p>`;
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
 }
