@@ -6941,6 +6941,16 @@ Candy Racing Green|62.077|#488c73
 Candy Brown|62.078|#7b5e4f
 Candy Black|62.079|#372f2e
 #Ŷ
+Troll Hide|9455|#4a4804
+Orc Skin|9456|#7d7b63
+Goblin Skin|9457|#a54c25
+Kobold Scale|9458|#752619
+Ogre Skin|9459|#efa525
+Gnoll Pelt|9460|#8c8035
+Vampiric Mist|9461|#e7e6e8
+Succubus Kiss|9462|#6f0021
+Eldritch Purple|9463|#862182
+Cursed Gold|9464|#b66a23
 Skeleton Key|9465|#66706b
 Dungeon Grey|9466|#483c37
 Crimson Red|9467|#651212
@@ -6948,6 +6958,16 @@ Brilliant Red|9468|#e81c25
 Fireball Orange|9469|#ec6420
 Golden Yellow|9470|#f5ac14
 Bright Turquoise|9471|#005152
+Dragon Blue|9472|#0b5fae
+Gem Purple|9473|#3d2363
+Caucasian Flesh|9474|#e2a76f
+Maiden Flesh|9475|#eed9bf
+Woodland Brown|9476|#95632d
+Witchcraft Purple|9477|#804371
+Solid White|9478|#ffffff
+Solid Black|9479|#000000
+Blue Flame|9480|#cceafa
+Turf Green|9481|#237436
 Suntan Flesh|9482|#aa6126
 Twilight Purple|9483|#1e2a5a
 Pale Saffron|9484|#fdd726
