@@ -14,8 +14,9 @@ data/reaper/bones-2/09496-reliquary-gold-talon-games.png (left-edge strip median
 09455-09495 are flat square tiles (median of a strip down the tile's left edge, clear of the text);
 09497-09508 are glossy round tiles (median of the whole ball, leaving out the white text and highlight and the black
 text outline). These are Reaper's web tile colours, not photos of paint, so every colour is an estimate.
-Skeleton Key, Drow Silver and Cursed Gold are metallic (gradient tiles, MET_K). Elven Green (09488)
-has no tile image on the store, so they are left out, as are codes the recordings do not show.
+Skeleton Key, Drow Silver and Cursed Gold are metallic (gradient tiles, MET_K). Elven Green (09488) has no tile
+image in the recordings; it was added afterwards by hand at the end of RAW from the owner's screenshot
+data/reaper/bones-2/09488-elven-green-reapermini.png (left-edge strip median of the tile, #264033).
 Name 09500 is the product title 'Brinewind Brown' (its tile art says 'Brinewood').
 """
 import re, statistics as st, sys
