@@ -137,7 +137,7 @@ export async function load(env, url) {
 // Exported for tools/check_seo.mjs.
 export function theme(index) {
   try {
-    const js = index.match(/<script>var l='cyber'[\s\S]*?<\/script>/)[0];
+    const js = index.match(/<script>var l='ink'[\s\S]*?<\/script>/)[0];
     const a = index.indexOf('/* Top nav'), b = index.indexOf('</style>', a);
     if (a < 0 || b < 0) throw new Error('theme CSS not found');
     const css = index.slice(a, b).replace(/url\((?!["']?(?:data:|https?:|\/))(["']?)/g, 'url($1/');

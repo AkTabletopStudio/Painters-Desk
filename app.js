@@ -843,9 +843,9 @@ return{ramps,cells,mine:mx(mine),other:mx(other),ess,left:gaps.filter(x=>!x.done
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 // Site theme picker. The choice lives in localStorage pd-look; an inline script in index.html applies it before first paint.
-// Neon 1984 (cyber) is the default for anyone who hasn't picked; Paint Pot is stored as ''.
+// Japanese Ink (ink) is the default for anyone who hasn't picked; Paint Pot is stored as ''.
 // On a first visit the same dialog opens as a picker: choices only preview until Confirm saves one.
-{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311',abyss:'#041416',arcane:'#3b2616',frost:'#10273f',infernal:'#0b0605',bench:'#1d6650',ink:'#f2ebdb',desert:'#8a4a24',lab:'#eef5f4',steam:'#1a110b',egypt:'#1c0d06',void:'#05070f',classic:['#f3f4f6','#1e1f22'],classicd:'#1e1f22'},DEF='cyber',dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
+{const LOOKS={'':null,cyber:'#0d0221',grim:'#14120f',forest:'#2f4a24',dwarf:'#0b1311',abyss:'#041416',arcane:'#3b2616',frost:'#10273f',infernal:'#0b0605',bench:'#1d6650',ink:'#f2ebdb',desert:'#8a4a24',lab:'#eef5f4',steam:'#1a110b',egypt:'#1c0d06',void:'#05070f',classic:['#f3f4f6','#1e1f22'],classicd:'#1e1f22'},DEF='ink',dlg=document.getElementById('thDlg'),opts=dlg.querySelectorAll('.tho');
 const ttl=document.getElementById('thT'),txt=document.getElementById('thP'),ok=document.getElementById('thOk'),T0=[ttl.textContent,txt.textContent,ok.textContent];
 const metas=[...document.querySelectorAll('meta[name="theme-color"]')],orig=metas.map(m=>m.content);
 const apply=l=>{if(!(l in LOOKS))l='';if(l)document.documentElement.dataset.look=l;else delete document.documentElement.dataset.look;
