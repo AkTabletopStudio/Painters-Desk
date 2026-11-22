@@ -1084,7 +1084,7 @@ function allCellHTML(D, c) {
   if (!c) return '<td class="nm">–</td>';
   const { m, alt } = c;
   const src = m.s ? esc(D.msrc[m.s] || 'a conversion chart') : '';
-  return `<td>${allSw(m.p)}${m.s ? `<span class="ck" title="Listed in ${src}">✓</span> ` : '≈ '}<a href="${m.p.url}">${esc(label(m.p))}</a><em>${esc(D.GL[m.p.g])} · ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${m.s ? ' · ' + src : ''}</em>${alt ? `<span class="alt">${allSw(alt.p)}≈ <a href="${alt.p.url}">${esc(label(alt.p))}</a><em>closer by colour · ΔE ${alt.d.toFixed(0)}, ${closeness(alt.d)}</em></span>` : ''}</td>`;
+  return `<td>${allSw(m.p)}${m.s ? `<span class="ck" role="button" tabindex="0" title="Listed in ${src}">✓</span> ` : '≈ '}<a href="${m.p.url}">${esc(label(m.p))}</a><em><span class="rn">${esc(D.GL[m.p.g])} · </span>ΔE ${m.d.toFixed(0)}, ${closeness(m.d)}${m.s ? '<span class="src"> · ' + src + '</span>' : ''}</em>${alt ? `<span class="alt">${allSw(alt.p)}≈ <a href="${alt.p.url}">${esc(label(alt.p))}</a><em>closer by colour · ΔE ${alt.d.toFixed(0)}, ${closeness(alt.d)}</em></span>` : ''}</td>`;
 }
 function allStats(D) {
   if (D.allStats) return D.allStats;
@@ -1108,6 +1108,7 @@ function allChartPage(D, g, url) {
 <p>ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Swatch colours are estimates, so treat every match as close, never exact. ${st.linked.toLocaleString('en')} paints have at least one conversion-chart equivalent in another brand. ${esc(st.noChart.slice(0, -1).join(', ') + ' and ' + st.noChart.slice(-1))} have no conversion chart yet, so their matches are all by colour.</p></div>
 <section class="panel" id="acc"><h2>Choose the chart</h2>
 <form class="acf" method="get" action="${path}"><label>Convert from <select name="from" id="acFrom">${D.brands.map(b => opt(b, b === from)).join('')}</select></label>
+<label class="acto">Compare to <select id="acTo">${D.brands.map(b => b === from ? '' : opt(b, b === cols[0])).join('')}</select></label>
 <label>Range <select id="acRange"><option value="">All ranges</option>${groups.map(x => `<option value="${esc(x.g)}">${esc(D.GL[x.g])}</option>`).join('')}</select></label>
 <label>Find a paint <input type="search" id="acQ" placeholder="e.g. Mephiston Red" autocomplete="off"></label>
 <fieldset class="acb"><legend>Brands to show</legend>${D.brands.map(b => b === from ? '' : `<label><input type="checkbox" name="to" value="${b.slug}"${cols.includes(b) ? ' checked' : ''}> ${esc(short(b))}</label>`).join('')}</fieldset>
@@ -1122,30 +1123,39 @@ function allChartPage(D, g, url) {
 .acb label{display:flex;gap:5px;align-items:center;font-size:14px;padding:2px 10px;border:2px solid var(--ink);border-radius:999px;background:var(--card);cursor:pointer}
 .tw.ac{max-height:75vh;overflow:auto}.ac table.cv{width:auto;min-width:100%}.ac table.cv td{min-width:170px;max-width:240px}.ac table.cv td:first-child{min-width:160px}
 .ac thead th{position:sticky;top:0;background:var(--card);z-index:2}.ac tr.rg th{background:var(--soft);color:var(--fg);font-size:14px;padding:8px 6px}
-.ac td.nm{color:var(--mut)}.ac .alt{display:block;margin-top:6px;padding-top:6px;border-top:1px dashed color-mix(in srgb,var(--ink) 35%,transparent)}</style>
+.ac td.nm{color:var(--mut)}.acto{display:none!important}.ac .ck{cursor:pointer}
+/* Phones: one brand at a time from the Compare to picker, two columns that fit the screen, short cells (tap ✓ for the chart's name). */
+@media (max-width:700px){.acto{display:grid!important;flex:1 1 100%}.acb{display:none}.acf>label{flex:1 1 100%}.acf select,.acf input[type=search]{width:100%}
+.tw.ac{max-height:none;overflow:visible}.ac table.cv{width:100%;table-layout:fixed}.ac table.cv td,.ac table.cv td:first-child{min-width:0;max-width:none;width:50%;overflow-wrap:anywhere}
+.ac table.cv td em .rn,.ac table.cv td em .src{display:none}.ac table.cv td.so em .src{display:inline}.ac table.cv td em{font-size:13px}}.ac .alt{display:block;margin-top:6px;padding-top:6px;border-top:1px dashed color-mix(in srgb,var(--ink) 35%,transparent)}</style>
 <script>(function(){var d=document,F=d.getElementById('acFrom'),R=d.getElementById('acRange'),Q=d.getElementById('acQ'),B=d.getElementById('acBody'),H=d.getElementById('acHead'),N=d.getElementById('acN'),T=d.getElementById('acH'),DL=d.getElementById('acDl'),X=null,cache={};
 function e(t){return String(t).replace(/[&<>"']/g,function(c){return'&#'+c.charCodeAt(0)+';'})}
 function cl(x){return x<1.5?'perfect':x<4?'very close':x<7?'close':x<11?'fair':x<15?'loose':x<22?'very loose':'poor'}
 function sw(p){return'<i class="sw" style="background:'+p[2]+'"></i>'}
 function lk(p){return'<a href="'+p[3]+'">'+e(p[0]+(p[1]?' ('+p[1]+')':''))+'</a>'}
-function cell(c){if(!c)return'<td class="nm">–</td>';var p=X.p[c[0]],s=c[1]?X.s[c[1]]||'a conversion chart':'',h='<td>'+sw(p)+(c[1]?'<span class="ck" title="Listed in '+e(s)+'">✓</span> ':'≈ ')+lk(p)+'<em>'+e(p[4])+' · ΔE '+Math.round(c[2])+', '+cl(c[2])+(c[1]?' · '+e(s):'')+'</em>';
+function cell(c){if(!c)return'<td class="nm">–</td>';var p=X.p[c[0]],s=c[1]?X.s[c[1]]||'a conversion chart':'',h='<td>'+sw(p)+(c[1]?'<span class="ck" role="button" tabindex="0" title="Listed in '+e(s)+'">✓</span> ':'≈ ')+lk(p)+'<em><span class="rn">'+e(p[4])+' · </span>ΔE '+Math.round(c[2])+', '+cl(c[2])+(c[1]?'<span class="src"> · '+e(s)+'</span>':'')+'</em>';
  if(c[3]!=null){var a=X.p[c[3]];h+='<span class="alt">'+sw(a)+'≈ '+lk(a)+'<em>closer by colour · ΔE '+Math.round(c[4])+', '+cl(c[4])+'</em></span>'}return h+'</td>'}
-function cols(){return[].map.call(d.querySelectorAll('.acb input:checked'),function(i){return i.value})}
+var TO=d.getElementById('acTo'),PH=window.matchMedia('(max-width:700px)');
+function cols(){if(PH.matches&&TO.value)return[TO.value];return[].map.call(d.querySelectorAll('.acb input:checked'),function(i){return i.value})}
+function toOpts(x){var k=TO.value,c=d.querySelector('.acb input:checked');TO.innerHTML=x.b.map(function(b,i){return i===x.fi?'':'<option value="'+b+'">'+e(x.bn[i])+'</option>'}).join('');if(x.b.indexOf(k)>=0&&k!==x.b[x.fi])TO.value=k;else if(c)TO.value=c.value}
 function draw(){if(!X)return;var cs=cols().map(function(s){return X.b.indexOf(s)}).filter(function(i){return i>=0}),r=R.value,q=Q.value.trim().toLowerCase(),n=0,g=null,out=[];
  H.innerHTML='<tr><th>'+e(X.name)+'</th>'+cs.map(function(i){return'<th>'+e(X.bn[i])+'</th>'}).join('')+'</tr>';
  X.rows.forEach(function(w){var p=X.p[w[0]];if(r&&w[1]!==r)return;if(q&&(p[0]+' '+p[1]).toLowerCase().indexOf(q)<0)return;n++;
   if(w[1]!==g){g=w[1];out.push('<tr class="rg"><th colspan="'+(cs.length+1)+'">'+e(X.gl[g])+'</th></tr>')}
   out.push('<tr><td>'+sw(p)+lk(p)+'</td>'+cs.map(function(i){return cell(w[2][i])}).join('')+'</tr>')});
- B.innerHTML=out.join('')||'<tr><td>No paints match that search.</td></tr>';N.textContent=n+' paints';T.textContent=X.name+' to '+cs.length+' brand'+(cs.length===1?'':'s')}
+ B.innerHTML=out.join('')||'<tr><td>No paints match that search.</td></tr>';N.textContent=n+' paints';T.textContent=X.name+' to '+(cs.length===1?X.bn[cs[0]]:cs.length+' brands')}
 function load(s,first){if(cache[s]){X=cache[s];if(!first)draw();return}fetch('${path}.json?from='+encodeURIComponent(s)).then(function(r){return r.json()}).then(function(x){cache[s]=x;if(F.value===s){X=x;if(!first)draw()}}).catch(function(){N.textContent='The chart could not load. Check your connection and try again.'})}
 F.addEventListener('change',function(){var s=F.value,keep=cols();DL.href='${path}.csv?from='+s;DL.textContent='Download '+F.options[F.selectedIndex].text.replace(' / Warhammer','')+' chart (CSV)';
  fetch('${path}.json?from='+encodeURIComponent(s)).then(function(r){return r.json()}).then(function(x){cache[s]=x;X=x;
   R.innerHTML='<option value="">All ranges</option>'+x.gs.map(function(g){return'<option value="'+e(g)+'">'+e(x.gl[g])+'</option>'}).join('');
   var fs=d.querySelector('.acb');fs.innerHTML='<legend>Brands to show</legend>'+x.b.map(function(b,i){if(i===x.fi)return'';var on=keep.indexOf(b)>=0||!keep.length&&i<6;return'<label><input type="checkbox" value="'+b+'"'+(on?' checked':'')+'> '+e(x.bn[i])+'</label>'}).join('');
-  if(!cols().length){var f=fs.querySelector('input');if(f)f.checked=true}draw();try{history.replaceState(null,'','?from='+s)}catch(_){}})});
+  if(!d.querySelector('.acb input:checked')){var f=fs.querySelector('input');if(f)f.checked=true}toOpts(x);draw();try{history.replaceState(null,'','?from='+s)}catch(_){}})});
 d.querySelector('.acb').addEventListener('change',function(){if(X)draw();else load(F.value)});
-R.addEventListener('change',function(){X?draw():load(F.value)});Q.addEventListener('input',function(){X?draw():load(F.value)});
-load(F.value,true)})();</script>
+R.addEventListener('change',function(){X?draw():load(F.value)});TO.addEventListener('change',function(){X?draw():load(F.value)});
+function relay(){X?draw():load(F.value)}if(PH.addEventListener)PH.addEventListener('change',relay);
+function tick(ev){var c=ev.target.closest&&ev.target.closest('.ck');if(c&&c.closest('td')){c.closest('td').classList.toggle('so');ev.preventDefault()}}
+B.addEventListener('click',tick);B.addEventListener('keydown',function(ev){if(ev.key==='Enter'||ev.key===' ')tick(ev)});Q.addEventListener('input',function(){X?draw():load(F.value)});
+load(F.value,!PH.matches)})();</script>
 ${guideLinks(g)}`;
   const html = page({ title, desc, path, body, og: 'article', crumbs: [['Guides', '/guides'], [title, path]], ld: [article(path, title, desc, '2026-11-21')] });
   return q.toString() ? html.replace('<meta name="description"', '<meta name="robots" content="noindex, follow"><meta name="description"') : html;
