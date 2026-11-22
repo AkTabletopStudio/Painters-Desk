@@ -405,8 +405,8 @@ dialog.pl{max-width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);
 .plh{display:flex;gap:14px;align-items:center;padding-right:36px}.plh h2{margin:0}dialog.pl .plh p{margin:4px 0 0}.pls{flex:none;width:64px;height:64px;border-radius:50%;border:3px solid var(--ink)}
 dialog.pl .row{justify-content:flex-start;margin:14px 0 4px}dialog.pl h3{margin:14px 0 6px;font-size:16px}dialog.pl ul.m li{padding:4px 0}dialog.pl p.s{margin:8px 0 0;font-size:13px}.btn.pri{background:var(--yel)}
 ${THEME.css}</style></head>
-<body><div class="wrap navw">${path === '/' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
-${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
+<body><div class="wrap navw">${path === '/' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') && path !== '/guides/' + ALL_SLUG ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
+${ptabs(path)}${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
 Chart-listed matches come from the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart; the rest are a nearest-colour calculation.
@@ -919,6 +919,14 @@ ${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="l
       mainEntity: { '@type': 'ItemList', name: `${br.name} paints`, numberOfItems: br.paints.length, itemListElement: br.paints.map((p, k) => ({ '@type': 'ListItem', position: k + 1, url: SITE + p.url, name: p.n })) },
     })],
   });
+}
+
+/* Paints sub-tabs: /paints pages and the all-brands chart share the Paints nav button with My paints (app view #/paints). Same strip as PTABS in account.js. */
+function ptabs(path) {
+  const on = path === '/guides/' + ALL_SLUG ? 2 : path.startsWith('/paints') ? 0 : -1;
+  if (on < 0) return '';
+  const t = [['/paints', 'All paints'], ['/#/paints', 'My paints'], ['/guides/' + ALL_SLUG, '<span class="lg">Conversion chart</span><span class="sh">Chart</span>']];
+  return `<nav class="ctabs ptabs" aria-label="Paints">${t.map(([u, l], k) => `<a href="${u}"${k === on ? ' class="on" aria-current="page"' : ''}>${l}</a>`).join('')}</nav>\n`;
 }
 
 function indexPage(D) {
