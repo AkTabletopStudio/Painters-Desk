@@ -213,7 +213,7 @@ function route(){
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);delete document.documentElement.dataset.boot;
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
- document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
+ document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='list'&&view==='paints')||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
  if(view==='welcome')renderWelcome();
  else if(view==='palettes')window.pdPalettes&&pdPalettes(id);
  else if(view==='paints')renderPaints();
@@ -580,11 +580,13 @@ function wirePlan(){const s=$('plnS');if(s)s.onchange=()=>{try{localStorage.setI
 async function loadPlanRecs(){if(PLRECS)return;const m=new Map();
  for(const sc of['mine','saved']){try{(await api('/recipes?scope='+sc)).recipes.forEach(r=>{if(!m.has(r.id))m.set(r.id,r)})}catch(e){}}
  PLRECS=m;renderPlan()}
+// Paints sub-tabs, the same strip worker/seo.js puts on /paints and /guides/conversion-chart.
+const PTABS='<nav class="ctabs ptabs" aria-label="Paints"><a href="/paints">All paints</a><a href="#/paints" class="on" aria-current="page">My paints</a><a href="/guides/conversion-chart"><span class="lg">Conversion chart</span><span class="sh">Chart</span></a></nav>';
 function renderPaints(){
  const el=$('v-paints');
- if(!ME){el.innerHTML='<h1>My paints</h1>'+signInLink('Your collection is saved to your account.');return}
+ if(!ME){el.innerHTML=PTABS+'<h1>My paints</h1>'+signInLink('Your collection is saved to your account.');return}
  // Layout like the wheel page: a summary of the collection up top (editing happens in a pop-up), then the tools, most used first.
- el.innerHTML=`<h1>My paints</h1>
+ el.innerHTML=PTABS+`<h1>My paints</h1>
  <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
  <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pCsv" type="button">Import from CSV</button></div>
  <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
