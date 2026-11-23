@@ -706,6 +706,7 @@ function wChips(tot){
   if(loose.length)WCH.push({l:b+' · '+loose.length+(loose.length>1?' paints':' paint'),ps:loose})});
  const el=document.getElementById('wchips');
  el.innerHTML=WCH.length?WCH.slice(0,WCH_MAX).map((c,j)=>`<span class="wchip">${wEsc(c.l)}<button type="button" data-wc="${j}" aria-label="Take ${wEsc(c.l)} off the wheel" title="Take off the wheel">✕</button></span>`).join('')+(WCH.length>WCH_MAX?`<button type="button" class="wchip more" id="wMore">+${WCH.length-WCH_MAX} more</button>`:''):'<span class="s">no paints yet. Tap Change paints to pick some.</span>';
+ document.getElementById('wClr').hidden=!tot;
  document.getElementById('cnt2').textContent=tot?tot+(tot>1?' paints':' paint'):'';
  const m=document.getElementById('wMore');if(m)m.onclick=openPick}
 document.getElementById('wchips').addEventListener('click',e=>{const b=e.target.closest('[data-wc]');if(!b)return;WCH[+b.dataset.wc].ps.forEach(i=>P[i].on=false);sync()});
@@ -769,7 +770,8 @@ tree.addEventListener('change',e=>{const t=e.target;
  if(t.dataset.r){const q=qv();SETS[t.dataset.r].ps.forEach(i=>{const p=P[i];if(!q||match(p,q))p.on=t.checked})}
  else if(t.dataset.i!==undefined)P[+t.dataset.i].on=t.checked;
  sync()});
-document.getElementById('clr').onclick=()=>{P.forEach(p=>p.on=false);sync()};
+// Clear all (here and on the wheel bar) is wired in account.js, which asks first when it would drop a lot of paints.
+document.getElementById('clr').onclick=()=>window.pdClearWheel?pdClearWheel():(P.forEach(p=>p.on=false),sync());
 document.getElementById('q').oninput=()=>{const q=qv();
  tree.querySelectorAll('label.pi').forEach(l=>l.hidden=!!q&&!match(P[+l.dataset.i],q));
  tree.querySelectorAll('.sub').forEach(d=>d.hidden=!!q&&!d.querySelector('label.pi:not([hidden])'));
