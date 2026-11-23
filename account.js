@@ -72,7 +72,7 @@ async function api(path,{method='GET',body,keepalive=false}={}){
  const h=body?{'Content-Type':'application/json'}:{},t=fbToken();if(t)h['X-Pd-Token']=t;
  const r=await fetch('/api'+path,{method,credentials:'same-origin',headers:h,body:body?JSON.stringify(body):undefined,keepalive});
  const d=await r.json().catch(()=>({}));
- if(!r.ok){const e=new Error(d.error||'Something went wrong ('+r.status+')');e.status=r.status;throw e}
+ if(!r.ok){const e=new Error(d.error||'Something went wrong ('+r.status+')');e.status=r.status;e.data=d;throw e}
  return d}
 const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
 // Recipe and palette cards lead with the colour strip (one band per layer or colour); tutorial cards lead with the model photo.
@@ -427,13 +427,13 @@ const BULK=5;let paintsRedraw=null,undoK=[],undoOn=false,undoTm=0;
 function askBulk(keys,what,on,done){const d=$('remDlg'),n=keys.length,s=n===1?'':'s';
  $('remDlgT').textContent=on?'Add to your collection?':'Remove from your collection?';$('remOk').textContent=on?'Add paints':'Remove paints';$('remOk').className='btn '+(on?'pri':'dan');
  $('remDlgM').textContent=`This ${on?'adds':'removes'} ${n} paint${s}${what?' ('+what+')':''} ${on?'to':'from'} your collection.`;d.returnValue='';
- d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(keys,on);if(done)done();undoBar(keys,on);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
+ d.onclose=()=>{if(d.returnValue!=='ok')return;if(!on)pendSure=true;setOwned(keys,on);if(done)done();undoBar(keys,on);if(paintsRedraw)paintsRedraw()};d.showModal();$('remNo').focus()}
 // The Undo bar moves into whichever pop-up is open (a modal pop-up makes the rest of the page untappable), and back to the page when it closes.
 function undoHost(){const T=$('undoT'),d=[...document.querySelectorAll('dialog[open]')].filter(x=>x.matches(':modal')).pop()||document.body;if(T.parentNode===d)return;d.appendChild(T);
  if(d!==document.body)d.addEventListener('close',()=>{if(T.parentNode===d)document.body.appendChild(T)},{once:true})}
 function undoBar(keys,on=false){undoHost();if(undoOn!==on)undoK=[];undoOn=on;undoK=[...new Set([...undoK,...keys])];const n=undoK.length;$('undoM').textContent=`${on?'Added':'Removed'} ${n} paint${n===1?'':'s'} ${on?'to':'from'} your collection.`;$('undoT').hidden=false;
  clearTimeout(undoTm);undoTm=setTimeout(()=>{$('undoT').hidden=true;undoK=[]},10000)}
-$('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
+$('undoB').onclick=()=>{clearTimeout(undoTm);$('undoT').hidden=true;const ks=undoK;undoK=[];if(!OWN||!ks.length)return;if(undoOn)pendSure=true;setOwned(ks,!undoOn);if(paintsRedraw)paintsRedraw()};
 // ---------- import paints from a CSV file ----------
 // Reads a spreadsheet export (Brand, Paint Name, SKU/code, optional Range; other columns are ignored), matches each row to a paint
 // in data.js, shows the matches to check, then adds the ticked ones you don't already own (the BULK confirm and Undo bar still apply).
@@ -523,14 +523,34 @@ const csvKeys=()=>[...csvPicked().keys()];
 function csvSum(){const r=CSV_ROWS,n=r.length,f=r.filter(x=>x.l.length).length,kn=r.filter(x=>x.s==='known').length,ks=csvKeys();
  $('csvSum').textContent=`${n} row${n===1?'':'s'}: ${f} matched, ${kn?kn+' not on the site yet, ':''}${n-f-kn} not found. ${ks.length} new paint${ks.length===1?'':'s'} ticked to add.`;
  const b=$('csvAdd');b.hidden=false;b.disabled=!ks.length;b.textContent=ks.length?`Add ${ks.length} paint${ks.length===1?'':'s'}`:'Nothing new to add'}
-let pend={add:new Set(),remove:new Set(),det:new Map()},saveT=0;
+// pendSure: the painter already confirmed a big removal (range untick pop-up, Undo of an add), so the server's
+// safety net (it refuses emptying most of a 20+ paint collection) doesn't ask again.
+let pend={add:new Set(),remove:new Set(),det:new Map()},saveT=0,pendSure=false;
 function setOwned(keys,on){keys.forEach(k=>{if(on){OWN.add(k);WANT.delete(k);pend.add.add(k);pend.remove.delete(k)}else{OWN.delete(k);DET.delete(k);pend.det.delete(k);pend.remove.add(k);pend.add.delete(k)}});
  ownSync();clearTimeout(saveT);saveT=setTimeout(flush,500)}
 // Saves pots / SKU / colour for owned paints (sent with the next collection save). d = {key:{q,s,c}}, merged with what's there.
 function setDet(d){if(!DETOK)return;Object.entries(d).forEach(([k,v])=>{const o=Object.assign({q:1,s:'',c:''},DET.get(k),v);o.q=Math.min(999,Math.max(1,Math.round(+o.q)||1));DET.set(k,o);pend.det.set(k,o)});clearTimeout(saveT);saveT=setTimeout(flush,500)}
 const qtyOf=k=>(DET.get(k)||{}).q||1;
-async function flush(keepalive){const b={add:[...pend.add],remove:[...pend.remove],details:Object.fromEntries(pend.det)};pend={add:new Set(),remove:new Set(),det:new Map()};if(!b.add.length&&!b.remove.length&&!Object.keys(b.details).length)return;
- try{const r=await api('/collection',{method:'PUT',body:b,keepalive});OWN=ownSet(r.paints);if(r.details){DETOK=true;DET=new Map(Object.entries(r.details))}const m=$('pmsg');if(m)m.textContent='Saved.'}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}}
+async function flush(keepalive){const b={add:[...pend.add],remove:[...pend.remove],details:Object.fromEntries(pend.det)};if(pendSure)b.sure=true;pend={add:new Set(),remove:new Set(),det:new Map()};pendSure=false;if(!b.add.length&&!b.remove.length&&!Object.keys(b.details).length)return;
+ try{colSaved(await api('/collection',{method:'PUT',body:b,keepalive}))}catch(e){if(e.status===409&&e.data&&e.data.code==='big_remove'){askBig(b,e.data);return}const m=$('pmsg');if(m)m.textContent=e.message}}
+function colSaved(r){OWN=ownSet(r.paints);if(r.details){DETOK=true;DET=new Map(Object.entries(r.details))}const m=$('pmsg');if(m)m.textContent='Saved.'}
+// After the server keeps the collection as it was (Cancel on the safety net, or a restore), show what it holds now.
+function colShow(r){colSaved(r);ownSync();if(typeof renderNeu==='function')renderNeu();if(typeof draw==='function')draw();if(paintsRedraw)paintsRedraw();else if(!$('v-paints').hidden)renderPaints()}
+// The server refused a save that would take most of the collection away. Ask once; Cancel puts the collection back as saved.
+function askBig(b,x){const d=$('remDlg'),gone=x.have-x.left;$('remDlgT').textContent='Remove most of your collection?';$('remOk').textContent='Remove '+gone+' paint'+(gone===1?'':'s');$('remOk').className='btn dan';
+ $('remDlgM').textContent=`This would remove ${gone} of your ${x.have} paints and leave ${x.left}. If you didn't mean to, press Cancel and your collection stays as it was.`;d.returnValue='';
+ d.onclose=async()=>{try{colShow(d.returnValue==='ok'?await api('/collection',{method:'PUT',body:Object.assign({},b,{sure:true})}):await api('/collection'))}catch(e){const m=$('pmsg');if(m)m.textContent=e.message}};
+ if(d.open)d.close();d.showModal();$('remNo').focus()}
+// Restore: the server keeps a copy of the collection from before the first change of each day (last 14 days).
+async function rstOpen(){const d=$('rstDlg'),L=$('rstL');L.innerHTML='<p class="s">Loading your backups…</p>';d.showModal();
+ let r;try{r=await api('/collection/backups')}catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`;return}const bs=r.backups||[];
+ if(!bs.length){L.innerHTML='<p class="s">No backups yet. One is kept each day you change your collection, from before that day\'s first change.</p>';return}
+ const day=k=>new Date(k+'T12:00:00Z').toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+ L.innerHTML=bs.map(x=>`<div class="rstr"><span><b>${esc(day(x.day))}</b> <span class="s">${x.n} paint${x.n===1?'':'s'}, from before that day's first change</span></span><button type="button" class="btn sm" data-rst="${esc(x.day)}">Restore</button></div>`).join('');
+ L.querySelectorAll('[data-rst]').forEach(e=>e.onclick=async()=>{const n=bs.find(x=>x.day===e.dataset.rst).n;
+  if(e.dataset.sure!=='1'){L.querySelectorAll('[data-rst]').forEach(o=>{o.dataset.sure='';o.textContent='Restore';o.className='btn sm'});e.dataset.sure='1';e.textContent=`Yes, go back to these ${n}`;e.className='btn sm dan';return}
+  e.disabled=true;e.textContent='Restoring…';clearTimeout(saveT);await flush();
+  try{colShow(await api('/collection/restore',{method:'POST',body:{day:e.dataset.rst}}));d.close();const m=$('pmsg');if(m)m.textContent='Restored. You own '+OWN.size+' paints again.'}catch(er){e.disabled=false;e.textContent=er.message}})}
 function renderMixes(){const el=$('mixP');if(!el)return;
  const wr=$('mixd')||el;if(!MIXOK){wr.hidden=true;return}wr.hidden=false;
  const ms=P.filter(p=>p.mix);if($('mixN'))$('mixN').textContent=ms.length?`(${ms.length})`:'';
@@ -588,7 +608,7 @@ function renderPaints(){
  // Layout like the wheel page: a summary of the collection up top (editing happens in a pop-up), then the tools, most used first.
  el.innerHTML=PTABS+`<h1>My paints</h1>
  <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
- <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pCsv" type="button">Import from CSV</button></div>
+ <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pCsv" type="button">Import from CSV</button><button class="btn" id="pRst" type="button">Restore a backup</button></div>
  <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
  <details class="panel" id="ownd" hidden><summary><b>My paints list</b> <span class="s" id="ownN"></span></summary>${DETOK?'<label class="owqt"><input type="checkbox" id="ownQ"> Count pots <span class="s">(how many of each you have)</span></label>':''}<div id="ownL"></div><div class="row"><button class="btn sm" type="button" id="ownCp">Copy list</button><span class="s" id="ownM"></span></div></details>
  <div class="panel ptip" id="ptip" hidden><b>Start by ticking the paints you own.</b> <span class="s">Open your collection, pick a brand and tick a whole range or single paints. Suggestions, plans and matches then work from them.</span><div class="row"><button class="btn pri" id="pTip" type="button">Tick my paints</button></div></div>
@@ -603,11 +623,13 @@ function renderPaints(){
  <p class="s">Columns: <b>Brand</b>, <b>Paint Name</b>, and if you have them <b>SKU</b>, <b>Range</b>, <b>Count</b> and <b>Color</b> (saved as your note; the wheel keeps its own swatch). You check each match before anything is added, and paints you already own are skipped.</p>
  <div class="row csvin"><label class="btn pri" for="csvFile">Choose CSV file</label><input type="file" id="csvFile" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden><button class="btn" type="button" id="csvTpl">Download template</button><button class="btn" type="button" id="csvExp">Download my paints</button></div>
  <details class="csvpaste"><summary class="s">Or paste the rows</summary><textarea id="csvTxt" rows="5" placeholder="Brand,Paint Name,SKU&#10;Vallejo,Dead White,72.001"></textarea><div class="row"><button class="btn sm" type="button" id="csvGo">Check these rows</button></div></details>
- <div id="csvOut"></div><div class="pkft"><span class="s" id="csvSum" style="margin-right:auto"></span><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="button" id="csvAdd" hidden>Add paints</button></div></dialog>`;
+ <div id="csvOut"></div><div class="pkft"><span class="s" id="csvSum" style="margin-right:auto"></span><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="button" id="csvAdd" hidden>Add paints</button></div></dialog>
+ <dialog class="pd" id="rstDlg" aria-labelledby="rstT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><h2 id="rstT" style="padding-right:40px">Restore a backup</h2>
+ <p class="s">Each day you change your collection, a copy of how it looked before that day's first change is kept for 14 days. Restoring puts that list back and takes off paints added since.</p><div id="rstL"></div></dialog>`;
  // Fold-away sections remember whether they were left open (Suggested paints and Plan keep their own keys).
  [['shopd','pd-shopd'],['mixd','pd-mixd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
  const colOpen=bi=>{const d=$('colDlg');d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
- $('pEdit').onclick=()=>colOpen();
+ $('pEdit').onclick=()=>colOpen();$('pRst').onclick=rstOpen;
  $('pCsv').onclick=csvOpen;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
  $('csvFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>csvShow(String(rd.result));rd.onerror=()=>{$('csvOut').innerHTML='<p class="s">That file could not be read.</p>'};rd.readAsText(f)};
  $('csvGo').onclick=()=>csvShow($('csvTxt').value);$('csvOut').addEventListener('change',csvSum);
