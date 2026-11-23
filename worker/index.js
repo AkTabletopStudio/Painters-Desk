@@ -117,8 +117,12 @@ async function handle(request, env, ctx) {
   if (url.pathname === '/.well-known/assetlinks.json') return assetLinks(env);
   if (isSeoPath(url.pathname)) {
     const r = await seo(request, env, url);
-    if (r.status === 200 && request.method === 'GET' && url.pathname !== '/sitemap.xml') ctx?.waitUntil(countVisit(request, env, url.pathname, request.headers.get('Referer'), url));
-    return r;
+    if (r.status !== 200 || request.method !== 'GET' || url.pathname === '/sitemap.xml') return r;
+    // Serving a page only counts as '[served]' (or a bot). A person is counted when the page's own script
+    // reports back through /api/hit (PEOPLE_JS), which crawlers that only fetch the HTML never do.
+    ctx?.waitUntil(countVisit(request, env, url.pathname, null, url, true));
+    return /text\/html/.test(r.headers.get('content-type') || '')
+      ? new HTMLRewriter().on('body', { element: e => e.append(PEOPLE_JS, { html: true }) }).transform(r) : r;
   }
   if (isSharePath(url.pathname)) {
     const r = await share(request, env, url);
@@ -179,6 +183,8 @@ async function route(request, env, url) {
   if (p === '/api/me/wheel' && m === 'PUT') return putWheel(request, env);
   if (p === '/api/collection' && m === 'GET') return getCollection(request, env);
   if (p === '/api/collection' && m === 'PUT') return putCollection(request, env);
+  if (p === '/api/collection/backups' && m === 'GET') return listBackups(request, env);
+  if (p === '/api/collection/restore' && m === 'POST') return restoreBackup(request, env);
   if (p === '/api/wants' && m === 'GET') return getWants(request, env);
   if (p === '/api/wants' && m === 'PUT') return putWants(request, env);
   if (p === '/api/mixes' && m === 'GET') return getMixes(request, env);
@@ -327,12 +333,22 @@ async function currentUser(request, env) {
   if (!token) return null;
   // dm/dm_mail (message settings) come with migration 0015.
   // forum_mail comes with migration 0018.
-  const msg = await hasMessages(env), fnd = await hasFindable(env), frm = await hasForum(env);
+  const msg = await hasMessages(env), fnd = await hasFindable(env), frm = await hasForum(env), seen = await hasSchema(env, 'users.last_seen');
   const row = await env.DB.prepare(
-    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}${fnd ? ', u.findable' : ''}${frm ? ', u.forum_mail' : ''}
+    `SELECT u.id, u.name, u.email, u.email_verified, ${AVATAR} AS avatar, u.avatar AS provider_avatar, u.avatar_image, u.bio, u.link, u.favourites, u.updates, u.updates_asked, u.blocked, u.created_at${msg ? ', u.dm, u.dm_mail' : ''}${fnd ? ', u.findable' : ''}${frm ? ', u.forum_mail' : ''}${seen ? ', u.last_seen' : ''}
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`
   ).bind(await sha256(token), now()).first();
   if (!row) return null;
+  if (seen) {
+    // Returning users for the daily report (migration 0027): the first signed-in request of each UTC day stamps
+    // last_seen and counts one more day seen, so this writes at most once a day per account.
+    const t = now(), today = t - t % 86400000;
+    if (!(row.last_seen >= today)) {
+      try { await env.DB.prepare('UPDATE users SET last_seen = ?, seen_days = seen_days + 1 WHERE id = ? AND (last_seen IS NULL OR last_seen < ?)').bind(t, row.id, today).run(); }
+      catch (e) { console.error('last_seen update failed', e); }
+    }
+    delete row.last_seen;
+  }
   // Only a verified email can grant admin rights, so typing someone's address at sign-up gains nothing.
   row.admin = !!row.email && !!row.email_verified && adminEmails(env).includes(row.email.toLowerCase());
   row.email_verified = !!row.email_verified;
@@ -927,6 +943,7 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM saves WHERE user_id = ? OR recipe_id IN (SELECT id FROM recipes WHERE user_id = ?)').bind(u.id, u.id),
     env.DB.prepare('DELETE FROM recipes WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
+    ...(await hasSchema(env, 'collection_backups') ? [env.DB.prepare('DELETE FROM collection_backups WHERE user_id = ?').bind(u.id)] : []),
     ...(await hasCommissions(env) ? [
       env.DB.prepare('DELETE FROM commissions WHERE user_id = ?').bind(u.id),
       env.DB.prepare('DELETE FROM commission_messages WHERE painter_id = ? OR sender_id = ?').bind(u.id, u.id),
@@ -1023,6 +1040,16 @@ async function putCollection(request, env) {
   const b = await body(request);
   const add = paintKeys(b.add, 3000), remove = paintKeys(b.remove, 3000), t = now();
   const det = await hasCollDetails(env) ? collDetails(b.details) : [];
+  if (remove.length) {
+    // Safety net: a save that would empty (or nearly empty) a collection of SAFE_MIN+ paints is refused unless the
+    // painter confirmed it (sure), so a glitch or a stale empty list in another tab can't wipe a real collection.
+    const have = (await env.DB.prepare('SELECT COUNT(*) AS n FROM collection WHERE user_id = ?').bind(u.id).first()).n;
+    const left = Math.max(0, have - remove.length + add.length);
+    if (have >= SAFE_MIN && left < have / 5 && b.sure !== true) {
+      return json({ error: `Not saved: this would remove ${have - left} of your ${have} paints.`, code: 'big_remove', have, left }, 409);
+    }
+  }
+  if (add.length || remove.length || det.length) await backupCollection(env, u.id, t);
   const stmts = [
     ...add.map(k => env.DB.prepare('INSERT OR IGNORE INTO collection (user_id, paint_key, added_at) VALUES (?, ?, ?)').bind(u.id, k, t)),
     ...remove.map(k => env.DB.prepare('DELETE FROM collection WHERE user_id = ? AND paint_key = ?').bind(u.id, k)),
@@ -1031,6 +1058,59 @@ async function putCollection(request, env) {
   for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
   // Paints just added to the collection come off the shopping list (skipped until migration 0022 adds the table).
   if (add.length) try { for (let i = 0; i < add.length; i += 100) await env.DB.batch(add.slice(i, i + 100).map(k => env.DB.prepare('DELETE FROM wants WHERE user_id = ? AND paint_key = ?').bind(u.id, k))); } catch (e) { if (!noWants(e)) throw e; }
+  return getCollection(request, env);
+}
+
+// ---------- collection backups (migration 0027) ----------
+// Before a painter's first change of each UTC day, the collection as it stood is copied to collection_backups,
+// so My paints can put back how it looked on an earlier day. BACKUP_DAYS copies are kept per painter.
+const SAFE_MIN = 20, BACKUP_DAYS = 14, BACKED = new Set();
+async function backupCollection(env, uid, t) {
+  const day = new Date(t).toISOString().slice(0, 10), key = uid + '|' + day;
+  if (BACKED.has(key) || !await hasSchema(env, 'collection_backups')) return;
+  try {
+    const det = await hasCollDetails(env);
+    const r = await env.DB.prepare(`INSERT OR IGNORE INTO collection_backups (user_id, day, n, paints, created_at)
+      SELECT ?, ?, COUNT(*), json_group_array(json_array(paint_key, ${det ? 'qty, sku, color' : '1, NULL, NULL'})), ? FROM collection WHERE user_id = ? HAVING COUNT(*) > 0`)
+      .bind(uid, day, t, uid).run();
+    if (r.meta?.changes) await env.DB.prepare(`DELETE FROM collection_backups WHERE user_id = ? AND day NOT IN
+      (SELECT day FROM collection_backups WHERE user_id = ? ORDER BY day DESC LIMIT ${BACKUP_DAYS})`).bind(uid, uid).run();
+    // Nothing to copy yet (an empty collection): try again on the next save, so today's first real list is kept.
+    else if (!await env.DB.prepare('SELECT 1 FROM collection_backups WHERE user_id = ? AND day = ?').bind(uid, day).first()) return;
+    if (BACKED.size > 5000) BACKED.clear();
+    BACKED.add(key);
+  } catch (e) {
+    // A failed backup must never block the save itself.
+    console.error('Collection backup failed', e);
+  }
+}
+
+async function listBackups(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'collection_backups')) return json({ backups: null });
+  const rows = (await env.DB.prepare('SELECT day, n, created_at FROM collection_backups WHERE user_id = ? ORDER BY day DESC').bind(u.id).all()).results;
+  return json({ backups: rows });
+}
+
+// Puts the collection back to a backup: paints in the backup come back (with their pots, SKU and colour),
+// paints added since are taken off. Today's backup is made first, so a restore can itself be undone tomorrow
+// (and today's copy still holds how the collection looked before today's first change).
+async function restoreBackup(request, env) {
+  const u = await requireUser(request, env);
+  const b = await body(request);
+  const day = typeof b.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.day) ? b.day : null;
+  if (!day || !await hasSchema(env, 'collection_backups')) throw new HttpError(400, 'Pick a backup to restore');
+  const row = await env.DB.prepare('SELECT n FROM collection_backups WHERE user_id = ? AND day = ?').bind(u.id, day).first();
+  if (!row) throw new HttpError(404, 'That backup has gone (only the last ' + BACKUP_DAYS + ' days are kept)');
+  const t = now(), det = await hasCollDetails(env);
+  await backupCollection(env, u.id, t);
+  // One batch is one transaction, so the collection is never left half-restored.
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
+    env.DB.prepare(`INSERT OR IGNORE INTO collection (user_id, paint_key, added_at${det ? ', qty, sku, color' : ''})
+      SELECT ?, json_extract(value, '$[0]'), ?${det ? ", MIN(999, MAX(1, COALESCE(json_extract(value, '$[1]'), 1))), json_extract(value, '$[2]'), json_extract(value, '$[3]')" : ''}
+      FROM json_each((SELECT paints FROM collection_backups WHERE user_id = ? AND day = ?)) WHERE json_extract(value, '$[0]') IS NOT NULL`).bind(u.id, t, u.id, day),
+  ]);
   return getCollection(request, env);
 }
 
@@ -2733,26 +2813,44 @@ const BOT_UA = /bot|crawl|spider|slurp|preview|fetch|monitor|headless|lighthouse
 // without the headers every current browser sends when someone opens a page.
 const CLOUD_ASN = new Set([16509, 14618, 8987, 396982, 15169, 19527, 8075, 14061, 24940, 213230, 16276, 35540, 63949,
   45102, 37963, 132203, 45090, 31898, 136907, 55990, 51167, 20473, 60781, 12876, 9009, 212238, 62240, 40021, 36352, 46606]);
-function isCrawler(request, server) {
+// kind: 'nav' = a page load served by the Worker, 'beacon' = a paint page or guide reporting back from the
+// browser (a real browser's fetch always carries Sec-Fetch-Site: same-origin), 'app' = an app view from account.js.
+function isCrawler(request, kind) {
   if (CLOUD_ASN.has(request.cf?.asn)) return true;
   const h = request.headers;
-  return server && (!h.get('Accept-Language') || h.get('Sec-Fetch-Mode') !== 'navigate');
+  if (kind === 'beacon') return h.get('Sec-Fetch-Site') !== 'same-origin' || !h.get('Accept-Language');
+  return kind === 'nav' && (!h.get('Accept-Language') || h.get('Sec-Fetch-Mode') !== 'navigate');
 }
+
+// Added to every paint page and guide. It reports the visit once the page is on screen in a real browser
+// (not one driven by automation) and the reader either does something (scroll, tap, key) or stays 4 seconds.
+// Pages fetched without running scripts, or closed straight away, stay '[served]' only.
+const PEOPLE_JS = `<script>(function(){var n=navigator,d=document,done=0,tm=0;if(n.webdriver||!window.fetch)return;
+function go(){if(done||d.visibilityState!=='visible')return;done=1;clearTimeout(tm);E.forEach(function(e){removeEventListener(e,go,true)});
+ fetch('/api/hit',{method:'POST',credentials:'same-origin',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({p:location.pathname,r:d.referrer})}).catch(function(){})}
+var E=['scroll','pointerdown','keydown','touchstart'];E.forEach(function(e){addEventListener(e,go,{capture:true,passive:true})});
+function wait(){clearTimeout(tm);if(d.visibilityState==='visible')tm=setTimeout(go,4000)}wait();d.addEventListener('visibilitychange',wait)})()</script>`;
 
 async function hit(request, env, url) {
   const b = await body(request);
-  const path = typeof b.p === 'string' && /^#\/[\w-]{0,40}(\/[\w-]{1,40})?$/.test(b.p) ? b.p : null;
+  const p = typeof b.p === 'string' ? b.p : '';
+  // App views (#/recipes) come from account.js route(); paint pages and guides from PEOPLE_JS.
+  const path = /^#\/[\w-]{0,40}(\/[\w-]{1,40})?$/.test(p) ? p
+    : p.length <= 300 && /^\/[\w\-./%~]*$/.test(p) && isSeoPath(p) && p !== '/sitemap.xml' ? p : null;
   if (!path) throw new HttpError(400, 'Bad page');
   await countVisit(request, env, path, typeof b.r === 'string' ? b.r : null, url);
   return new Response(null, { status: 204 });
 }
 
 let SALT = null;
-async function countVisit(request, env, path, referrer, url) {
+// served = a paint page or guide as the Worker sends it: counted only as '[served]' (or a bot), never as a person.
+// Other page loads (shared links) still count as people when they pass the 'nav' crawler check.
+async function countVisit(request, env, path, referrer, url, served = false) {
   try {
     const ua = request.headers.get('User-Agent') || '';
     const t = now(), iso = new Date(t).toISOString(), hour = iso.slice(0, 13), day = iso.slice(0, 10);
-    const bot = !ua || BOT_UA.test(ua) ? '[bots]' : isCrawler(request, !path.startsWith('#')) ? '[crawler]' : null;
+    const kind = served || path === '/r' ? 'nav' : path.startsWith('#') ? 'app' : 'beacon';
+    const bot = !ua || BOT_UA.test(ua) ? '[bots]' : isCrawler(request, kind) ? '[crawler]' : served ? '[served]' : null;
     if (bot) {
       await env.DB.prepare('INSERT INTO page_views (hour, path, views) VALUES (?, ?, 1) ON CONFLICT (hour, path) DO UPDATE SET views = views + 1').bind(hour, bot).run();
       return;
