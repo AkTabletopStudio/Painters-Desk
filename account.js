@@ -750,6 +750,18 @@ function addTicked(empty){if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix&&p.g!
  $('addDlgM').textContent=empty?`Your collection (My paints) is empty, so there's nothing to show yet. Your picks stay on the wheel. Add the ${n} paint${s} on the wheel to your collection now?`:`This adds ${n} paint${s} to your collection`+(had?` (${had} ticked already in it).`:'.');d.returnValue='';
  d.onclose=()=>{if(d.returnValue!=='ok')return;setOwned(nw,true);addLbl(`Added ${n} paint${s} ✓`);if(empty)wheelNote(`Added ${n} paint${s} to My paints.`);renderNeu();draw()};d.showModal();$('addNo').focus()}
 $('addMine').onclick=()=>addTicked(false);
+// Clear all (wheel bar and Change paints pop-up): asks first when BULK or more paints are on the wheel, or when what's on it isn't
+// the signed-in user's collection (that can't be got back with Show my collection). Undo puts the old picks back either way.
+function clearWheel(){const ps=P.filter(p=>p.on&&!p.mix),n=ps.length;if(!n)return;
+ const coll=!!OWN&&OWN.size>0&&P.every(p=>p.mix||p.g==='B'||p.on===OWN.has(p.k)),s=n===1?'':'s';
+ const go=()=>{const w=selNow();P.forEach(p=>p.on=false);sync();
+  wheelNote(`Cleared ${n} paint${s} from the wheel.`,'Undo',()=>{selApply(w);sync()})};
+ if(n<BULK&&(coll||!OWN))return go();
+ const d=$('clrDlg');
+ $('clrDlgM').textContent=`This takes all ${n} paint${s} off the wheel.`+(OWN&&!coll?" They aren't your collection, so Show my collection won't bring them back.":'')+' You can Undo straight after.';
+ d.returnValue='';d.onclose=()=>{if(d.returnValue==='ok')go()};d.showModal();$('clrNo').focus()}
+window.pdClearWheel=clearWheel;
+$('wClr').onclick=clearWheel;
 $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
 
 /* ---------- recipes list ---------- */
