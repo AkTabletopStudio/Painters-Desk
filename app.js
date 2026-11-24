@@ -177,32 +177,36 @@ under:{name:'Underpainting',full:'Underpainting and glazes',sum:'Value underpain
 const TQ_GUIDE={nmm:'best-paints-for-nmm',osl:'best-paints-for-osl',skin:'best-paints-for-skin-tones',gem:'best-paints-for-gems',zen:'zenithal-highlighting',edge:'edge-highlighting',glaze:'glazing',dry:'drybrushing'};
 const TQK=Object.keys(TQ),TQN=()=>TQ[NMO.q];
 /* ---------- Blend mode ----------
-   A blend starts from the wheel's own picks (two complements on the shadow side, two neighbours on the light side,
-   ordered like the centre disc). The painter then swaps, adds, removes and reorders steps by tapping paints on the
+   The painter taps two paints. The first is the base; both are fixed picks, placed dark to light. The steps between
+   them, and one step past each end, are filled with the nearest real paints (owned paints first). The painter then swaps, adds, removes and reorders steps by tapping paints on the
    wheel or in the neutrals, and can mix any step with the base. Mixed colours are estimates (Lab average by parts). */
 let BL=null,ACT=null;const MXR=[[1,0],[2,1],[1,1],[1,2]],MXN=['Pure','2:1 with base','1:1 with base','1:2 with base'];
 function autoPicks(b){if(!CH.includes(b))return{comp:[],ana:[]};const th=(b.W+180)%360,c=CH.filter(p=>p!==b);
 return{comp:uniqSw(c.filter(p=>hd(p.W,th)<=22).sort((x,y)=>ptS(x,th,b,1)-ptS(y,th,b,1)),b,6),ana:uniqSw(c.filter(p=>hd(p.W,b.W)<=25).sort((x,y)=>ptS(x,b.W,b)-ptS(y,b.W,b)),b,6)}}
-function blendSeed(b){const {comp,ana}=autoPicks(b),m=q=>!ONLY_MINE||own(q),byL=(x,y)=>Math.abs(x.L-b.L)-Math.abs(y.L-b.L);
-const c=comp.filter(m).slice(0,2).sort(byL).reverse(),a=ana.filter(m).slice(0,2).sort(byL);
-BL={b,s:[...c.map(p=>({p,sp:p,m:0})),{p:b,base:1},...a.map(p=>({p,sp:p,m:0}))]};ACT=null}
+// First tap: the base, waiting for the second paint.
+function blendSeed(b){BL={b,s:[{p:b,base:1}],wait:1};ACT=null}
+// Second tap: base and second pick fixed, darker one on the shadow side, BN steps between and one past each end.
+const BN=2;function blendTwo(b,c){const A={p:b,base:1},B={p:c,sp:c,m:0,man:1},au=()=>({p:null,sp:null,m:0}),mid=Array.from({length:BN},au);
+BL={b,b2:c,s:c.L<b.L?[au(),B,...mid,A,au()]:[au(),A,...mid,B,au()]};ACT=null}
 // Steps the painter didn't pick (auto) are refilled on every draw. Between two fixed steps (the base or a pick) an auto step
-// aims at the colour part-way between them; past the outermost pick it carries on the same way (clamped). A side with no
-// picks keeps the wheel's own seed paints. Each target takes the nearest unused ticked opaque paint, lightness weighted like ramps.
+// aims at the colour part-way between them; past the outermost fixed step it carries on the same way (clamped). With only the
+// base fixed, auto steps keep their last paint. Each target takes the nearest unused ticked opaque paint, lightness weighted
+// like ramps, with paints the painter owns preferred unless another is clearly closer.
 function blendAuto(){const st=BL.s,fx=x=>x.base||x.man,A=st.map((x,i)=>fx(x)?i:-1).filter(i=>i>=0),used=new Set(st.filter(fx).map(x=>x.p)),
 pool=P.filter(p=>p.on&&nmmOK(p)&&(!ONLY_MINE||own(p))),todo=[];
-const near=t=>{let b=null,bd=1e9;for(const q of pool){if(used.has(q))continue;const d=Math.hypot(1.6*(q.lab[0]-t[0]),q.lab[1]-t[1],q.lab[2]-t[2]);if(d<bd){bd=d;b=q}}return b};
+const near=t=>{let b=null,bd=1e9;for(const q of pool){if(used.has(q))continue;const d=Math.hypot(1.6*(q.lab[0]-t[0]),q.lab[1]-t[1],q.lab[2]-t[2])+(own(q)?0:4);if(d<bd){bd=d;b=q}}return b};
 st.forEach((x,i)=>{if(fx(x))return;const lo=A.filter(a=>a<i).pop(),hi=A.find(a=>a>i);
- if(!((lo!=null&&st[lo].man)||(hi!=null&&st[hi].man))){x.p=used.has(x.sp)?near(x.sp.lab)||x.sp:x.sp;used.add(x.p);return}
+ if(A.length<2){if(!x.sp)x.sp=x.p;if(x.sp){x.p=used.has(x.sp)?near(x.sp.lab)||x.sp:x.sp;used.add(x.p)}return}
  let t;if(lo!=null&&hi!=null){const L=mixLab(st[lo]),H=mixLab(st[hi]),f=(i-lo)/(hi-lo);t=L.map((v,k)=>v+(H[k]-v)*f)}
  else{const a=lo!=null?lo:hi,b2=lo!=null?A.filter(z=>z<a).pop():A.find(z=>z>a),Aa=mixLab(st[a]),Ab=mixLab(st[b2]),k=Math.abs(i-a)/Math.abs(a-b2);
   t=Aa.map((v,j)=>v+(v-Ab[j])*k);t[0]=Math.max(4,Math.min(97,t[0]))}
  todo.push([x,t])});
-todo.forEach(([x,t])=>{const q=near(t);if(q){x.p=q;used.add(q)}x.t=t})}
+todo.forEach(([x,t])=>{const q=near(t);if(q){x.p=q;used.add(q);if(!x.sp)x.sp=q}x.t=t});BL.s=st.filter(x=>x.p)}
 const mixLab=x=>{if(x.base||!x.m)return x.p.lab;const[r0,r1]=MXR[x.m],b=BL.b.lab;return x.p.lab.map((v,i)=>(v*r0+b[i]*r1)/(r0+r1))};
 const mixHex=x=>x.base||!x.m?x.p.h:labHex(mixLab(x));
 const blendTag=p=>{const b=BL.b;if(!CH.includes(b)||!CH.includes(p))return'Neutral';if(hd(p.W,(b.W+180)%360)<=30)return'Complement';if(hd(p.W,b.W)<=30)return'Neighbour';return'Other hue'};
-function blendFill(p){if(!ACT||!BL)return false;if(p!==BL.b){if(ACT.ins)BL.s.splice(ACT.i,0,{p,sp:p,m:0,man:1});else BL.s[ACT.i]={...BL.s[ACT.i],p,man:1}}ACT=null;draw();return true}
+function blendFill(p){if(BL&&BL.wait&&MODE==='mix'&&BL.b===NB){if(p===BL.b)return false;blendTwo(BL.b,p);draw();return true}
+if(!ACT||!BL)return false;if(p!==BL.b){if(ACT.ins)BL.s.splice(ACT.i,0,{p,sp:p,m:0,man:1});else BL.s[ACT.i]={...BL.s[ACT.i],p,man:1}}ACT=null;draw();return true}
 // Wheel overlay: the blend as a path through its paints on the wheel, and the centre disc as the blend in the painter's order.
 function blendWheel(){const st=BL.s;let s=stepLine(st.map(x=>x.p),BL.b);
 const b=BL.b,ax=(CH.includes(b)?b.W:0)*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
@@ -212,20 +216,22 @@ const add=(i,t)=>`<button type="button" class="badd${ACT&&ACT.ins&&ACT.i===i?' o
 const rows=st.map((x,i)=>{const act=ACT&&!ACT.ins&&ACT.i===i;
  if(x.base)return`<div class="nrow brow nbase"><div class="nrole">Base</div><span class="nsw" style="background:${b.h}"></span><div class="nnm"><b>${star(b)}${esc(b.n)}</b><span>${esc(GL[b.g])}${b.c?' · '+esc(b.c):''}</span></div><span></span><span></span></div>`;
  return`<div class="nrow brow${act?' bact':''}"><div class="nrole">${i<i0?'Shadow side':'Light side'}</div><button type="button" class="nsw bsw" data-mr="${i}" style="background:${mixHex(x)}" title="Replace this paint" aria-label="Replace ${esc(x.p.n)}">${x.m?`<i style="background:${x.p.h}" title="${esc(x.p.n)} before mixing"></i>`:''}</button><div class="nnm"><b>${act?'Now tap a paint on the wheel…':star(x.p)+esc(x.p.n)+(x.p.c?' <em>'+esc(x.p.c)+'</em>':'')}</b><span>${x.man?'<u class="bpin">Your pick</u>':'Auto'} · ${blendTag(x.p)} · ${esc(GL[x.p.g])}</span></div><select class="nsel bmx" data-mm="${i}" aria-label="Mix with base">${MXN.map((t,k)=>`<option value="${k}"${k===x.m?' selected':''}>${t}</option>`).join('')}</select><span class="bbt"><button type="button" class="nsk bpk${x.man?' on':''}" data-mp="${i}" aria-pressed="${!!x.man}" title="${x.man?'Pinned: tap to let the wheel choose this step again':'Pin this paint so it stops changing'}" aria-label="Pin">📌</button><button type="button" class="nsk" data-mu="${i}" title="Move toward the shadow end" aria-label="Move up"${i?'':' disabled'}>↑</button><button type="button" class="nsk" data-md="${i}" title="Move toward the light end" aria-label="Move down"${i<st.length-1?'':' disabled'}>↓</button><button type="button" class="nsk" data-mx="${i}" title="Remove this step" aria-label="Remove">×</button></span></div>`}).join('');
-const w=292/st.length;
-el.innerHTML=`<b>Your blend from:</b> <div class="chips"><span class="chip"><i style="background:${b.h}"></i>${star(b)}${esc(b.n)} <span style="color:var(--mut)">${esc(b.c)}</span></span></div>
-<p class="s">It starts with the wheel's own complements and neighbours. Tap a swatch, then any paint on the wheel or in the neutrals, to swap it in. Steps marked Auto then recalculate to blend smoothly around your picks. 📌 pins or unpins a step, ↑ ↓ reorder, × removes.${ONLY_MINE?' Starting picks come from your collection.':''}</p>
+const w=292/st.length,ch=p=>`<span class="chip"><i style="background:${p.h}"></i>${star(p)}${esc(p.n)} <span style="color:var(--mut)">${esc(p.c)}</span></span>`;
+if(BL.wait){el.innerHTML=`<b>First paint:</b> <div class="chips">${ch(b)}</div><p class="s bwait"><b>Now tap a second paint</b> on the wheel or in the Neutrals. The blend fills in the steps between your two paints and carries on a little past each end.</p>`;return}
+el.innerHTML=`<b>Your blend between:</b> <div class="chips">${ch(b)}${BL.b2&&st.some(x=>x.p===BL.b2)?ch(BL.b2):''}</div>
+<p class="s">The steps between your two paints, and one past each end, are the nearest real paints${ONLY_MINE?' from your collection':', with paints you own first'}. Tap a swatch, then any paint on the wheel or in the neutrals, to swap it in. Steps marked Auto then recalculate to blend smoothly around your picks. 📌 pins or unpins a step, ↑ ↓ reorder, × removes. Tap a paint on the wheel with no step chosen to start a new blend.</p>
 ${add(0,'+ Add a step on the shadow side')}<div class="nrows">${rows}</div>${add(st.length,'+ Add a step on the light side')}
 <svg class="blade" viewBox="0 0 300 96" role="img" aria-label="Blend preview"><defs><linearGradient id="bp" x1="0" x2="1">${st.map((x,i)=>`<stop offset="${(i/Math.max(1,st.length-1)).toFixed(3)}" stop-color="${mixHex(x)}"/>`).join('')}</linearGradient></defs>${st.map((x,i)=>`<rect x="${(4+i*w).toFixed(1)}" y="6" width="${w.toFixed(1)}" height="40" fill="${mixHex(x)}"/>`).join('')}<rect x="4" y="6" width="292" height="40" rx="6" fill="none" stroke="#1b1b1b" stroke-width="3"/><rect x="4" y="54" width="292" height="36" rx="18" fill="url(#bp)" stroke="#1b1b1b" stroke-width="3"/></svg>
 <p class="s">Top: each step as painted. Bottom: how they blend. Mixed colours and swatches are estimates, so test the blend on the model.</p>
-<div class="row"><button class="btn" type="button" id="blTut">Save as recipe</button><button class="btn" type="button" id="blReset">Reset to wheel picks</button></div>`;
+<div class="row"><button class="btn" type="button" id="blTut">Save as recipe</button><button class="btn" type="button" id="blReset" title="Go back to just your two paints with fresh steps between and around them">Reset steps</button><button class="btn" type="button" id="blNew">Pick two new paints</button></div>`;
 el.querySelectorAll('[data-ma]').forEach(e=>e.onclick=()=>{const i=+e.dataset.ma;ACT=ACT&&ACT.ins&&ACT.i===i?null:{i,ins:1};draw()});
 el.querySelectorAll('[data-mr]').forEach(e=>e.onclick=()=>{const i=+e.dataset.mr;ACT=ACT&&!ACT.ins&&ACT.i===i?null:{i};draw()});
 el.querySelectorAll('[data-mu],[data-md]').forEach(e=>e.onclick=()=>{const i=+(e.dataset.mu??e.dataset.md),j=e.dataset.mu!=null?i-1:i+1;[st[i],st[j]]=[st[j],st[i]];ACT=null;draw()});
 el.querySelectorAll('[data-mp]').forEach(e=>e.onclick=()=>{const x=st[+e.dataset.mp];x.man=x.man?0:1;if(!x.man&&!x.sp)x.sp=x.p;ACT=null;draw()});
 el.querySelectorAll('[data-mx]').forEach(e=>e.onclick=()=>{st.splice(+e.dataset.mx,1);ACT=null;draw()});
 el.querySelectorAll('[data-mm]').forEach(e=>e.onchange=()=>{st[+e.dataset.mm].m=+e.value;draw()});
-document.getElementById('blReset').onclick=()=>{blendSeed(b);draw()};
+document.getElementById('blReset').onclick=()=>{BL.b2?blendTwo(b,BL.b2):blendSeed(b);draw()};
+document.getElementById('blNew').onclick=()=>{BL=null;sel=null;NB=null;ACT=null;draw()};
 // Recipe order: the base first, then the shadow side working outward from it, then the light side.
 document.getElementById('blTut').onclick=()=>{const sh=st.slice(0,i0).reverse(),li=st.slice(i0+1),mx=x=>x.m?[{k:x.p.k,parts:MXR[x.m][0]},{k:b.k,parts:MXR[x.m][1]}]:[{k:x.p.k,parts:1}];
  NMM_DRAFT={kind:'recipe',title:'Blend: '+b.n.trim(),summary:'Custom blend built on the Painters Desk wheel.',
@@ -484,7 +490,7 @@ if(MX)s+=blendWheel();
 if(sel&&!R&&!MX&&!HS){const ax=sel.W*Math.PI/180-Math.PI/2,ux=Math.cos(ax)/2,uy=Math.sin(ax)/2;
 s+=`<defs><linearGradient id="cg" x1="${.5-ux}" y1="${.5-uy}" x2="${.5+ux}" y2="${.5+uy}">${discStops(sel,comp,ana).map(([h,o])=>`<stop offset="${o.toFixed(4)}" stop-color="${h}"/>`).join('')}</linearGradient></defs><circle id="cgd" cx="${CX}" cy="${CY}" r="96" fill="url(#cg)" stroke="#1b1b1b" stroke-width="3"><title>Complements → ${sel.n} → neighbours</title></circle>`}
 const R0=WMD>=54?26:Math.round(WMD*4.6)/10,kk=R0/26,show=document.getElementById('lab').checked&&R0>=12;
-CH.forEach(p=>{const on=MX?ACT||MX.includes(p):R?R.some(x=>x.p===p):HS?HIN.has(p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
+CH.forEach(p=>{const on=MX?ACT||BL.wait||MX.includes(p):R?R.some(x=>x.p===p):HS?HIN.has(p):!sel||p===sel||comp.includes(p)||ana.includes(p);const ls=lines(p.n),tc=p.lum>.55?'#111':'#fff';
 const st=p.mix?'stroke="#1b1b1b" stroke-dasharray="7 4"':(p.g==='W'||p.g==='s'||p.c.endsWith(' Wash'))?'stroke="#fff" stroke-dasharray="3 3"':p.g==='F'||p.g==='!'?`stroke="${p.h}" style="filter:drop-shadow(0 0 6px ${p.h})"`:'stroke="#1b1b1b"';
 const sw=p===sel?5:comp.includes(p)?4:2;
 s+=`<g class="dot" data-i="${p.i}" opacity="${on?1:.2}"><circle cx="${p.x}" cy="${p.y}" r="${R0}" fill="${p.h}" ${st} stroke-width="${p===sel?4:2}"${comp.includes(p)||(R&&p!==sel&&R.some(x=>x.p===p))||(MX&&p!==sel&&MX.includes(p))||(HPK.has(p)&&p!==sel)?' stroke="#fff" stroke-width="4"':''}/>`+
@@ -500,7 +506,7 @@ if(R){nmmPanel(NBp,R);return}
 if(MX){blendPanel();return}
 if(MODE==='nmm'){document.getElementById('sel').innerHTML='<b>'+TQN().hint+'</b>';return}
 if(HS){document.getElementById('sel').innerHTML=hPanel(HS,sel)+matchHTML(sel);wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel);return}
-if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap a paint to start a blend. It starts with the wheel\'s own complements and neighbours, then you swap in your own.</b>';return}
+if(MODE==='mix'){document.getElementById('sel').innerHTML='<b>Tap the first paint of your blend, then a second.</b> The blend fills in the steps between them and a little past each end, using real paints (yours first).';return}
 document.getElementById('sel').innerHTML=sel?`<b>Selected:</b> <div class="chips">${chip(sel)}</div><h2>Complements (opposite on the wheel)</h2><div class="chips">${comp.length?comp.map(chip).join(''):'<span class="s">Neutral: no true opposite. Try a cool or warm grey.</span>'}</div><h2>Analogous neighbors</h2><div class="chips">${ana.map(chip).join('')}</div><p class="s">Underpainting tip: complements make strong shadow or contrast underlayers and tone down saturation; analogous neighbors make smooth glazes and transitions.</p>`+matchHTML(sel):SEL0;if(sel){wireMatch(sel);window.pdRecipesFor&&pdRecipesFor(sel)}}
 function pick(p){window.pdHaptic&&pdHaptic();if(MODE==='mix'&&blendFill(p))return;sel=p===sel?null:p;NB=sel;nmmSkip=[];draw()}
 document.getElementById('lab').onchange=draw;
@@ -1088,7 +1094,7 @@ const TOUR_ON=false;
    mv(500,'.tumr');tap(1200,()=>{S.mode='ramp';render()});
    for(let i=1;i<=7;i++)at(1600+i*380,()=>{S.rampN=i;render()});
    mv(5000,'.turr:nth-child(6) u');tap(5800,()=>{S.swap=5;RC[5]='hsl(52 48% 80%)';RT[5]='Close';render()});at(7600,()=>{RC[5]='hsl(50 55% 78%)';RT[5]='Loose'})}},
-  {t:'You\'re ready',x:'<b>Blends</b> lets you build your own blend, and <b>From a photo</b> pulls colours out of a picture. Replay this tour any time with <b>▶ Watch the tour</b> above the wheel.',d:4000,run(){base({});mv(600,'.tumb');tap(1400,()=>q('.tumb').classList.add('on'));at(2600,()=>C.style.opacity=0)}}];
+  {t:'You\'re ready',x:'<b>Blends</b> blends between and around any two paints you tap, and <b>From a photo</b> pulls colours out of a picture. Replay this tour any time with <b>▶ Watch the tour</b> above the wheel.',d:4000,run(){base({});mv(600,'.tumb');tap(1400,()=>q('.tumb').classList.add('on'));at(2600,()=>C.style.opacity=0)}}];
  const dots=dlg.querySelector('.tudots');dots.innerHTML=SC.map((s,i)=>'<button type="button" aria-label="Step '+(i+1)+': '+s.t.replace(/'/g,'&#39;')+'"></button>').join('');
  function go(i){cur=i;Qs=[];tm=0;const s=SC[i];dur=s.d;C.style.transition='';C.style.opacity=0;C.classList.remove('dn');
   dlg.querySelector('.tun').textContent='Step '+(i+1)+' of '+SC.length;dlg.querySelector('#tuT').textContent=s.t;dlg.querySelector('.tutx').innerHTML=s.x;
@@ -1146,7 +1152,7 @@ const TOUR_ON=false;
   {el:()=>$('pickBtn'),t:'Choose the paints',
    x:()=>'<b>＋ Change paints</b> picks which ranges show on the wheel. Mix any brands you like, or tick single paints.'},
   {el:()=>document.querySelector('#v-wheel .nmode'),t:'More ways to use it',
-   x:()=>'<b>Ramps</b> builds a shadow-to-highlight ramp (NMM, OSL, skin, gems). <b>Blends</b> lets you build your own blend. <b>Scheme</b> switches the colour harmony. A short tip pops up the first time you open each one.'},
+   x:()=>'<b>Ramps</b> builds a shadow-to-highlight ramp (NMM, OSL, skin, gems). <b>Blends</b> fills in the steps between and around two paints you tap. <b>Scheme</b> switches the colour harmony. A short tip pops up the first time you open each one.'},
   {el:()=>navPaints(),t:'Your own paints',
    x:()=>'Open <b>Paints</b> and tick what you own in <b>My paints</b>. Sign in to keep your collection, then <b>Show my collection</b> puts just your paints on the wheel. Replay this tour any time with <b>? Tour</b>.'}];
  let cur=-1,raf=0,last='';
@@ -1205,7 +1211,7 @@ const TOUR_ON=false;
  $('mNmm').addEventListener('click',()=>later(()=>tip('ramp',()=>vis($('nmmOpt'))?$('nmmOpt'):$('mNmm'),'Ramps',
   'Tap a paint on the wheel and it becomes the base of a shadow-to-highlight ramp. Pick the <b>Technique</b> (NMM, OSL, skin, gems, glazes, drybrushing) and 5 or 7 <b>Steps</b> here. In the panel, <b>↻</b> swaps a step for the next closest paint.')));
  $('mMix').addEventListener('click',()=>later(()=>tip('blend',$('mMix'),'Blends',
-  'Build your own blend from the paint you tapped. In the panel, tap a slot, then tap a paint on the wheel to put it there. <b>📌</b> pins a step, and the steps you haven\'t picked fill in between your pins.')));
+  'Tap two paints on the wheel. The blend fills in the steps between them and one past each end with real paints. In the panel, tap a slot, then a paint on the wheel to swap it. <b>📌</b> pins a step, and the rest fill in around your pins.')));
  $('hSch').addEventListener('click',()=>{const d=$('schDlg');const w=()=>d.open?setTimeout(w,300):later(()=>tip('scheme',$('hSch'),'Colour schemes',
   'The wheel now marks a hue band for each colour in the scheme and suggests a paint for each one. Tap another paint to rebuild the scheme around it.'));setTimeout(w,300)});
  $('trad').addEventListener('change',e=>{if(e.target.checked)later(()=>tip('trad',e.target.closest('label'),'Traditional wheel',
