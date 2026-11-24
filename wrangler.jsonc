@@ -27,8 +27,18 @@
   // Tutorial photos (R2). The deploy fails if this bucket doesn't exist.
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "painters-desk-images" }],
   // OAuth client IDs and secrets are set as secrets, never here (see SETUP-ACCOUNTS.md).
-  // Needed by the Workers Builds preview command (npx wrangler preview) on PR branches.
-  "previews": {},
+  // PR test sites (npx wrangler preview in Workers Builds). They get their own empty database and photo bucket,
+  // never the live ones, so sign-up, My paints and the other account pages can be tried without touching real accounts.
+  // No secrets: Google/Discord/GitHub sign-in and email stay off there, email + password sign-up works.
+  // The test database is set up from the same migrations: see wrangler.preview-migrations.jsonc.
+  "previews": {
+    "d1_databases": [
+      { "binding": "DB", "database_name": "painters-desk-preview", "database_id": "d7c0ac57-5cee-4155-83f4-6621dbe8671f" }
+    ],
+    "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "painters-desk-images-preview" }],
+    "ai": { "binding": "AI" },
+    "durable_objects": { "bindings": [{ "name": "CHAT", "class_name": "ChatRoom" }] }
+  },
   // Cloudflare Email Sending (Workers Paid) for confirmation and password-reset emails, sent from the MAIL_FROM secret.
   // paintersdesk.com must be onboarded under Email Service > Email Sending.
   "send_email": [{ "name": "EMAIL" }],

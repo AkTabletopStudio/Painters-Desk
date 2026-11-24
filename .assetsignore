@@ -18,3 +18,4 @@ __pycache__
 .claude
 apps
 .github
+wrangler.preview-migrations.jsonc

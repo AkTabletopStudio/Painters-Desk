@@ -79,9 +79,9 @@ const SECURITY = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()',
+  'Permissions-Policy': 'geolocation=(), microphone=(), camera=(self), payment=(), usb=(), interest-cohort=()',
   'Content-Security-Policy-Report-Only': [
-    "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'",
+    "default-src 'self'", "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'", "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:", "font-src 'self' data:", "connect-src 'self'", "media-src 'self' blob:",
     'frame-src https://www.youtube-nocookie.com https://player.vimeo.com', "worker-src 'self'", "manifest-src 'self'",
     "object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'",
