@@ -518,6 +518,11 @@ function csvShow2(text){const rows=CSV_ROWS=csvRead(text),out=$('csvOut');
   return`<label class="csvr"><input type="checkbox" data-csvi="${i}"${p&&!own&&r.s!=='close'?' checked':''}${p?'':' disabled'}><i class="csvsw${kn&&kn.h?' kn':''}" style="background:${p?p.h:kn&&kn.h||'transparent'}"${kn&&kn.h?' title="Colour from other sites, an estimate"':''}></i><span class="csvm"><span class="csvsrc">${src} ${tag}</span>${pick}</span></label>`}).join('')+`</div>`;
  csvSum()}
 // Ticked rows as {paint key: row}, new paints only (a paint listed twice keeps its first row).
+// Scan paints (scan.js, loaded the first time it's opened) uses the same matching as the CSV import.
+let SCAN_OPEN=null,SCAN_LD=false;
+function scanStart(){if(SCAN_OPEN)return SCAN_OPEN();if(SCAN_LD)return;SCAN_LD=true;const t=document.createElement('script');t.src='scan.js';
+ t.onload=()=>{SCAN_OPEN=window.pdScan({csvIndex,csvNorm,csvCode,csvLev,csvAlLoad,CSV_BR,own:()=>OWN||new Set(),setOwned,undoBar,askBulk,BULK,esc,redraw:()=>{if(paintsRedraw)paintsRedraw()}});SCAN_OPEN()};
+ t.onerror=()=>{SCAN_LD=false;t.remove();const m=$('pmsg');if(m)m.textContent='The scanner could not load. Check your connection and try again.'};document.head.appendChild(t)}
 function csvPicked(){const m=new Map();$('csvOut').querySelectorAll('input[data-csvi]:checked').forEach(e=>{const i=+e.dataset.csvi,s=$('csvOut').querySelector(`select[data-csvp="${i}"]`),k=s?s.value:CSV_ROWS[i].l[0].k;if(!OWN.has(k)&&!m.has(k))m.set(k,CSV_ROWS[i])});return m}
 const csvKeys=()=>[...csvPicked().keys()];
 function csvSum(){const r=CSV_ROWS,n=r.length,f=r.filter(x=>x.l.length).length,kn=r.filter(x=>x.s==='known').length,ks=csvKeys();
@@ -608,7 +613,7 @@ function renderPaints(){
  // Layout like the wheel page: a summary of the collection up top (editing happens in a pop-up), then the tools, most used first.
  el.innerHTML=PTABS+`<h1>My paints</h1>
  <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
- <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pCsv" type="button">Import from CSV</button><button class="btn" id="pRst" type="button">Restore a backup</button></div>
+ <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pScan" type="button">Scan paints</button><button class="btn" id="pCsv" type="button">Import from CSV</button><button class="btn" id="pRst" type="button">Restore a backup</button></div>
  <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
  <details class="panel" id="ownd" hidden><summary><b>My paints list</b> <span class="s" id="ownN"></span></summary>${DETOK?'<label class="owqt"><input type="checkbox" id="ownQ"> Count pots <span class="s">(how many of each you have)</span></label>':''}<div id="ownL"></div><div class="row"><button class="btn sm" type="button" id="ownCp">Copy list</button><span class="s" id="ownM"></span></div></details>
  <div class="panel ptip" id="ptip" hidden><b>Start by ticking the paints you own.</b> <span class="s">Open your collection, pick a brand and tick a whole range or single paints. Suggestions, plans and matches then work from them.</span><div class="row"><button class="btn pri" id="pTip" type="button">Tick my paints</button></div></div>
@@ -624,13 +629,19 @@ function renderPaints(){
  <div class="row csvin"><label class="btn pri" for="csvFile">Choose CSV file</label><input type="file" id="csvFile" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden><button class="btn" type="button" id="csvTpl">Download template</button><button class="btn" type="button" id="csvExp">Download my paints</button></div>
  <details class="csvpaste"><summary class="s">Or paste the rows</summary><textarea id="csvTxt" rows="5" placeholder="Brand,Paint Name,SKU&#10;Vallejo,Dead White,72.001"></textarea><div class="row"><button class="btn sm" type="button" id="csvGo">Check these rows</button></div></details>
  <div id="csvOut"></div><div class="pkft"><span class="s" id="csvSum" style="margin-right:auto"></span><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="button" id="csvAdd" hidden>Add paints</button></div></dialog>
+ <dialog class="pd pickdlg" id="scDlg" aria-labelledby="scT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div class="pkh"><h2 id="scT">Scan paints</h2></div>
+ <p class="s">Point your camera at a pot and tap <b>Read label</b>, one pot at a time, or pick a photo. Vallejo barcodes are read on their own. Everything is read on your device, and you check each paint before it's added.</p>
+ <div class="scv" id="scCam" hidden><video id="scV" playsinline muted autoplay></video><i class="scbox" aria-hidden="true"></i></div>
+ <div class="row csvin"><button class="btn pri" type="button" id="scRead" disabled>Read label</button><label class="btn" for="scFile">Take or pick a photo</label><input type="file" id="scFile" accept="image/*" capture="environment" hidden></div>
+ <p class="s" id="scSt" role="status" aria-live="polite"></p>
+ <div id="scOut"></div><div class="pkft"><span class="s" id="scSum" style="margin-right:auto"></span><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="button" id="scAdd" disabled>Add paints</button></div></dialog>
  <dialog class="pd" id="rstDlg" aria-labelledby="rstT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><h2 id="rstT" style="padding-right:40px">Restore a backup</h2>
  <p class="s">Each day you change your collection, a copy of how it looked before that day's first change is kept for 14 days. Restoring puts that list back and takes off paints added since.</p><div id="rstL"></div></dialog>`;
  // Fold-away sections remember whether they were left open (Suggested paints and Plan keep their own keys).
  [['shopd','pd-shopd'],['mixd','pd-mixd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
  const colOpen=bi=>{const d=$('colDlg');d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
  $('pEdit').onclick=()=>colOpen();$('pRst').onclick=rstOpen;
- $('pCsv').onclick=csvOpen;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
+ $('pCsv').onclick=csvOpen;$('pScan').onclick=scanStart;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
  $('csvFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>csvShow(String(rd.result));rd.onerror=()=>{$('csvOut').innerHTML='<p class="s">That file could not be read.</p>'};rd.readAsText(f)};
  $('csvGo').onclick=()=>csvShow($('csvTxt').value);$('csvOut').addEventListener('change',csvSum);
  $('csvAdd').onclick=()=>{const pk=csvPicked(),ks=[...pk.keys()];if(!ks.length)return;$('csvDlg').close();
