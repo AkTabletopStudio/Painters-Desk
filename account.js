@@ -788,10 +788,12 @@ const blDone=x=>(x.stages.painted||0)+(x.stages.based||0);
 const blBar=(st,qty)=>`<span class="blbar" role="img" aria-label="${esc(blStTxt(st))}">${BL_ST.map(([k,,c])=>st[k]?`<i style="flex:${st[k]};background:${c}"></i>`:'').join('')||'<i style="flex:1;background:var(--bg)"></i>'}</span>`;
 const blStTxt=st=>BL_ST.filter(([k])=>st[k]).map(([k,l])=>`${st[k]} ${l.toLowerCase()}`).join(' · ');
 const blSum=items=>{const s={};BL_ST.forEach(([k])=>s[k]=0);items.forEach(x=>BL_ST.forEach(([k])=>s[k]+=x.stages[k]||0));return s};
-function blNames(){return BLNP||(BLNP=new Promise(ok=>{if(window.BL_NAMES)return ok();const s=document.createElement('script');s.src='backlog-names.js';s.onload=()=>ok();s.onerror=()=>{BLNP=null;ok()};document.head.appendChild(s)}).then(()=>{
+// backlog-units.js (faction and unit names) is a separate file that can be removed on its own; the page works without it.
+const blLoad=(src,v)=>new Promise(ok=>{if(window[v])return ok();const s=document.createElement('script');s.src=src;s.onload=s.onerror=()=>ok();document.head.appendChild(s)});
+function blNames(){return BLNP||(BLNP=Promise.all([blLoad('backlog-names.js','BL_NAMES'),blLoad('backlog-units.js','BL_UNITS')]).then(()=>{
  // Index: game -> {factions: Map(faction -> units[]), units: Map(unit -> Set(faction))}, plus what the painter typed before.
  const X=new Map(),add=(g,f,u)=>{if(!g)return;let G=X.get(g.toLowerCase());if(!G)X.set(g.toLowerCase(),G={n:g,f:new Map(),u:new Map()});if(f&&!G.f.has(f))G.f.set(f,[]);if(u){if(f)G.f.get(f).push(u);if(!G.u.has(u))G.u.set(u,new Set());if(f)G.u.get(u).add(f)}};
- (window.BL_NAMES||[]).forEach(([g,fs])=>fs.forEach(([f,us])=>{add(g,f);us.forEach(u=>add(g,f,u))}));
+ [...(window.BL_NAMES||[]),...(window.BL_UNITS||[])].forEach(([g,fs])=>fs.forEach(([f,us])=>{add(g,f);us.forEach(u=>add(g,f,u))}));
  (BLI||[]).forEach(x=>add(x.game,x.faction,x.name));BLX=X}))}
 function blOpts(id,list){const d=$(id);if(d)d.innerHTML=[...new Set(list)].sort((a,b)=>a.localeCompare(b)).slice(0,4000).map(v=>`<option value="${esc(v)}">`).join('')}
 function blLists(){if(!BLX)return;const g=BLX.get($('blG').value.trim().toLowerCase()),f=$('blF').value.trim();
