@@ -1124,3 +1124,92 @@ const TOUR_ON=false;
   b.onclick=()=>{V.set.call(i,'');sync();i.dispatchEvent(new Event('input',{bubbles:true}));i.focus()}};
  const scan=r=>{if(r.matches&&r.matches('input[type=search]'))add(r);r.querySelectorAll&&r.querySelectorAll('input[type=search]').forEach(add)};
  scan(D);new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(D.body,{childList:true,subtree:true})})();
+
+// Guided tour: spotlight pop-ups on the real wheel page (5 steps), plus one-time tips the first time someone opens a deeper feature.
+// First visit to the wheel starts the tour once (localStorage pd-gt); the ? Tour button replays it. Tips remember themselves in pd-tip-<name>,
+// and "No more tips" sets pd-tips-off. Nothing here changes the user's paints; the tour only switches the wheel back to Colours mode.
+(()=>{const $=id=>document.getElementById(id),LS={get(k){try{return localStorage.getItem(k)}catch(e){return '1'}},set(k){try{localStorage.setItem(k,'1')}catch(e){}}};
+ const vw=$('v-wheel'),RM=matchMedia('(prefers-reduced-motion: reduce)');
+ const o=document.createElement('div');o.className='gt';o.id='gt';o.hidden=true;
+ o.innerHTML='<div class="gtblk"></div><div class="gtring"></div><div class="gtcard" role="dialog" aria-modal="false" aria-labelledby="gtT" aria-describedby="gtX">'+
+  '<button class="gtx" type="button" aria-label="Close the tour">×</button><span class="s gtn"></span><h2 id="gtT"></h2><p id="gtX" aria-live="polite"></p>'+
+  '<div class="gtrow"><button class="btn gtsk" type="button">Skip tour</button><span class="gtsp"></span><button class="btn gtbk" type="button">‹ Back</button><button class="btn pri gtnx" type="button">Next ›</button></div></div>';
+ document.body.appendChild(o);
+ const blk=o.querySelector('.gtblk'),ring=o.querySelector('.gtring'),card=o.querySelector('.gtcard');
+ const navPaints=()=>document.querySelector('nav.top a[data-v="list"]');
+ const picked=()=>{const s=$('sel');return !!(s&&!s.querySelector('.wtips'))};
+ const ST=[
+  {el:()=>$('wzw'),t:'This is the colour wheel',live:1,
+   x:()=>'Every dot is a paint. Colours go round the circle, and paints get lighter towards the rim. <b>Try it: tap any paint.</b> Zoom with <b>+</b> and <b>−</b>'+(matchMedia('(pointer:coarse)').matches?' or pinch.':' or Ctrl + scroll.')},
+  {el:()=>$('sel'),t:'What goes with it',
+   x:()=>(picked()?'Here is the paint you tapped. ':'When you tap a paint, this panel fills in. ')+'<b>Complements</b> sit opposite it on the wheel and <b>neighbours</b> either side. <b>Matches</b> lists the closest paints from other brands. Tap any swatch to jump to it.'},
+  {el:()=>$('pickBtn'),t:'Choose the paints',
+   x:()=>'<b>＋ Change paints</b> picks which ranges show on the wheel. Mix any brands you like, or tick single paints.'},
+  {el:()=>document.querySelector('#v-wheel .nmode'),t:'More ways to use it',
+   x:()=>'<b>Ramps</b> builds a shadow-to-highlight ramp (NMM, OSL, skin, gems). <b>Blends</b> lets you build your own blend. <b>Scheme</b> switches the colour harmony. A short tip pops up the first time you open each one.'},
+  {el:()=>navPaints(),t:'Your own paints',
+   x:()=>'Open <b>Paints</b> and tick what you own in <b>My paints</b>. Sign in to keep your collection, then <b>Show my collection</b> puts just your paints on the wheel. Replay this tour any time with <b>? Tour</b>.'}];
+ let cur=-1,raf=0,last='';
+ const vis=e=>{if(!e)return false;const r=e.getBoundingClientRect();return r.width>0&&r.height>0};
+ function place(){if(o.hidden){raf=0;return}const s=ST[cur],e=s&&s.el();
+  if(vis(e)){const r=e.getBoundingClientRect(),W=innerWidth,H=innerHeight,p=6,x1=Math.max(4,r.left-p),y1=Math.max(4,r.top-p),x2=Math.min(W-4,r.right+p),y2=Math.min(H-4,r.bottom+p);
+   const k=[x1,y1,x2,y2,W,H].map(Math.round).join();
+   if(k!==last){last=k;ring.style.cssText='left:'+x1+'px;top:'+y1+'px;width:'+(x2-x1)+'px;height:'+(y2-y1)+'px';
+    // the blocker covers everything except the spotlight, and only lets taps through on a "try it" step
+    blk.style.clipPath=s.live?'polygon(evenodd,0 0,100% 0,100% 100%,0 100%,0 0,'+x1+'px '+y1+'px,'+x1+'px '+y2+'px,'+x2+'px '+y2+'px,'+x2+'px '+y1+'px,'+x1+'px '+y1+'px)':'none';
+    const cw=Math.min(380,W-24),ch=card.offsetHeight,g=14;card.style.width=cw+'px';
+    // below, else above, else beside (wide screens), else docked to the bottom (or the top when the target sits low)
+    let top,left=W<600?(W-cw)/2:Math.min(W-cw-12,Math.max(12,(x1+x2)/2-cw/2));
+    if(y2+g+ch<=H-8)top=y2+g;else if(y1-g-ch>=8)top=y1-g-ch;
+    else if(W>=600&&(x1-g-cw>=8||x2+g+cw<=W-8)){left=x1-g-cw>=8?x1-g-cw:x2+g;top=Math.min(H-ch-8,Math.max(8,y1))}
+    else top=y1>H/2?8:H-ch-8;
+    card.style.left=left+'px';card.style.top=Math.max(8,top)+'px'}}
+  raf=requestAnimationFrame(place)}
+ function go(i){if(i>=ST.length)return end();cur=i;const s=ST[i],e=s.el();if(!vis(e)&&i<ST.length-1)return go(i+1);
+  o.querySelector('.gtn').textContent='Step '+(i+1)+' of '+ST.length;$('gtT').textContent=s.t;$('gtX').innerHTML=s.x();
+  o.querySelector('.gtbk').hidden=!i;const nx=o.querySelector('.gtnx');nx.textContent=i===ST.length-1?'Done':'Next ›';
+  o.classList.toggle('live',!!s.live);last='';
+  if(e){const r=e.getBoundingClientRect(),tall=r.height>innerHeight*.6;if(r.top<60||r.bottom>innerHeight-60)e.scrollIntoView({block:tall?'start':'center',behavior:RM.matches?'auto':'smooth'})}
+  card.classList.remove('in');void card.offsetWidth;card.classList.add('in');nx.focus({preventScroll:true});if(!raf)raf=requestAnimationFrame(place)}
+ function end(){o.hidden=true;cur=-1;document.documentElement.classList.remove('gton');cancelAnimationFrame(raf);raf=0;LS.set('pd-gt')}
+ window.pdGuide=()=>{if(!o.hidden)return;if(location.hash&&!/^#\/?$/.test(location.hash))location.hash='#/';
+  if(typeof MODE!=='undefined'&&MODE!=='col')setMode('col');closeTip();LS.set('pd-gt');o.hidden=false;document.documentElement.classList.add('gton');setTimeout(()=>go(0),60)};
+ o.querySelector('.gtnx').onclick=()=>go(cur+1);o.querySelector('.gtbk').onclick=()=>go(Math.max(0,cur-1));
+ o.querySelector('.gtsk').onclick=end;o.querySelector('.gtx').onclick=end;
+ addEventListener('keydown',e=>{if(o.hidden)return;if(e.key==='Escape')end();else if(e.key==='ArrowRight'&&!/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))go(cur+1);else if(e.key==='ArrowLeft'&&cur>0)go(cur-1)});
+ // "Try it" step: tapping a paint moves on to the panel that shows what goes with it
+ $('w').addEventListener('click',e=>{if(cur===0&&!o.hidden&&e.target.closest('.dot'))setTimeout(()=>{if(cur===0)go(1)},350)});
+ const qb=document.createElement('button');qb.type='button';qb.className='btn tourb gtq';qb.id='gtBtn';qb.innerHTML='<span aria-hidden="true">?</span> Tour';qb.title='A quick guided tour of the wheel';qb.onclick=()=>pdGuide();
+ $('tourBtn').after(qb);
+ // first visit to the wheel: once, after any first-visit popup (theme picker, welcome) has closed
+ let tries=0;const first=()=>{if(LS.get('pd-gt')||vw.hidden||!o.hidden)return;if(document.querySelector('dialog[open]')||!document.querySelector('#w .dot')){if(++tries<60)setTimeout(first,1500);return}pdGuide()};
+ new MutationObserver(()=>{if(!vw.hidden)setTimeout(first,900)}).observe(vw,{attributes:true,attributeFilter:['hidden']});setTimeout(first,1500);
+
+ // ---------- one-time tips ----------
+ const tp=document.createElement('div');tp.className='gtip';tp.hidden=true;tp.setAttribute('role','note');
+ tp.innerHTML='<b class="gtih"></b><p></p><div class="gtrow"><button class="btn sm gtoff" type="button">No more tips</button><span class="gtsp"></span><button class="btn sm pri gtok" type="button">Got it</button></div>';
+ document.body.appendChild(tp);let tipAt=null,tipRaf=0;
+ function closeTip(){tp.hidden=true;tipAt=null;cancelAnimationFrame(tipRaf);tipRaf=0}
+ function tipPlace(){if(tp.hidden||!tipAt){tipRaf=0;return}const r=tipAt.getBoundingClientRect();if(!r.width&&!r.height){closeTip();return}
+  const W=document.documentElement.clientWidth,cw=Math.min(340,W-24),ch=tp.offsetHeight;tp.style.width=cw+'px';
+  const below=r.bottom+12+ch<=innerHeight||r.top-12-ch<0,ax=Math.min(cw-22,Math.max(22,r.left+r.width/2-Math.min(W-cw-12,Math.max(12,r.left+r.width/2-cw/2))));
+  const left=Math.min(W-cw-12,Math.max(12,r.left+r.width/2-cw/2));tp.style.left=left+scrollX+'px';tp.style.top=(below?r.bottom+12:r.top-12-ch)+scrollY+'px';
+  tp.classList.toggle('up',!below);tp.style.setProperty('--ax',ax+'px');tipRaf=requestAnimationFrame(tipPlace)}
+ function tip(name,at,t,x){if(LS.get('pd-tips-off')||LS.get('pd-tip-'+name)||!o.hidden)return;const a=typeof at==='function'?at():at;if(!vis(a))return;
+  LS.set('pd-tip-'+name);tipAt=a;tp.querySelector('.gtih').textContent=t;tp.querySelector('p').innerHTML=x;tp.hidden=false;tp.classList.remove('in');void tp.offsetWidth;tp.classList.add('in');
+  if(!tipRaf)tipRaf=requestAnimationFrame(tipPlace)}
+ tp.querySelector('.gtok').onclick=closeTip;tp.querySelector('.gtoff').onclick=()=>{LS.set('pd-tips-off');closeTip()};
+ addEventListener('keydown',e=>{if(e.key==='Escape'&&!tp.hidden&&!document.querySelector('dialog[open]'))closeTip()});
+ addEventListener('hashchange',closeTip);
+ const later=f=>setTimeout(f,80);
+ $('mNmm').addEventListener('click',()=>later(()=>tip('ramp',()=>vis($('nmmOpt'))?$('nmmOpt'):$('mNmm'),'Ramps',
+  'Tap a paint on the wheel and it becomes the base of a shadow-to-highlight ramp. Pick the <b>Technique</b> (NMM, OSL, skin, gems, glazes, drybrushing) and 5 or 7 <b>Steps</b> here. In the panel, <b>↻</b> swaps a step for the next closest paint.')));
+ $('mMix').addEventListener('click',()=>later(()=>tip('blend',$('mMix'),'Blends',
+  'Build your own blend from the paint you tapped. In the panel, tap a slot, then tap a paint on the wheel to put it there. <b>📌</b> pins a step, and the steps you haven\'t picked fill in between your pins.')));
+ $('hSch').addEventListener('click',()=>{const d=$('schDlg');const w=()=>d.open?setTimeout(w,300):later(()=>tip('scheme',$('hSch'),'Colour schemes',
+  'The wheel now marks a hue band for each colour in the scheme and suggests a paint for each one. Tap another paint to rebuild the scheme around it.'));setTimeout(w,300)});
+ $('trad').addEventListener('change',e=>{if(e.target.checked)later(()=>tip('trad',e.target.closest('label'),'Traditional wheel',
+  'This is the screen-colour wheel, where red sits opposite cyan and yellow opposite blue. Untick it to go back to the painter\'s red, yellow and blue wheel, where red sits opposite green.'))});
+ new MutationObserver(()=>{if($('w').classList.contains('zm'))tip('zoom',document.querySelector('#wzw .wzb'),'Zoomed in',
+  'Drag to move around the wheel, '+(matchMedia('(pointer:coarse)').matches?'pinch':'use Ctrl + scroll')+' or the <b>+</b> and <b>−</b> buttons to zoom, and <b>⤢</b> shows the whole wheel again.')}).observe($('w'),{attributes:true,attributeFilter:['class']});
+})();
