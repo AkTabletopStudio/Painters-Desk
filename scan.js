@@ -7,7 +7,7 @@
 //    code (72.001 Dead White = 8429551720014, as on retailer listings). Any other barcode says so and asks for the label instead.
 // Loaded on demand by account.js, which hands over its matching and collection helpers (it runs inside its own closure).
 window.pdScan=function(A){const{csvIndex,csvNorm,csvCode,csvLev,csvAlLoad,CSV_BR,setOwned,undoBar,askBulk,BULK,esc}=A;const paintsRedraw=A.redraw;
-const SCAN={rows:[],stream:null,ocr:null,ocrP:null,zx:null,zxP:null,bd:undefined,timer:0,busy:false,seen:new Map(),n:0};
+const SCAN={sig:null,still:0,lastSig:null,autoT:0,rows:[],stream:null,ocr:null,ocrP:null,zx:null,zxP:null,bd:undefined,timer:0,busy:false,seen:new Map(),n:0};
 const scanEl=id=>document.getElementById(id);
 const scanLoad=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)});
 
@@ -67,7 +67,7 @@ function scanCanvas(src,max){const w=src.videoWidth||src.naturalWidth||src.width
  c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c}
 
 // ---------- dialog ----------
-const SCAN_HINT='Hold one pot\'s label in the box and tap Read label. Vallejo barcodes are read on their own.';
+const SCAN_HINT='Hold one pot\'s label in the box and keep it still. It reads on its own (or tap Read label).';
 const scanSt=t=>{const e=scanEl('scSt');if(e)e.textContent=t};
 function scanOpen(){scanWire();csvAlLoad();const d=scanEl('scDlg');SCAN.rows=[];SCAN.seen=new Map();SCAN.n=0;scanDraw();scanSt('');d.showModal();scanCam();
  // Start fetching the label reader straight away so the first Read label is quicker.
@@ -77,18 +77,32 @@ async function scanCam(){const v=scanEl('scV'),box=scanEl('scCam');
  try{SCAN.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
   v.srcObject=SCAN.stream;await v.play().catch(()=>{});box.hidden=false;scanEl('scRead').disabled=false;scanSt(SCAN_HINT);scanLoop()}
  catch(e){box.hidden=true;scanSt(e&&e.name==='NotAllowedError'?'Camera access was blocked. Allow the camera for this site, or use Take or pick a photo.':'No camera found. Use Take or pick a photo instead.')}}
-function scanStop(){clearTimeout(SCAN.timer);SCAN.timer=0;if(SCAN.stream){SCAN.stream.getTracks().forEach(t=>t.stop());SCAN.stream=null}const v=scanEl('scV');if(v)v.srcObject=null}
+function scanStop(){clearTimeout(SCAN.timer);SCAN.sig=SCAN.lastSig=null;SCAN.still=0;SCAN.timer=0;if(SCAN.stream){SCAN.stream.getTracks().forEach(t=>t.stop());SCAN.stream=null}const v=scanEl('scV');if(v)v.srcObject=null}
+// A tiny greyscale copy of the frame: used to tell when the camera is held still, and when it now shows something new.
+function scanSig(v){const c=scanSig.c||(scanSig.c=document.createElement('canvas'));c.width=32;c.height=24;const x=c.getContext('2d',{willReadFrequently:true});
+ x.drawImage(v,0,0,32,24);const d=x.getImageData(0,0,32,24).data,g=new Float32Array(768);let m=0;for(let i=0;i<768;i++){g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;m+=g[i]}
+ m/=768;let sd=0;for(let i=0;i<768;i++)sd+=(g[i]-m)**2;g.sd=Math.sqrt(sd/768);return g}
+const scanDiff=(a,b)=>{if(!a||!b)return 255;let t=0;for(let i=0;i<a.length;i++)t+=Math.abs(a[i]-b[i]);return t/a.length};
+// Barcodes every half second. Labels on their own: once the picture has stayed still for about a second, shows some detail
+// (not a blank wall), and differs from the last picture read (or 5 seconds have passed), it is read like Read label. Only clear matches are added this way.
 function scanLoop(){clearTimeout(SCAN.timer);if(!SCAN.stream)return;SCAN.timer=setTimeout(async()=>{const v=scanEl('scV');
- if(v&&v.readyState>=2&&!SCAN.busy){const cs=await scanBars(v);cs.forEach(c=>scanGotBar(c))}scanLoop()},450)}
+ if(v&&v.readyState>=2&&!SCAN.busy){const cs=await scanBars(v);cs.forEach(c=>scanGotBar(c));
+  if(SCAN.ocr&&!SCAN.busy&&!document.hidden){const g=scanSig(v),d=scanDiff(g,SCAN.sig);SCAN.sig=g;SCAN.still=d<6?SCAN.still+1:0;
+   if(SCAN.still>=2&&g.sd>18&&Date.now()-SCAN.autoT>1500&&(scanDiff(g,SCAN.lastSig)>5||Date.now()-SCAN.autoT>5000)){SCAN.lastSig=g;SCAN.autoT=Date.now();await scanRead(v,true)}}}
+ scanLoop()},450)}
 function scanGotBar(c){const t=Date.now();if(SCAN.seen.has(c)&&t-SCAN.seen.get(c)<6000)return;const again=SCAN.seen.has(c);SCAN.seen.set(c,t);if(again)return;
  const r=scanCode(c);if(navigator.vibrate)try{navigator.vibrate(40)}catch(e){}
  scanPush(Object.assign(r,{src:'Barcode '+c+(r.code?' (Vallejo '+r.code+')':'')}))}
-async function scanRead(src,label){if(SCAN.busy)return;SCAN.busy=true;const b=scanEl('scRead');b.disabled=true;
- try{scanSt('Reading the label…');const w=await scanOcr();scanSt('Reading the label…');
+async function scanRead(src,auto){if(SCAN.busy)return;SCAN.busy=true;const b=scanEl('scRead');b.disabled=true;
+ try{scanSt('Reading the label…');const w=await scanOcr();
   const c=scanCanvas(src,1600),{data}=await w.recognize(c),txt=(data.text||'').replace(/\s+/g,' ').trim();
-  if(!txt){scanSt('No words found. Move closer, hold steady, and make sure the label is lit.');return}
-  const r=scanText(data.text);if(r.l.length)scanPush(Object.assign(r,{src:'Label: “'+(txt.length>60?txt.slice(0,57)+'…':txt)+'”'}));
-  scanSt(r.l.length?'Got it. Read the next pot, or check the list and add.':'Couldn\'t match those words to a paint. Try again closer, or straighter on.')}
+  if(!txt){scanSt(auto?SCAN_HINT:'No words found. Move closer, hold steady, and make sure the label is lit.');return}
+  const r=scanText(data.text);
+  // Read on its own: only a clear match is listed (a best guess would add noise while the camera wanders). Read label lists guesses too.
+  if(auto&&r.s!=='ok'&&r.s!=='pick'){scanSt(SCAN_HINT);return}
+  const n=SCAN.rows.length;if(r.l.length)scanPush(Object.assign(r,{src:'Label: “'+(txt.length>60?txt.slice(0,57)+'…':txt)+'”'}));
+  if(auto&&SCAN.rows.length>n&&navigator.vibrate)try{navigator.vibrate(40)}catch(e){}
+  scanSt(auto?(SCAN.rows.length>n?'Got '+r.l[0].n.trim()+'. Show the next pot.':SCAN_HINT):r.l.length?'Got it. Read the next pot, or check the list and add.':'Couldn\'t match those words to a paint. Try again closer, or straighter on.')}
  catch(e){scanSt('The label reader couldn\'t start (it needs about 15 MB the first time). Check your connection and try again.')}
  finally{SCAN.busy=false;b.disabled=!SCAN.stream}}
 async function scanPhoto(f){const img=new Image(),u=URL.createObjectURL(f);img.src=u;try{await img.decode()}catch(e){scanSt('That photo couldn\'t be opened.');URL.revokeObjectURL(u);return}

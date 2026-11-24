@@ -630,7 +630,7 @@ function renderPaints(){
  <details class="csvpaste"><summary class="s">Or paste the rows</summary><textarea id="csvTxt" rows="5" placeholder="Brand,Paint Name,SKU&#10;Vallejo,Dead White,72.001"></textarea><div class="row"><button class="btn sm" type="button" id="csvGo">Check these rows</button></div></details>
  <div id="csvOut"></div><div class="pkft"><span class="s" id="csvSum" style="margin-right:auto"></span><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="button" id="csvAdd" hidden>Add paints</button></div></dialog>
  <dialog class="pd pickdlg" id="scDlg" aria-labelledby="scT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div class="pkh"><h2 id="scT">Scan paints</h2></div>
- <p class="s">Point your camera at a pot and tap <b>Read label</b>, one pot at a time, or pick a photo. Vallejo barcodes are read on their own. Everything is read on your device, and you check each paint before it's added.</p>
+ <p class="s">Point your camera at a pot and hold it still: the label is read on its own, one pot at a time (or tap <b>Read label</b>, or pick a photo). Vallejo barcodes are read on their own. Everything is read on your device, and you check each paint before it's added.</p>
  <div class="scv" id="scCam" hidden><video id="scV" playsinline muted autoplay></video><i class="scbox" aria-hidden="true"></i></div>
  <div class="row csvin"><button class="btn pri" type="button" id="scRead" disabled>Read label</button><label class="btn" for="scFile">Take or pick a photo</label><input type="file" id="scFile" accept="image/*" capture="environment" hidden></div>
  <p class="s" id="scSt" role="status" aria-live="polite"></p>
