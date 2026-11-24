@@ -923,9 +923,9 @@ ${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="l
 
 /* Paints sub-tabs: /paints pages and the all-brands chart share the Paints nav button with My paints (app view #/paints). Same strip as PTABS in account.js. */
 function ptabs(path) {
-  const on = path === '/guides/' + ALL_SLUG ? 2 : path.startsWith('/paints') ? 0 : -1;
+  const on = path === '/guides/' + ALL_SLUG ? 3 : path.startsWith('/paints') ? 0 : -1;
   if (on < 0) return '';
-  const t = [['/paints', 'All paints'], ['/#/paints', 'My paints'], ['/guides/' + ALL_SLUG, '<span class="lg">Conversion chart</span><span class="sh">Chart</span>']];
+  const t = [['/paints', 'All paints'], ['/#/paints', 'My paints'], ['/#/backlog', 'Backlog'], ['/guides/' + ALL_SLUG, '<span class="lg">Conversion chart</span><span class="sh">Chart</span>']];
   return `<nav class="ctabs ptabs" aria-label="Paints">${t.map(([u, l], k) => `<a href="${u}"${k === on ? ' class="on" aria-current="page"' : ''}>${l}</a>`).join('')}</nav>\n`;
 }
 

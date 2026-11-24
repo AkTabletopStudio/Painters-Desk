@@ -187,6 +187,12 @@ async function route(request, env, url) {
   if (p === '/api/collection/restore' && m === 'POST') return restoreBackup(request, env);
   if (p === '/api/wants' && m === 'GET') return getWants(request, env);
   if (p === '/api/wants' && m === 'PUT') return putWants(request, env);
+  if (p === '/api/backlog' && m === 'GET') return getBacklog(request, env);
+  if (p === '/api/backlog' && m === 'POST') return saveBacklog(request, env, null);
+  if ((r = p.match(/^\/api\/backlog\/([\w-]+)$/))) {
+    if (m === 'PUT') return saveBacklog(request, env, r[1]);
+    if (m === 'DELETE') return deleteBacklog(request, env, r[1]);
+  }
   if (p === '/api/mixes' && m === 'GET') return getMixes(request, env);
   if (p === '/api/mixes' && m === 'POST') return addMix(request, env);
   if ((r = p.match(/^\/api\/mixes\/([\w-]+)$/)) && m === 'DELETE') return deleteMix(request, env, r[1]);
@@ -420,7 +426,7 @@ async function me(request, env, url) {
   const messages = await hasMessages(env), msgPhotos = messages && await hasMsgPhotos(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: env.DEV_LOGIN === '1', ...(boot ? { boot: await boot } : {}) });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: devOn(env, url), autoDev: devOn(env, url) && env.PREVIEW === '1', ...(boot ? { boot: await boot } : {}) });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -622,8 +628,13 @@ async function revokeApple(env, userId) {
 
 // Local development only: sign in as a named test user without any OAuth keys. Enabled by DEV_LOGIN=1 in .dev.vars.
 // &email=… acts like a sign-in service that verified that email, to try account linking.
+// Dev sign-in: local testing (DEV_LOGIN=1 in .dev.vars) and PR test sites (previews.vars in wrangler.jsonc, with
+// PREVIEW=1 signing visitors in on their own as a shared test account). Never on the live site, even if the
+// variable were set there by mistake: the live host names are refused here.
+const LIVE_HOST = /(^|\.)paintersdesk\.com$|^painters-desk\.aktabletopstudio\.workers\.dev$/i;
+const devOn = (env, url) => env.DEV_LOGIN === '1' && !LIVE_HOST.test(url.hostname);
 async function devLogin(request, env, url) {
-  if (env.DEV_LOGIN !== '1') throw new HttpError(404, 'Not found');
+  if (!devOn(env, url)) throw new HttpError(404, 'Not found');
   const name = str(url.searchParams.get('name') || 'Test Painter', 60, 'Name');
   const userId = await upsertIdentity(env, request, 'dev', { id: name.toLowerCase(), name, email: url.searchParams.get('email') || null, avatar: null });
   return startSession(env, url, userId, url.searchParams.get('return'));
@@ -944,6 +955,7 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM recipes WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
     ...(await hasSchema(env, 'collection_backups') ? [env.DB.prepare('DELETE FROM collection_backups WHERE user_id = ?').bind(u.id)] : []),
+    ...(await hasSchema(env, 'backlog') ? [env.DB.prepare('DELETE FROM backlog WHERE user_id = ?').bind(u.id)] : []),
     ...(await hasCommissions(env) ? [
       env.DB.prepare('DELETE FROM commissions WHERE user_id = ?').bind(u.id),
       env.DB.prepare('DELETE FROM commission_messages WHERE painter_id = ? OR sender_id = ?').bind(u.id, u.id),
@@ -1154,6 +1166,69 @@ async function putWants(request, env) {
 /* ---------- saved mixes ---------- */
 
 // Until migration 0020 is applied the table is missing; the site then hides the mix buttons.
+/* ---------- backlog ("pile of shame", migration 0028) ---------- */
+// Each item is one kit or unit the painter owns: free-text game/faction/name, how many models, and how many of
+// them sit at each stage. Until the migration is applied, GET says unavailable and the page explains it.
+const BL_STAGES = ['unbuilt', 'built', 'primed', 'painted', 'based'], BL_MAX = 2000;
+const blText = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n) || null;
+function blRow(r) {
+  let stages = {}, paints = [];
+  try { stages = JSON.parse(r.stages); } catch {}
+  try { paints = JSON.parse(r.paints || '[]'); } catch {}
+  return { id: r.id, game: r.game || '', faction: r.faction || '', name: r.name, qty: r.qty, stages, notes: r.notes || '', recipe: r.recipe || '', paints, photo: r.photo || '', created_at: r.created_at, updated_at: r.updated_at };
+}
+function blItem(b) {
+  const name = blText(b.name, 120);
+  if (!name) throw new HttpError(400, 'Give the model or unit a name');
+  const qty = Math.round(Number(b.qty));
+  if (!(qty >= 1 && qty <= 999)) throw new HttpError(400, 'How many models: 1 to 999');
+  // Stage counts are clamped to whole numbers and made to add up to qty: anything left over is unbuilt.
+  const st = {}; let left = qty;
+  for (const k of BL_STAGES.slice(1)) { const n = Math.max(0, Math.min(left, Math.round(Number(b.stages && b.stages[k]) || 0))); st[k] = n; left -= n; }
+  st.unbuilt = left;
+  const stages = Object.fromEntries(BL_STAGES.map(k => [k, st[k]]));
+  const recipe = /^[\w-]{1,64}$/.test(String(b.recipe || '')) ? String(b.recipe) : null;
+  const photo = IMAGE_ID.test(String(b.photo || '')) ? String(b.photo) : null;
+  return { game: blText(b.game, 80), faction: blText(b.faction, 80), name, qty, stages: JSON.stringify(stages), notes: String(b.notes || '').trim().slice(0, 2000) || null, recipe, paints: JSON.stringify(paintKeys(b.paints, 40)), photo };
+}
+async function getBacklog(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'backlog')) return json({ items: [], unavailable: true });
+  const rows = (await env.DB.prepare('SELECT * FROM backlog WHERE user_id = ? ORDER BY created_at').bind(u.id).all()).results;
+  return json({ items: rows.map(blRow) });
+}
+async function saveBacklog(request, env, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'backlog')) throw new HttpError(503, 'The backlog isn\'t switched on yet');
+  const b = await body(request), x = blItem(b), t = now();
+  let old = null;
+  if (id) {
+    old = await env.DB.prepare('SELECT photo FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+    if (!old) throw new HttpError(404, 'Not found');
+  }
+  if (x.photo && x.photo !== old?.photo) await checkImagesOwned(env, u, [x.photo]);
+  if (id) {
+    await env.DB.prepare('UPDATE backlog SET game = ?, faction = ?, name = ?, qty = ?, stages = ?, notes = ?, recipe = ?, paints = ?, photo = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .bind(x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, x.photo, t, id, u.id).run();
+    if (old.photo && old.photo !== x.photo) await dropUnusedImages(env, [old.photo]);
+  } else {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM backlog WHERE user_id = ?').bind(u.id).first();
+    if (n && n.n >= BL_MAX) throw new HttpError(400, `Your backlog can hold up to ${BL_MAX} entries`);
+    id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO backlog (id, user_id, game, faction, name, qty, stages, notes, recipe, paints, photo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, u.id, x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, x.photo, t, t).run();
+  }
+  return json({ item: blRow(await env.DB.prepare('SELECT * FROM backlog WHERE id = ?').bind(id).first()) });
+}
+async function deleteBacklog(request, env, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'backlog')) throw new HttpError(503, 'The backlog isn\'t switched on yet');
+  const row = await env.DB.prepare('SELECT photo FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+  await env.DB.prepare('DELETE FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).run();
+  if (row?.photo) await dropUnusedImages(env, [row.photo]);
+  return json({ ok: true });
+}
+
 const noMixes = e => /no such table: mixes/i.test(String(e && e.message));
 
 async function getMixes(request, env) {
@@ -1594,6 +1669,8 @@ async function moderation(request, env) {
     for (const img of JSON.parse(m.images)) add(img, { type: 'chat', id: m.room_id, msg: m.id, title: m.name });
   if (await hasMsgPhotos(env)) for (const m of (await env.DB.prepare("SELECT m.id, m.images, c.id AS conv, c.kind FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE m.images != '[]'").all()).results)
     for (const img of JSON.parse(m.images)) add(img, { type: 'message', id: m.conv, kind: m.kind });
+  if (await hasSchema(env, 'backlog')) for (const b of (await env.DB.prepare('SELECT user_id, name, photo FROM backlog WHERE photo IS NOT NULL').all()).results)
+    add(b.photo, { type: 'backlog', id: b.user_id, title: b.name });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -2362,11 +2439,11 @@ async function cleanPost(env, u, b) {
 
 // Delete photos no recipe, profile, portfolio, chat message or other post still uses (a photo can be reused across them).
 async function dropUnusedImages(env, ids) {
-  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), gone = [];
+  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), bl = await hasSchema(env, 'backlog'), gone = [];
   for (const id of new Set(ids)) {
     const like = `%"${id}"%`;
     const used = await env.DB.prepare(`SELECT 1 FROM recipes WHERE cover = ?1 OR steps LIKE ?2 UNION ALL SELECT 1 FROM users WHERE avatar_image = ?1
-      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
+      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''}${bl ? ' UNION ALL SELECT 1 FROM backlog WHERE photo = ?1' : ''} LIMIT 1`).bind(id, like).first();
     if (!used) gone.push(id);
   }
   await deleteImages(env, gone);

@@ -20,7 +20,7 @@ const ownSet=ks=>new Set(ks.map(k=>RENAMED[k]||k).filter(k=>BYKEY.has(k)));
 // Water is a tutorial-only mix item (for thinning, washes and glazes). It isn't a paint, so it never goes on the wheel or in collections.
 const WATER={k:'water',n:'Water',h:'linear-gradient(#f2fbff,#a9d6ee)'};
 const mixP=k=>k===WATER.k?WATER:BYKEY.get(k);
-const VIEWS=['welcome','changelog','palettes','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum','testing'];
+const VIEWS=['welcome','changelog','palettes','wheel','paints','recipes','recipe','edit','account','profile','reset','admin','painters','inbox','people','forum','testing','backlog'];
 let ME=null,INFO=null,API=false;
 // Saved mixes (My mix paints): loaded with the collection, handed to the wheel (app.js pdSetMixes). MIXOK is false until migration 0020 is live.
 let MIXES=[],MIXOK=false;window.pdMixOK=()=>MIXOK;
@@ -161,7 +161,9 @@ function wheelReset(){try{localStorage.removeItem(WK);localStorage.removeItem(WP
 let BOOT=null;
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
- let got=false;try{const early=window.pdMe;window.pdMe=null;INFO=await (early?early.catch(()=>api('/me?boot=1')):api('/me?boot=1'));ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
+ let got=false;try{const early=window.pdMe;window.pdMe=null;INFO=await (early?early.catch(()=>api('/me?boot=1')):api('/me?boot=1'));ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)
+  // PR test sites sign you in as a shared test account (until you sign out in this tab).
+  ;if(!ME&&INFO.autoDev){let no=false;try{no=sessionStorage.getItem('pd-noauto')==='1'}catch(e){}if(!no){location.replace('/api/auth/dev?name=Test%20Painter&return='+encodeURIComponent(location.pathname+location.hash));return}}}catch(e){API=false;ME=null}
  BOOT=INFO&&INFO.boot||null;if(INFO)delete INFO.boot;
  // Remember who is signed in (name and picture only) so the next page load shows it in the nav straight away (inline script in index.html).
  if(got)try{if(ME)localStorage.setItem('pd-me',JSON.stringify({name:ME.name||'',avatar:ME.avatar||'',chat:!!INFO.chat}));else localStorage.removeItem('pd-me')}catch(e){}
@@ -213,7 +215,7 @@ function route(){
  VIEWS.forEach(n=>$('v-'+n).hidden=n!==view);delete document.documentElement.dataset.boot;
  countHit(view==='recipe'&&id?'#/recipe/'+id:'#/'+view);
  const full=view==='wheel'||view==='paints';$('footFull').hidden=!full;$('footShort').hidden=full;
- document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='list'&&view==='paints')||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
+ document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===view||(a.dataset.v==='list'&&(view==='paints'||view==='backlog'))||(a.dataset.v==='recipes'&&(view==='recipe'||view==='edit'||view==='painters'||view==='people'||view==='palettes'))));
  if(view==='welcome')renderWelcome();
  else if(view==='palettes')window.pdPalettes&&pdPalettes(id);
  else if(view==='paints')renderPaints();
@@ -229,6 +231,7 @@ function route(){
  else if(view==='people')renderPeople();
  else if(view==='forum')renderForum(id,sub);
  else if(view==='testing')renderTesting();
+ else if(view==='backlog')renderBacklog();
  if(view!=='wheel')scrollTo(0,0)}
 addEventListener('hashchange',route);
 // Anonymous view count for the site's daily traffic report: just the view name and, once, the site that linked here. No cookies.
@@ -362,7 +365,7 @@ function renderAccount(){
   catch(e){c.checked=!c.checked;$('pFindM').className='err';$('pFindM').textContent=e.message}c.disabled=false};
  commissionPanel();
  // Signing out also puts the wheel back to the starting paints, so the next person on this browser doesn't see your collection.
- $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});wheelReset();await loadMe();location.hash='#/'};
+ $('out').onclick=async()=>{try{sessionStorage.setItem('pd-noauto','1')}catch(e){}await api('/auth/logout',{method:'POST'});wheelReset();await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
  $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});wheelReset();await loadMe();location.hash='#/'}}
 
@@ -606,7 +609,7 @@ async function loadPlanRecs(){if(PLRECS)return;const m=new Map();
  for(const sc of['mine','saved']){try{(await api('/recipes?scope='+sc)).recipes.forEach(r=>{if(!m.has(r.id))m.set(r.id,r)})}catch(e){}}
  PLRECS=m;renderPlan()}
 // Paints sub-tabs, the same strip worker/seo.js puts on /paints and /guides/conversion-chart.
-const PTABS='<nav class="ctabs ptabs" aria-label="Paints"><a href="/paints">All paints</a><a href="#/paints" class="on" aria-current="page">My paints</a><a href="/guides/conversion-chart"><span class="lg">Conversion chart</span><span class="sh">Chart</span></a></nav>';
+const PTABS='<nav class="ctabs ptabs" aria-label="Paints"><a href="/paints">All paints</a><a href="#/paints" class="on" aria-current="page">My paints</a><a href="#/backlog">Backlog</a><a href="/guides/conversion-chart"><span class="lg">Conversion chart</span><span class="sh">Chart</span></a></nav>';
 function renderPaints(){
  const el=$('v-paints');
  if(!ME){el.innerHTML=PTABS+'<h1>My paints</h1>'+signInLink('Your collection is saved to your account.');return}
@@ -777,6 +780,115 @@ $('useMine').onclick=mineTap;
 $('mineBtn').onclick=mineTap;
 const addLbl=t=>{$('addMine').textContent=t;setTimeout(()=>$('addMine').textContent='Add ticked paints to my collection',2500)};
 // empty = came from Show my collection with nothing in My paints yet: explain instead of clearing the wheel.
+/* ---------- backlog ("pile of shame", #/backlog) ---------- */
+// The models a painter still has to build and paint, for any game. Each entry is free text (game, faction, model or
+// unit) with how many models and how many sit at each stage. Suggestions come from backlog-names.js (names only,
+// from the community BSData catalogues), loaded the first time the add pop-up opens.
+const BL_ST=[['unbuilt','Unbuilt','var(--bg)'],['built','Built','var(--org)'],['primed','Primed','var(--pur)'],['painted','Painted','var(--tea)'],['based','Based','var(--yel)']];
+let BLI=null,BLOFF=false,BLNP=null,BLX=null,BLRC=null;
+const blDone=x=>(x.stages.painted||0)+(x.stages.based||0);
+const blBar=(st,qty)=>`<span class="blbar" role="img" aria-label="${esc(blStTxt(st))}">${BL_ST.map(([k,,c])=>st[k]?`<i style="flex:${st[k]};background:${c}"></i>`:'').join('')||'<i style="flex:1;background:var(--bg)"></i>'}</span>`;
+const blStTxt=st=>BL_ST.filter(([k])=>st[k]).map(([k,l])=>`${st[k]} ${l.toLowerCase()}`).join(' · ');
+const blSum=items=>{const s={};BL_ST.forEach(([k])=>s[k]=0);items.forEach(x=>BL_ST.forEach(([k])=>s[k]+=x.stages[k]||0));return s};
+// backlog-units.js (faction and unit names) is a separate file that can be removed on its own; the page works without it.
+const blLoad=(src,v)=>new Promise(ok=>{if(window[v])return ok();const s=document.createElement('script');s.src=src;s.onload=s.onerror=()=>ok();document.head.appendChild(s)});
+function blNames(){return BLNP||(BLNP=Promise.all([blLoad('backlog-names.js','BL_NAMES'),blLoad('backlog-units.js','BL_UNITS')]).then(()=>{
+ // Index: game -> {factions: Map(faction -> units[]), units: Map(unit -> Set(faction))}, plus what the painter typed before.
+ const X=new Map(),add=(g,f,u)=>{if(!g)return;let G=X.get(g.toLowerCase());if(!G)X.set(g.toLowerCase(),G={n:g,f:new Map(),u:new Map()});if(f&&!G.f.has(f))G.f.set(f,[]);if(u){if(f)G.f.get(f).push(u);if(!G.u.has(u))G.u.set(u,new Set());if(f)G.u.get(u).add(f)}};
+ [...(window.BL_NAMES||[]),...(window.BL_UNITS||[])].forEach(([g,fs])=>{add(g);fs.forEach(([f,us])=>{add(g,f);us.forEach(u=>add(g,f,u))})});
+ (BLI||[]).forEach(x=>add(x.game,x.faction,x.name));BLX=X}))}
+// Suggestions under the Game, Faction and Model boxes: our own drop-down (browser datalists don't show on many phones).
+// Opens on focus with the whole list, narrows as you type (names starting with the text first), tap to pick.
+function blGame(){return BLX&&BLX.get($('blG').value.trim().toLowerCase())}
+function blList(k){if(!BLX)return[];const g=blGame(),f=$('blF').value.trim();
+ if(k==='g')return[...BLX.values()].map(G=>[G.n,G.u.size?plural(G.u.size,'unit'):'']);
+ if(!g)return[];if(k==='f')return[...g.f.keys()].map(n=>[n,plural(g.f.get(n).length,'unit')]);
+ if(f&&g.f.has(f))return g.f.get(f).map(n=>[n,'']);return[...g.u.keys()].map(n=>[n,[...g.u.get(n)].join(', ')])}
+function blSug(inp,k,picked){const box=document.createElement('div');box.className='res blsug';box.hidden=true;(inp.closest('label')||inp.parentNode).appendChild(box);
+ const show=()=>{const t=inp.value.trim().toLowerCase(),all=blList(k);if(!all.length){box.hidden=true;return}
+  const seen=new Set(),hits=all.filter(([n])=>!seen.has(n)&&seen.add(n)&&(!t||n.toLowerCase().includes(t)));
+  hits.sort((a,b)=>(t?(b[0].toLowerCase().startsWith(t)-a[0].toLowerCase().startsWith(t)):0)||a[0].localeCompare(b[0]));
+  if(!hits.length||hits.length===1&&hits[0][0].toLowerCase()===t){box.hidden=true;return}
+  box.innerHTML=hits.slice(0,40).map(([n,m],i)=>`<div class="pi" data-i="${i}"><span>${esc(n)}${m?` <em>${esc(m)}</em>`:''}</span></div>`).join('')+(hits.length>40?`<div class="s" style="padding:6px 10px">${(hits.length-40).toLocaleString()} more: keep typing to narrow it down</div>`:'');
+  box.querySelectorAll('.pi').forEach(d=>d.onpointerdown=e=>{e.preventDefault();inp.value=hits[+d.dataset.i][0];box.hidden=true;picked&&picked()});box.hidden=false};
+ inp.addEventListener('focus',show);inp.addEventListener('input',show);inp.addEventListener('blur',()=>setTimeout(()=>box.hidden=true,120));
+ inp.addEventListener('keydown',e=>{if(e.key==='Escape'&&!box.hidden){e.stopPropagation();e.preventDefault();box.hidden=true}});return show}
+function renderBacklog(){
+ const el=$('v-backlog');
+ if(!ME){el.innerHTML=blTabs()+'<h1>My backlog</h1><p>Keep track of the pile of models waiting to be built and painted, for any game.</p>'+signInLink('Your backlog is saved to your account.');return}
+ if(!BLI){el.innerHTML=blTabs()+'<h1>My backlog</h1><p class="s">Loading…</p>';api('/backlog').then(r=>{BLI=r.items;BLOFF=!!r.unavailable;if(!$('v-backlog').hidden)renderBacklog()}).catch(e=>{el.innerHTML=blTabs()+`<h1>My backlog</h1><p class="err">${esc(e.message)}</p>`});return}
+ if(BLOFF){el.innerHTML=blTabs()+'<h1>My backlog</h1><p class="s">The backlog is almost ready and will switch on shortly. Please check back soon.</p>';return}
+ const items=BLI,S=blSum(items),tot=items.reduce((a,x)=>a+x.qty,0),done=S.painted+S.based;
+ let gsel='',hide=false,q='';try{gsel=localStorage.getItem('pd-blg')||'';hide=localStorage.getItem('pd-blh')==='1'}catch(e){}
+ const games=[...new Set(items.map(x=>x.game||''))].sort((a,b)=>(a||'~').localeCompare(b||'~'));if(gsel&&!games.includes(gsel==='-'?'':gsel))gsel='';
+ el.innerHTML=blTabs()+`<h1>My backlog</h1>
+ <div class="panel blsum">${tot?`<div class="psh"><b>${plural(tot,'model')}</b> <span class="s">${done.toLocaleString()} painted (${Math.round(done*100/tot)}%) · ${plural(items.length,'entry').replace('entrys','entries')}</span></div>${blBar(S,tot)}<div class="chips blleg">${BL_ST.map(([k,l,c])=>`<span class="chip"><i style="background:${c}"></i>${l} ${S[k].toLocaleString()}</span>`).join('')}</div>`:'<p class="s" style="margin:0 0 8px">Your pile of shame starts here. Add the kits and units you own, for any game, and move them along from unbuilt to based as you go.</p>'}
+ <div class="row"><button class="btn pri" type="button" id="blAdd">Add models</button></div></div>
+ ${items.length?`<div class="bar blfil"><input id="blQ" type="search" placeholder="Search your backlog" class="inp"><select id="blGs" class="inp"><option value="">All games</option>${games.map(g=>`<option value="${esc(g||'-')}"${(g||'-')===gsel?' selected':''}>${esc(g||'No game set')}</option>`).join('')}</select><label class="s"><input type="checkbox" id="blH"${hide?' checked':''}> Hide finished</label></div><div id="blL"></div>`:''}
+ <dialog class="pd pickdlg" id="blDlg" aria-labelledby="blT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div class="pkh"><h2 id="blT">Add models</h2></div>
+ <form id="blForm"><div class="blrow"><label class="f"><span>Game</span><input type="text" class="inp" id="blG" data-clear maxlength="80" placeholder="e.g. Warhammer 40,000" autocomplete="off"></label>
+ <label class="f"><span>Faction or army</span><input type="text" class="inp" id="blF" data-clear maxlength="80" placeholder="Optional" autocomplete="off"></label></div>
+ <div class="blrow"><label class="f bln"><span>Model or unit</span><input type="text" class="inp" id="blN" data-clear maxlength="120" required placeholder="Type any name, or pick a suggestion" autocomplete="off"></label>
+ <label class="f blq"><span>How many models</span><input type="number" class="inp" id="blQty" min="1" max="999" value="1" required></label></div>
+ <p class="s" id="blHint"></p>
+ <fieldset class="blst"><legend>Where they're at</legend>${BL_ST.map(([k,l,c])=>`<label><i style="background:${c}"></i>${l}<input type="number" class="inp" min="0" max="999" data-bls="${k}" value="0"${k==='unbuilt'?' readonly tabindex="-1" title="The models not counted at a later stage"':''}></label>`).join('')}</fieldset>
+ <div class="f"><span>Photo <span class="s">(optional)</span></span><div class="row blphr" style="justify-content:flex-start"><img id="blPh" class="blph" alt="" hidden><label class="btn sm" for="blPf" id="blPb">Add a photo</label><input type="file" id="blPf" accept="image/*" hidden><button class="btn sm" type="button" id="blPx" hidden>Remove photo</button><span class="s" id="blPm"></span></div></div>
+ <label class="f"><span>Tutorial or recipe <span class="s">(optional)</span></span><select class="inp" id="blR"><option value="">None</option></select></label>
+ <div class="f"><span>Paints for it <span class="s">(optional)</span></span><div class="chips" id="blP"></div><div class="psearch" id="blPS"></div></div>
+ <label class="f"><span>Notes</span><textarea class="inp" id="blNo" rows="3" maxlength="2000" placeholder="Colour scheme, what's left to do, where the box is…"></textarea></label>
+ <p class="err" id="blErr"></p>
+ <div class="pkft"><button class="btn dan" type="button" id="blDel" hidden style="margin-right:auto">Delete</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn pri" type="submit" id="blOk">Save</button></div></form></dialog>`;
+ $('blAdd').onclick=()=>blEdit(null);
+ if(!items.length)return;
+ const draw=()=>{q=$('blQ').value.trim().toLowerCase();const gs=$('blGs').value,hd=$('blH').checked;
+  const sh=items.filter(x=>(!gs||(gs==='-'?'':gs)===(x.game||''))&&(!hd||x.stages.based<x.qty&&blDone(x)<x.qty)&&(!q||[x.game,x.faction,x.name,x.notes].join(' ').toLowerCase().includes(q)));
+  const by=new Map();sh.forEach(x=>{const g=x.game||'';if(!by.has(g))by.set(g,new Map());const F=by.get(g),f=x.faction||'';if(!F.has(f))F.set(f,[]);F.get(f).push(x)});
+  $('blL').innerHTML=[...by.keys()].sort((a,b)=>(a||'~').localeCompare(b||'~')).map(g=>{const F=by.get(g),all=[...F.values()].flat(),n=all.reduce((a,x)=>a+x.qty,0),d=all.reduce((a,x)=>a+blDone(x),0);
+   return `<details class="panel blg" open><summary><b>${esc(g||'No game set')}</b> <span class="s">${plural(n,'model')} · ${Math.round(d*100/n)}% painted</span></summary>${[...F.keys()].sort((a,b)=>(a||'~').localeCompare(b||'~')).map(f=>`${f?`<h3 class="blfh">${esc(f)}</h3>`:''}${F.get(f).sort((a,b)=>a.name.localeCompare(b.name)).map(blRowHTML).join('')}`).join('')}</details>`}).join('')||'<p class="s">Nothing matches.</p>';
+  $('blL').querySelectorAll('[data-ble]').forEach(b=>b.onclick=()=>blEdit(items.find(x=>x.id===b.dataset.ble)));
+  $('blL').querySelectorAll('[data-blnx]').forEach(b=>b.onclick=()=>blNext(items.find(x=>x.id===b.dataset.blnx),b));
+  $('blL').querySelectorAll('.chip[data-k]').forEach(c=>c.onclick=()=>{const p=BYKEY.get(c.dataset.k);if(p)paintLook(p)})};
+ $('blQ').oninput=draw;$('blGs').onchange=()=>{try{localStorage.setItem('pd-blg',$('blGs').value)}catch(e){}draw()};$('blH').onchange=()=>{try{localStorage.setItem('pd-blh',$('blH').checked?'1':'0')}catch(e){}draw()};
+ draw()}
+const blTabs=()=>PTABS.replace(' class="on" aria-current="page"','').replace('href="#/backlog"','href="#/backlog" class="on" aria-current="page"');
+function blRowHTML(x){const fin=x.stages.based>=x.qty,nx=BL_ST.findIndex(([k])=>x.stages[k]>0);
+ return `<div class="bli${fin?' fin':''}${x.photo?' hasph':''}">${x.photo?`<a class="blpa" href="${imgURL(x.photo)}" data-big="${esc(x.photo)}" target="_blank" rel="noopener" title="Show the photo"><img class="blph" src="${imgURL(x.photo)}" alt="${esc(x.name)}" loading="lazy"></a>`:''}<div class="blt"><b>${esc(x.name)}</b>${x.qty>1?` <span class="tag">×${x.qty}</span>`:''}${x.recipe?` <a class="tag" href="#/recipe/${esc(x.recipe)}">Tutorial / recipe →</a>`:''}</div>
+ ${blBar(x.stages,x.qty)}<div class="s blsx">${esc(blStTxt(x.stages))}</div>
+ ${x.paints.length?`<div class="chips blpc">${x.paints.map(k=>pchip(k)).join('')}</div>`:''}${x.notes?`<p class="s blno">${linkify(x.notes)}</p>`:''}
+ <div class="row">${fin?'<span class="s">All done ✓</span>':`<button class="btn sm" type="button" data-blnx="${esc(x.id)}" title="Move one model on to the next stage">${x.qty>1?'One':'It'}'s ${BL_ST[Math.min(nx+1,4)][1].toLowerCase()} ›</button>`}<button class="btn sm" type="button" data-ble="${esc(x.id)}">Edit</button></div></div>`}
+function blSave(x,b){return (x?api('/backlog/'+x.id,{method:'PUT',body:b}):api('/backlog',{method:'POST',body:b})).then(r=>{const i=BLI.findIndex(y=>y.id===r.item.id);if(i>=0)BLI[i]=r.item;else BLI.push(r.item);BLX=null;BLNP=null;return r.item})}
+const blBody=x=>({game:x.game,faction:x.faction,name:x.name,qty:x.qty,stages:x.stages,notes:x.notes,recipe:x.recipe,paints:x.paints,photo:x.photo});
+function blNext(x,btn){const st=Object.assign({},x.stages),i=BL_ST.findIndex(([k])=>st[k]>0);if(i<0||i>=4)return;st[BL_ST[i][0]]--;st[BL_ST[i+1][0]]++;btn.disabled=true;
+ blSave(x,Object.assign(blBody(x),{stages:st})).then(()=>renderBacklog()).catch(e=>{btn.disabled=false;btn.textContent=e.message})}
+function blRecipes(sel,cur){const fill=()=>{sel.innerHTML='<option value="">None</option>'+(BLRC||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.title)}${r.saved?' (saved)':''}</option>`).join('')+(cur&&!(BLRC||[]).some(r=>r.id===cur)?`<option value="${esc(cur)}">Linked tutorial</option>`:'');sel.value=cur||''};
+ if(BLRC)return fill();fill();Promise.all([api('/recipes?scope=mine').catch(()=>({recipes:[]})),api('/recipes?scope=saved').catch(()=>({recipes:[]}))]).then(([a,b])=>{const seen=new Set();BLRC=[...a.recipes,...b.recipes].filter(r=>!seen.has(r.id)&&seen.add(r.id));if($('blDlg')?.open)fill()})}
+function blEdit(x){const D=$('blDlg'),F=$('blForm');F.reset();$('blErr').textContent='';$('blT').textContent=x?'Edit '+x.name:'Add models';$('blDel').hidden=!x;$('blDel').textContent='Delete';$('blDel').dataset.sure='';
+ let paints=x?[...x.paints]:[];
+ if(x){$('blG').value=x.game;$('blF').value=x.faction;$('blN').value=x.name;$('blQty').value=x.qty;$('blNo').value=x.notes}
+ else{let g='';try{g=localStorage.getItem('pd-blg')||''}catch(e){}if(g==='-')g='';if(!g&&BLI.length)g=BLI[BLI.length-1].game;$('blG').value=g}
+ const ins=[...F.querySelectorAll('[data-bls]')];ins.forEach(i=>i.value=x?x.stages[i.dataset.bls]||0:0);
+ const fix=()=>{const q=Math.max(1,Math.min(999,Math.round(+$('blQty').value)||1));let left=q;ins.slice(1).forEach(i=>{let n=Math.max(0,Math.round(+i.value)||0);if(n>left){n=left;i.value=n}left-=n});ins[0].value=left};
+ if(!x)ins[0].value=1;fix();
+ $('blQty').oninput=fix;ins.slice(1).forEach(i=>i.oninput=fix);
+ const chips=()=>{$('blP').innerHTML=paints.map(k=>pchip(k,true)).join('');$('blP').querySelectorAll('.x').forEach(s=>s.onclick=()=>{paints=paints.filter(k=>k!==s.closest('.chip').dataset.k);chips()})};chips();
+ paintSearch($('blPS'),()=>paints,k=>{if(paints.length<40&&!paints.includes(k))paints.push(k);chips();$('blPS').querySelector('input').value='';$('blPS').querySelector('.res').hidden=true});
+ blRecipes($('blR'),x?.recipe||'');
+ // Photo: shrunk in the browser and uploaded straight away (the site's usual check runs on it); saved with the entry.
+ let photo=x?.photo||'';const phShow=()=>{$('blPh').hidden=!photo;if(photo)$('blPh').src=imgURL(photo);$('blPx').hidden=!photo;$('blPb').textContent=photo?'Change photo':'Add a photo'};phShow();$('blPm').textContent='';
+ $('blPf').value='';$('blPf').onchange=async()=>{const f=$('blPf').files[0];if(!f)return;$('blPm').textContent='Uploading…';$('blOk').disabled=true;
+  try{photo=await uploadPhoto(f);$('blPm').textContent='';phShow()}catch(e){$('blPm').textContent=e.message}$('blOk').disabled=false;$('blPf').value=''};
+ $('blPx').onclick=()=>{photo='';phShow()};
+ const hint=()=>{const g=BLX&&BLX.get($('blG').value.trim().toLowerCase()),u=$('blN').value.trim();
+  $('blHint').textContent=!BLX?'':g?(g.u.size?`Tap a box to see suggestions for ${g.n}, or type any name.`:`Type the unit or kit name. Names you add for ${g.n} come up as suggestions next time.`):$('blG').value.trim()?'Any game works: type the names yourself.':'Pick or type a game. Any game, board game, display piece or kitbash works.';
+  if(g&&u&&!$('blF').value.trim()){const fs=g.u.get(u);if(fs&&fs.size===1)$('blF').value=[...fs][0]}};
+ blNames().then(hint);
+ if(!D.dataset.sug){D.dataset.sug='1';blSug($('blG'),'g',()=>{hint();$('blF').focus()});blSug($('blF'),'f',()=>$('blN').focus());blSug($('blN'),'u',()=>{hint();$('blQty').focus()})}
+ $('blG').oninput=hint;$('blN').oninput=hint;$('blN').onchange=hint;
+ $('blDel').onclick=()=>{const b=$('blDel');if(!b.dataset.sure){b.dataset.sure='1';b.textContent='Tap again to delete';return}b.disabled=true;
+  api('/backlog/'+x.id,{method:'DELETE'}).then(()=>{BLI=BLI.filter(y=>y.id!==x.id);D.close();renderBacklog()}).catch(e=>{b.disabled=false;$('blErr').textContent=e.message})};
+ F.onsubmit=ev=>{ev.preventDefault();fix();const st={};ins.forEach(i=>st[i.dataset.bls]=+i.value);const ok=$('blOk');ok.disabled=true;
+  blSave(x,{game:$('blG').value,faction:$('blF').value,name:$('blN').value,qty:+$('blQty').value,stages:st,notes:$('blNo').value,recipe:$('blR').value,paints,photo}).then(it=>{ok.disabled=false;try{const f=localStorage.getItem('pd-blg');if(f&&f!==(it.game||'-'))localStorage.setItem('pd-blg','')}catch(e){}D.close();renderBacklog()}).catch(e=>{ok.disabled=false;$('blErr').textContent=e.message})};
+ D.showModal();if(!x)setTimeout(()=>$('blN').focus(),50)}
 function addTicked(empty){if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix&&p.g!=='B').map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));
  if(!ks.length){if(empty)location.hash='#/paints';return}if(!nw.length)return addLbl('Already in your collection ✓');
  const d=$('addDlg'),n=nw.length,had=ks.length-n,s=n===1?'':'s';
@@ -1195,7 +1307,7 @@ async function renderAdmin(){
  let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
  const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
  const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
- const where=w=>w.type==='message'?(w.kind==='feedback'?`<a href="#/inbox/${esc(w.id)}/team">feedback conversation</a>`:'private message'):w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const where=w=>w.type==='message'?(w.kind==='feedback'?`<a href="#/inbox/${esc(w.id)}/team">feedback conversation</a>`:'private message'):w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='backlog'?`backlog photo: ${esc(w.title)} (<a href="#/u/${esc(w.id)}">owner</a>)`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
  const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
   <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
   <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
