@@ -161,7 +161,9 @@ function wheelReset(){try{localStorage.removeItem(WK);localStorage.removeItem(WP
 let BOOT=null;
 async function loadMe(){
  // The nav always shows every section; the welcome page's account cards only show once there is a way to sign in.
- let got=false;try{const early=window.pdMe;window.pdMe=null;INFO=await (early?early.catch(()=>api('/me?boot=1')):api('/me?boot=1'));ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)}catch(e){API=false;ME=null}
+ let got=false;try{const early=window.pdMe;window.pdMe=null;INFO=await (early?early.catch(()=>api('/me?boot=1')):api('/me?boot=1'));ME=INFO.user;got=true;API=!!(ME||INFO.devLogin||INFO.providers.length||INFO.passwords)
+  // PR test sites sign you in as a shared test account (until you sign out in this tab).
+  ;if(!ME&&INFO.autoDev){let no=false;try{no=sessionStorage.getItem('pd-noauto')==='1'}catch(e){}if(!no){location.replace('/api/auth/dev?name=Test%20Painter&return='+encodeURIComponent(location.pathname+location.hash));return}}}catch(e){API=false;ME=null}
  BOOT=INFO&&INFO.boot||null;if(INFO)delete INFO.boot;
  // Remember who is signed in (name and picture only) so the next page load shows it in the nav straight away (inline script in index.html).
  if(got)try{if(ME)localStorage.setItem('pd-me',JSON.stringify({name:ME.name||'',avatar:ME.avatar||'',chat:!!INFO.chat}));else localStorage.removeItem('pd-me')}catch(e){}
@@ -363,7 +365,7 @@ function renderAccount(){
   catch(e){c.checked=!c.checked;$('pFindM').className='err';$('pFindM').textContent=e.message}c.disabled=false};
  commissionPanel();
  // Signing out also puts the wheel back to the starting paints, so the next person on this browser doesn't see your collection.
- $('out').onclick=async()=>{await api('/auth/logout',{method:'POST'});wheelReset();await loadMe();location.hash='#/'};
+ $('out').onclick=async()=>{try{sessionStorage.setItem('pd-noauto','1')}catch(e){}await api('/auth/logout',{method:'POST'});wheelReset();await loadMe();location.hash='#/'};
  $('del').onclick=()=>$('delc').hidden=false;
  $('del2').onclick=async()=>{await api('/me',{method:'DELETE'});wheelReset();await loadMe();location.hash='#/'}}
 
