@@ -29,9 +29,12 @@
   // OAuth client IDs and secrets are set as secrets, never here (see SETUP-ACCOUNTS.md).
   // PR test sites (npx wrangler preview in Workers Builds). They get their own empty database and photo bucket,
   // never the live ones, so sign-up, My paints and the other account pages can be tried without touching real accounts.
-  // No secrets: Google/Discord/GitHub sign-in and email stay off there, email + password sign-up works.
+  // No secrets: Google/Discord/GitHub sign-in and email stay off there; visitors are signed in as a test account.
   // The test database is set up from the same migrations: see wrangler.preview-migrations.jsonc.
+  // PREVIEW + DEV_LOGIN: test sites sign every visitor in as a shared "Test Painter" account, so nothing needs a
+  // sign-in there (worker/index.js devOn refuses this on paintersdesk.com and the live workers.dev name).
   "previews": {
+    "vars": { "DEV_LOGIN": "1", "PREVIEW": "1" },
     "d1_databases": [
       { "binding": "DB", "database_name": "painters-desk-preview", "database_id": "d7c0ac57-5cee-4155-83f4-6621dbe8671f" }
     ],

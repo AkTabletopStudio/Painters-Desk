@@ -420,7 +420,7 @@ async function me(request, env, url) {
   const messages = await hasMessages(env), msgPhotos = messages && await hasMsgPhotos(env), follows = await hasFollows(env), forum = await hasForum(env) && forumOpen(env, user), chat = await hasChat(env);
   // Email + password sign-up is always available; logins includes 'email' once a password is set.
   // mail: confirmation and password-reset emails can be sent.
-  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: env.DEV_LOGIN === '1', ...(boot ? { boot: await boot } : {}) });
+  return json({ user, logins, providers, passwords: true, mail: mailReady(env), messages, msgPhotos, follows, forum, chat, devLogin: devOn(env, url), autoDev: devOn(env, url) && env.PREVIEW === '1', ...(boot ? { boot: await boot } : {}) });
 }
 
 async function sessionCookie(env, url, userId) {
@@ -622,8 +622,13 @@ async function revokeApple(env, userId) {
 
 // Local development only: sign in as a named test user without any OAuth keys. Enabled by DEV_LOGIN=1 in .dev.vars.
 // &email=… acts like a sign-in service that verified that email, to try account linking.
+// Dev sign-in: local testing (DEV_LOGIN=1 in .dev.vars) and PR test sites (previews.vars in wrangler.jsonc, with
+// PREVIEW=1 signing visitors in on their own as a shared test account). Never on the live site, even if the
+// variable were set there by mistake: the live host names are refused here.
+const LIVE_HOST = /(^|\.)paintersdesk\.com$|^painters-desk\.aktabletopstudio\.workers\.dev$/i;
+const devOn = (env, url) => env.DEV_LOGIN === '1' && !LIVE_HOST.test(url.hostname);
 async function devLogin(request, env, url) {
-  if (env.DEV_LOGIN !== '1') throw new HttpError(404, 'Not found');
+  if (!devOn(env, url)) throw new HttpError(404, 'Not found');
   const name = str(url.searchParams.get('name') || 'Test Painter', 60, 'Name');
   const userId = await upsertIdentity(env, request, 'dev', { id: name.toLowerCase(), name, email: url.searchParams.get('email') || null, avatar: null });
   return startSession(env, url, userId, url.searchParams.get('return'));
