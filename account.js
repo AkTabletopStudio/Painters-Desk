@@ -795,13 +795,24 @@ const blLoad=(src,v)=>new Promise(ok=>{if(window[v])return ok();const s=document
 function blNames(){return BLNP||(BLNP=Promise.all([blLoad('backlog-names.js','BL_NAMES'),blLoad('backlog-units.js','BL_UNITS')]).then(()=>{
  // Index: game -> {factions: Map(faction -> units[]), units: Map(unit -> Set(faction))}, plus what the painter typed before.
  const X=new Map(),add=(g,f,u)=>{if(!g)return;let G=X.get(g.toLowerCase());if(!G)X.set(g.toLowerCase(),G={n:g,f:new Map(),u:new Map()});if(f&&!G.f.has(f))G.f.set(f,[]);if(u){if(f)G.f.get(f).push(u);if(!G.u.has(u))G.u.set(u,new Set());if(f)G.u.get(u).add(f)}};
- [...(window.BL_NAMES||[]),...(window.BL_UNITS||[])].forEach(([g,fs])=>fs.forEach(([f,us])=>{add(g,f);us.forEach(u=>add(g,f,u))}));
+ [...(window.BL_NAMES||[]),...(window.BL_UNITS||[])].forEach(([g,fs])=>{add(g);fs.forEach(([f,us])=>{add(g,f);us.forEach(u=>add(g,f,u))})});
  (BLI||[]).forEach(x=>add(x.game,x.faction,x.name));BLX=X}))}
-function blOpts(id,list){const d=$(id);if(d)d.innerHTML=[...new Set(list)].sort((a,b)=>a.localeCompare(b)).slice(0,4000).map(v=>`<option value="${esc(v)}">`).join('')}
-function blLists(){if(!BLX)return;const g=BLX.get($('blG').value.trim().toLowerCase()),f=$('blF').value.trim();
- blOpts('blGl',[...BLX.values()].map(G=>G.n));
- blOpts('blFl',g?[...g.f.keys()]:[]);
- blOpts('blUl',g?(f&&g.f.has(f)?g.f.get(f):[...g.u.keys()]):[])}
+// Suggestions under the Game, Faction and Model boxes: our own drop-down (browser datalists don't show on many phones).
+// Opens on focus with the whole list, narrows as you type (names starting with the text first), tap to pick.
+function blGame(){return BLX&&BLX.get($('blG').value.trim().toLowerCase())}
+function blList(k){if(!BLX)return[];const g=blGame(),f=$('blF').value.trim();
+ if(k==='g')return[...BLX.values()].map(G=>[G.n,G.u.size?plural(G.u.size,'unit'):'']);
+ if(!g)return[];if(k==='f')return[...g.f.keys()].map(n=>[n,plural(g.f.get(n).length,'unit')]);
+ if(f&&g.f.has(f))return g.f.get(f).map(n=>[n,'']);return[...g.u.keys()].map(n=>[n,[...g.u.get(n)].join(', ')])}
+function blSug(inp,k,picked){const box=document.createElement('div');box.className='res blsug';box.hidden=true;inp.after(box);
+ const show=()=>{const t=inp.value.trim().toLowerCase(),all=blList(k);if(!all.length){box.hidden=true;return}
+  const seen=new Set(),hits=all.filter(([n])=>!seen.has(n)&&seen.add(n)&&(!t||n.toLowerCase().includes(t)));
+  hits.sort((a,b)=>(t?(b[0].toLowerCase().startsWith(t)-a[0].toLowerCase().startsWith(t)):0)||a[0].localeCompare(b[0]));
+  if(!hits.length||hits.length===1&&hits[0][0].toLowerCase()===t){box.hidden=true;return}
+  box.innerHTML=hits.slice(0,40).map(([n,m],i)=>`<div class="pi" data-i="${i}"><span>${esc(n)}${m?` <em>${esc(m)}</em>`:''}</span></div>`).join('')+(hits.length>40?`<div class="s" style="padding:6px 10px">${(hits.length-40).toLocaleString()} more: keep typing to narrow it down</div>`:'');
+  box.querySelectorAll('.pi').forEach(d=>d.onpointerdown=e=>{e.preventDefault();inp.value=hits[+d.dataset.i][0];box.hidden=true;picked&&picked()});box.hidden=false};
+ inp.addEventListener('focus',show);inp.addEventListener('input',show);inp.addEventListener('blur',()=>setTimeout(()=>box.hidden=true,120));
+ inp.addEventListener('keydown',e=>{if(e.key==='Escape'&&!box.hidden){e.stopPropagation();e.preventDefault();box.hidden=true}});return show}
 function renderBacklog(){
  const el=$('v-backlog');
  if(!ME){el.innerHTML=blTabs()+'<h1>My backlog</h1><p>Keep track of the pile of models waiting to be built and painted, for any game.</p>'+signInLink('Your backlog is saved to your account.');return}
@@ -815,11 +826,10 @@ function renderBacklog(){
  <div class="row"><button class="btn pri" type="button" id="blAdd">Add models</button></div></div>
  ${items.length?`<div class="bar blfil"><input id="blQ" type="search" placeholder="Search your backlog" class="inp"><select id="blGs" class="inp"><option value="">All games</option>${games.map(g=>`<option value="${esc(g||'-')}"${(g||'-')===gsel?' selected':''}>${esc(g||'No game set')}</option>`).join('')}</select><label class="s"><input type="checkbox" id="blH"${hide?' checked':''}> Hide finished</label></div><div id="blL"></div>`:''}
  <dialog class="pd pickdlg" id="blDlg" aria-labelledby="blT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div class="pkh"><h2 id="blT">Add models</h2></div>
- <form id="blForm"><div class="blrow"><label class="f"><span>Game</span><input type="text" class="inp" id="blG" list="blGl" maxlength="80" placeholder="e.g. Warhammer 40,000" autocomplete="off"></label>
- <label class="f"><span>Faction or army</span><input type="text" class="inp" id="blF" list="blFl" maxlength="80" placeholder="Optional" autocomplete="off"></label></div>
- <div class="blrow"><label class="f bln"><span>Model or unit</span><input type="text" class="inp" id="blN" list="blUl" maxlength="120" required placeholder="Type any name, or pick a suggestion" autocomplete="off"></label>
+ <form id="blForm"><div class="blrow"><label class="f"><span>Game</span><input type="text" class="inp" id="blG" maxlength="80" placeholder="e.g. Warhammer 40,000" autocomplete="off"></label>
+ <label class="f"><span>Faction or army</span><input type="text" class="inp" id="blF" maxlength="80" placeholder="Optional" autocomplete="off"></label></div>
+ <div class="blrow"><label class="f bln"><span>Model or unit</span><input type="text" class="inp" id="blN" maxlength="120" required placeholder="Type any name, or pick a suggestion" autocomplete="off"></label>
  <label class="f blq"><span>How many models</span><input type="number" class="inp" id="blQty" min="1" max="999" value="1" required></label></div>
- <datalist id="blGl"></datalist><datalist id="blFl"></datalist><datalist id="blUl"></datalist>
  <p class="s" id="blHint"></p>
  <fieldset class="blst"><legend>Where they're at</legend>${BL_ST.map(([k,l,c])=>`<label><i style="background:${c}"></i>${l}<input type="number" class="inp" min="0" max="999" data-bls="${k}" value="0"${k==='unbuilt'?' readonly tabindex="-1" title="The models not counted at a later stage"':''}></label>`).join('')}</fieldset>
  <label class="f"><span>Tutorial or recipe <span class="s">(optional)</span></span><select class="inp" id="blR"><option value="">None</option></select></label>
@@ -863,10 +873,11 @@ function blEdit(x){const D=$('blDlg'),F=$('blForm');F.reset();$('blErr').textCon
  paintSearch($('blPS'),()=>paints,k=>{if(paints.length<40&&!paints.includes(k))paints.push(k);chips();$('blPS').querySelector('input').value='';$('blPS').querySelector('.res').hidden=true});
  blRecipes($('blR'),x?.recipe||'');
  const hint=()=>{const g=BLX&&BLX.get($('blG').value.trim().toLowerCase()),u=$('blN').value.trim();
-  $('blHint').textContent=!BLX?'':g?(g.u.size?`Names you've added for ${g.n} come up as you type.`:`Type the unit or kit name. Names you add for ${g.n} come up as suggestions next time.`):$('blG').value.trim()?'Any game works: type the names yourself.':'Pick or type a game. Any game, board game, display piece or kitbash works.';
-  if(g&&u&&!$('blF').value.trim()){const fs=g.u.get(u);if(fs&&fs.size===1){$('blF').value=[...fs][0];blLists()}}};
- blNames().then(()=>{blLists();hint()});
- $('blG').oninput=()=>{blLists();hint()};$('blF').oninput=()=>blLists();$('blN').oninput=hint;$('blN').onchange=hint;
+  $('blHint').textContent=!BLX?'':g?(g.u.size?`Tap a box to see suggestions for ${g.n}, or type any name.`:`Type the unit or kit name. Names you add for ${g.n} come up as suggestions next time.`):$('blG').value.trim()?'Any game works: type the names yourself.':'Pick or type a game. Any game, board game, display piece or kitbash works.';
+  if(g&&u&&!$('blF').value.trim()){const fs=g.u.get(u);if(fs&&fs.size===1)$('blF').value=[...fs][0]}};
+ blNames().then(hint);
+ if(!D.dataset.sug){D.dataset.sug='1';blSug($('blG'),'g',()=>{hint();$('blF').focus()});blSug($('blF'),'f',()=>$('blN').focus());blSug($('blN'),'u',()=>{hint();$('blQty').focus()})}
+ $('blG').oninput=hint;$('blN').oninput=hint;$('blN').onchange=hint;
  $('blDel').onclick=()=>{const b=$('blDel');if(!b.dataset.sure){b.dataset.sure='1';b.textContent='Tap again to delete';return}b.disabled=true;
   api('/backlog/'+x.id,{method:'DELETE'}).then(()=>{BLI=BLI.filter(y=>y.id!==x.id);D.close();renderBacklog()}).catch(e=>{b.disabled=false;$('blErr').textContent=e.message})};
  F.onsubmit=ev=>{ev.preventDefault();fix();const st={};ins.forEach(i=>st[i.dataset.bls]=+i.value);const ok=$('blOk');ok.disabled=true;

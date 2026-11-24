@@ -1,0 +1,24 @@
+# Copies of BSData catalogues read by tools/build_backlog_names.py for backlog-units.js (names only), 2026-11-24.
+# folder  owner/repo  commit  date
+AgeOfFantasy OnePageRules/AgeOfFantasy 7c867ec 2021-08-27
+GrimdarkFuture OnePageRules/GrimdarkFuture 962dc94 2021-09-06
+Halo-Flashpoint unofficialmantic/Halo-Flashpoint bca1df0 2025-04-09
+Horus-Heresy-Legions-Imperialis Blackjack-AoD/Horus-Heresy-Legions-Imperialis f1cd961 2026-11-21
+TrenchCrusade Fawkstrot11/TrenchCrusade 45d187c 2026-09-16
+Warcry JynxZz/Warcry 79c2966 2026-09-01
+Warhammer-The-Old-World davyalders/Warhammer-The-Old-World 8c53b44 2026-10-22
+age-of-sigmar-4th Harrison-Miller/age-of-sigmar-4th 487e2d9 2026-11-06
+bloodbowl bdubaut/bloodbowl 6679a2b 2025-10-23
+bolt-action-3e-data Jasseji/bolt-action-3e-data 6c8e9bc 2026-08-13
+conquest-the-last-argument-of-kings NotoriousICG/conquest-the-last-argument-of-kings 18d630f 2026-05-12
+dropfleet-commander-2024 NR-Data/dropfleet-commander-2024 98ad08e 2026-11-16
+flamesofwar NerdyDec/flamesofwar a271213 2026-08-04
+frostgrave NewRecruitEU/frostgrave c4ba3f4 2024-05-02
+horus-heresy-3rd-edition GeorgesAlkhouri/horus-heresy-3rd-edition 3a87462 2026-11-13
+kingsofwar PullusPuer/kingsofwar 6fbe00e 2021-05-12
+marvel-crisis-protocol teage-like-league/marvel-crisis-protocol 8abb577 2025-04-21
+star-wars-legion LordTyberias/star-wars-legion 0587bb4 2026-10-10
+stargrave NR-Data/stargrave 5aaf853 2026-11-16
+team-yankee NR-Data/team-yankee 6c876f8 2026-11-16
+wh40k-11e richardsolomou/wh40k-11e 6fd981b 2026-11-19
+wh40k-killteam greyforgestudios/wh40k-killteam a746733 2026-04-29
