@@ -95,6 +95,28 @@ dialog.pd.pickdlg{background:linear-gradient(var(--card),var(--card)),var(--bg)}
 .wtips li:before{content:counter(wt);flex:0 0 26px;height:26px;display:grid;place-items:center;border-radius:50%;background:var(--tea);color:#111;font-weight:700;font-size:14px}
 /* Wheel tour (app.js pdTour): animated walkthrough on a mock of the wheel page, drawn at a fixed size and scaled to fit. */
 .tourb{padding:4px 12px;font-size:14px;margin-left:6px;vertical-align:1px}.tourb[hidden]{display:none}
+/* Guided tour (app.js pdGuide): spotlight ring + card on the real wheel page, and one-time feature tips (.gtip). Solid card colours so no theme shows through. */
+.gtq{font-weight:700}
+.gt{position:fixed;inset:0;z-index:2000;pointer-events:none}.gt[hidden]{display:none}
+.gtblk{position:fixed;inset:0;pointer-events:auto;background:transparent}
+.gtring{position:fixed;border:3px solid var(--yel);border-radius:14px;box-shadow:0 0 0 3px var(--ink),0 0 0 200vmax rgba(0,0,0,.58);pointer-events:none}
+.gt.live .gtring{animation:gtp 1.6s ease-in-out infinite}
+@keyframes gtp{50%{border-color:var(--tea)}}
+.gtcard,.gtip{box-sizing:border-box;padding:14px 16px 12px;border:3px solid var(--ink);border-radius:16px;background:linear-gradient(var(--card),var(--card)),var(--bg);color:var(--fg);box-shadow:5px 5px 0 var(--sh);font-size:15px;line-height:1.45}
+.gtcard{position:fixed;pointer-events:auto;max-height:calc(100dvh - 16px);overflow:auto}
+.gtcard h2{margin:2px 34px 6px 0;font-family:var(--hf);font-size:20px;line-height:1.2}
+.gtcard p,.gtip p{margin:0 0 12px}
+.gtcard .gtn{display:block;font-size:13px}
+.gtx{position:absolute;top:6px;right:8px;width:34px;height:34px;border:0;background:none;color:var(--fg);font:700 24px/1 system-ui,sans-serif;cursor:pointer;border-radius:8px}
+.gtrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.gtsp{flex:1}.gtrow [hidden]{display:none}
+.gtip{position:absolute;z-index:1500;font-size:14px;padding:12px 14px 10px}.gtip[hidden]{display:none}
+.gtip .gtih{display:block;margin-bottom:4px;font-family:var(--hf);font-size:16px}
+.gtip:before{content:'';position:absolute;left:calc(var(--ax,40px) - 11px);top:-14px;border:11px solid transparent;border-top:0;border-bottom:13px solid var(--ink)}
+.gtip.up:before{top:auto;bottom:-14px;border-bottom:0;border-top:13px solid var(--ink)}
+.gtcard.in,.gtip.in{animation:gti .22s ease-out}
+@keyframes gti{from{opacity:0;transform:translateY(6px)}}
+@media (prefers-reduced-motion:reduce){.gtcard.in,.gtip.in,.gt.live .gtring{animation:none}}
+.gton .wtip{display:none}
 dialog.pd.tourdlg{width:720px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);overflow:auto;padding:14px 16px 16px;background:linear-gradient(var(--card),var(--card)),var(--bg)}
 .tourdlg .tux{position:absolute;top:8px;right:8px;z-index:3}
 .tubox{position:relative;overflow:hidden;margin:30px 0 10px;border-radius:14px}
@@ -933,6 +955,9 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>24 November 2026</h2><ul>
+<li data-a="wheel"><span class="tg nw">New</span><b>A guided tour of the wheel.</b> Five quick pop-ups point out tapping a paint, complements and matches, Change paints, the wheel modes and My paints. It runs once on your first visit, <b>Skip tour</b> closes it, and the <b>? Tour</b> button above the wheel replays it. Ramps, Blends, Scheme, the Traditional wheel and zooming each show a short tip the first time you use them.</li>
+</ul></div>
 <div class="panel cl"><h2>23 November 2026</h2><ul>
 <li data-a="mypaints"><span class="tg nw">New</span><b>A safety net for your collection.</b> If a save would wipe out most of a collection of 20 or more paints, the site now stops and asks first, and Cancel keeps everything as it was. A copy of your collection is also kept each day you change it (for 14 days): use <b>Restore a backup</b> on My paints to go back to an earlier day.</li>
 <li data-a="wheel"><span class="tg nw">New</span><b>Clear all on the wheel.</b> A <b>✕ Clear all</b> button next to Change paints takes every paint off the wheel in one go. If you have 5 or more paints on it, or it isn't showing your collection, it asks first, and an <b>Undo</b> button puts them all back.</li>
