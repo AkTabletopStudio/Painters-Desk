@@ -456,6 +456,17 @@ dialog.pqd{background:linear-gradient(var(--card),var(--card)),var(--bg);max-wid
 .ctl{margin:0 0 6px}
 /* Top nav: the same buttons on every page. seo.js copies this and the themes below onto the paint and guide pages.
    On phones the sections become a tab bar fixed to the bottom of the screen, as in most phone apps. */
+/* Backlog (#/backlog) */
+.blbar{display:flex;height:12px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;margin:6px 0 4px;background:var(--bg)}.blbar i{display:block;min-width:4px}
+.blbar i+i{border-left:2px solid var(--ink)}.blsum .blbar{height:18px}.blleg .chip{cursor:default}
+.blfil{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}.blfil .inp{flex:1 1 180px;width:auto;padding:8px 12px}.blfil select.inp{flex:0 1 220px}
+.blg>summary{cursor:pointer}.blfh{font-size:15px;margin:12px 0 4px;color:var(--mut)}
+.bli{border-top:2px solid var(--line);padding:10px 0}.bli .row{margin-top:6px}.bli.fin .blt b{text-decoration:line-through;text-decoration-thickness:2px}.blt .tag{margin-left:4px}a.tag{text-decoration:none}
+.blsx{font-size:13px}.blno{margin:6px 0 0;white-space:pre-wrap}.blpc{margin-top:6px}.blpc .chip{cursor:pointer}
+.blrow{display:flex;flex-wrap:wrap;gap:0 12px}.blrow .f{flex:1 1 220px;margin:8px 0}.blrow .blq{flex:0 1 150px}
+fieldset.blst{border:3px solid var(--ink);border-radius:14px;padding:8px 12px 12px;margin:8px 0;display:flex;flex-wrap:wrap;gap:8px}fieldset.blst legend{font-weight:700;font-size:14px;padding:0 4px}
+.blst label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:700;flex:1 1 90px}.blst label i{display:inline-block;width:100%;height:6px;border-radius:3px;border:1px solid var(--ink)}.blst .inp{padding:6px 8px}.blst .inp[readonly]{opacity:.7}
+#blDlg .psearch .res{max-height:220px;overflow:auto}
 .ctabs{display:flex;border:3px solid var(--ink);border-radius:14px;overflow:hidden;margin:4px 0 10px;box-shadow:4px 4px 0 var(--sh);max-width:680px}
 .ctabs a{flex:1;text-align:center;padding:9px 4px;color:var(--fg);background:var(--card);text-decoration:none;font-weight:700;font-size:15px;min-width:0}
 .ctabs a+a{border-left:3px solid var(--ink)}
@@ -942,6 +953,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h2 class="wsec">Your desk</h2>
 <div class="feats">
 <a class="feat" href="#/paints" data-api><span class="band" style="background:var(--pur)"></span><span class="in"><h3>My paints</h3><p>Keep a list of the paints on your shelf and bring them up on the wheel in one tap.</p><ul><li>Show only your collection, or match to it</li><li>Suggested paints to fill the gaps, plus an essentials check</li><li>Plan a project from a palette or tutorial</li><li>A shopping list to copy for the shop</li><li>Save your favourite mixes as paints</li></ul><span class="go">Build your collection →</span></span></a>
+<a class="feat" href="#/backlog" data-api><span class="band" style="background:var(--tea)"></span><span class="in"><h3>My backlog</h3><p>Track your pile of shame for any game: every kit and unit from unbuilt to built, primed, painted and based.</p><ul><li>Any game, board game or kitbash: type any name</li><li>Link a tutorial or recipe and the paints for each unit</li></ul><span class="go">Open my backlog →</span></span></a>
 <a class="feat" href="#/recipes/tutorial" data-api><span class="band" style="background:var(--red)"></span><span class="in"><h3>Tutorials &amp; community</h3><p>Recipes are one colour, layer by layer from base to highlight. Tutorials are a whole model, step by step with photos and video.</p><ul><li>Browse, upvote and save what others post</li><li>Tap any paint for a quick look at its matches</li><li>Comment and ask questions</li></ul><span class="go">Browse tutorials →</span></span></a>
 <button class="feat" type="button" id="wTheme"><span class="band" style="background:var(--org)"></span><span class="in"><h3>Make it yours</h3><p><span id="wLooks">16</span> looks for the whole site, from Neon 1984 and Grimdark to Steampunk Workshop, Void Station and Paint Pot, plus a plain Classic look in light or dark. Paint colours stay the same in every one.</p><ul><li>Change it any time with the Theme button</li></ul><span class="go">Pick a theme →</span></span></button>
 </div>
@@ -957,6 +969,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>24 November 2026</h2><ul>
+<li data-a="mypaints"><span class="tg nw">New</span><b>Track your backlog.</b> Under Paints, the new <b>Backlog</b> tab keeps your pile of shame for any game: add each kit or unit with how many models, then move them along from unbuilt to built, primed, painted and based. Link a tutorial or recipe and the paints you plan to use, add notes, and see how much of the pile is painted.</li>
 <li data-a="mypaints"><span class="tg up">Better</span><b>Scan paints reads on its own.</b> Hold a pot still in front of the camera and its label is read without tapping. Clear matches are added to the list to check, and <b>Read label</b> still works for a tricky pot. Barcodes now work for Army Painter, Citadel, Pro Acryl, Two Thin Coats and Turbo Dork as well as Vallejo (from the open Paint Commons barcode list).</li>
 <li data-a="mypaints"><span class="tg nw">New</span><b>Scan paints into your collection.</b> On My paints, tap <b>Scan paints</b> and point your phone camera at a pot, then tap <b>Read label</b> (or pick a photo). The name and code on the label are matched to our paints, and Vallejo barcodes are read on their own. You check the list before anything is added. Reading happens on your device, nothing is uploaded.</li>
 <li data-a="wheel"><span class="tg up">Better</span><b>Blends start from two paints.</b> In Blends, tap a first paint and then a second. The blend fills in the steps between them, and one step past each end, with the nearest real paints, using paints you own first. Swap, pin, reorder and mix steps as before, <b>Reset steps</b> goes back to your two paints, and <b>Pick two new paints</b> starts again. Swatches are estimates.</li>
@@ -1244,6 +1257,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 </div>
 </section>
 <section id="v-paints" hidden></section>
+<section id="v-backlog" hidden></section>
 <section id="v-recipes" hidden></section>
 <section id="v-recipe" hidden></section>
 <section id="v-edit" hidden></section>

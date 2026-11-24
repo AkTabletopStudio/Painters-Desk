@@ -187,6 +187,12 @@ async function route(request, env, url) {
   if (p === '/api/collection/restore' && m === 'POST') return restoreBackup(request, env);
   if (p === '/api/wants' && m === 'GET') return getWants(request, env);
   if (p === '/api/wants' && m === 'PUT') return putWants(request, env);
+  if (p === '/api/backlog' && m === 'GET') return getBacklog(request, env);
+  if (p === '/api/backlog' && m === 'POST') return saveBacklog(request, env, null);
+  if ((r = p.match(/^\/api\/backlog\/([\w-]+)$/))) {
+    if (m === 'PUT') return saveBacklog(request, env, r[1]);
+    if (m === 'DELETE') return deleteBacklog(request, env, r[1]);
+  }
   if (p === '/api/mixes' && m === 'GET') return getMixes(request, env);
   if (p === '/api/mixes' && m === 'POST') return addMix(request, env);
   if ((r = p.match(/^\/api\/mixes\/([\w-]+)$/)) && m === 'DELETE') return deleteMix(request, env, r[1]);
@@ -944,6 +950,7 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM recipes WHERE user_id = ?').bind(u.id),
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
     ...(await hasSchema(env, 'collection_backups') ? [env.DB.prepare('DELETE FROM collection_backups WHERE user_id = ?').bind(u.id)] : []),
+    ...(await hasSchema(env, 'backlog') ? [env.DB.prepare('DELETE FROM backlog WHERE user_id = ?').bind(u.id)] : []),
     ...(await hasCommissions(env) ? [
       env.DB.prepare('DELETE FROM commissions WHERE user_id = ?').bind(u.id),
       env.DB.prepare('DELETE FROM commission_messages WHERE painter_id = ? OR sender_id = ?').bind(u.id, u.id),
@@ -1154,6 +1161,60 @@ async function putWants(request, env) {
 /* ---------- saved mixes ---------- */
 
 // Until migration 0020 is applied the table is missing; the site then hides the mix buttons.
+/* ---------- backlog ("pile of shame", migration 0028) ---------- */
+// Each item is one kit or unit the painter owns: free-text game/faction/name, how many models, and how many of
+// them sit at each stage. Until the migration is applied, GET says unavailable and the page explains it.
+const BL_STAGES = ['unbuilt', 'built', 'primed', 'painted', 'based'], BL_MAX = 2000;
+const blText = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n) || null;
+function blRow(r) {
+  let stages = {}, paints = [];
+  try { stages = JSON.parse(r.stages); } catch {}
+  try { paints = JSON.parse(r.paints || '[]'); } catch {}
+  return { id: r.id, game: r.game || '', faction: r.faction || '', name: r.name, qty: r.qty, stages, notes: r.notes || '', recipe: r.recipe || '', paints, created_at: r.created_at, updated_at: r.updated_at };
+}
+function blItem(b) {
+  const name = blText(b.name, 120);
+  if (!name) throw new HttpError(400, 'Give the model or unit a name');
+  const qty = Math.round(Number(b.qty));
+  if (!(qty >= 1 && qty <= 999)) throw new HttpError(400, 'How many models: 1 to 999');
+  // Stage counts are clamped to whole numbers and made to add up to qty: anything left over is unbuilt.
+  const st = {}; let left = qty;
+  for (const k of BL_STAGES.slice(1)) { const n = Math.max(0, Math.min(left, Math.round(Number(b.stages && b.stages[k]) || 0))); st[k] = n; left -= n; }
+  st.unbuilt = left;
+  const stages = Object.fromEntries(BL_STAGES.map(k => [k, st[k]]));
+  const recipe = /^[\w-]{1,64}$/.test(String(b.recipe || '')) ? String(b.recipe) : null;
+  return { game: blText(b.game, 80), faction: blText(b.faction, 80), name, qty, stages: JSON.stringify(stages), notes: String(b.notes || '').trim().slice(0, 2000) || null, recipe, paints: JSON.stringify(paintKeys(b.paints, 40)) };
+}
+async function getBacklog(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'backlog')) return json({ items: [], unavailable: true });
+  const rows = (await env.DB.prepare('SELECT * FROM backlog WHERE user_id = ? ORDER BY created_at').bind(u.id).all()).results;
+  return json({ items: rows.map(blRow) });
+}
+async function saveBacklog(request, env, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'backlog')) throw new HttpError(503, 'The backlog isn\'t switched on yet');
+  const b = await body(request), x = blItem(b), t = now();
+  if (id) {
+    const r = await env.DB.prepare('UPDATE backlog SET game = ?, faction = ?, name = ?, qty = ?, stages = ?, notes = ?, recipe = ?, paints = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .bind(x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, t, id, u.id).run();
+    if (!r.meta.changes) throw new HttpError(404, 'Not found');
+  } else {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM backlog WHERE user_id = ?').bind(u.id).first();
+    if (n && n.n >= BL_MAX) throw new HttpError(400, `Your backlog can hold up to ${BL_MAX} entries`);
+    id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO backlog (id, user_id, game, faction, name, qty, stages, notes, recipe, paints, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, u.id, x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, t, t).run();
+  }
+  return json({ item: blRow(await env.DB.prepare('SELECT * FROM backlog WHERE id = ?').bind(id).first()) });
+}
+async function deleteBacklog(request, env, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'backlog')) throw new HttpError(503, 'The backlog isn\'t switched on yet');
+  await env.DB.prepare('DELETE FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).run();
+  return json({ ok: true });
+}
+
 const noMixes = e => /no such table: mixes/i.test(String(e && e.message));
 
 async function getMixes(request, env) {
