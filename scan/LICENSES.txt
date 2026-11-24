@@ -4,3 +4,4 @@ tesseract.min.js, worker.min.js  - Tesseract.js 7.0.0, Apache-2.0, https://githu
 tesseract-core-*.wasm.js         - tesseract.js-core 7.0.0 (Tesseract OCR engine), Apache-2.0, https://github.com/naptha/tesseract.js-core
 eng.traineddata.gz               - Tesseract English model (4.0.0_best_int) via @tesseract.js-data/eng 1.0.0, Apache-2.0, https://github.com/tesseract-ocr/tessdata
 zxing-reader.js, zxing_reader.wasm - zxing-wasm 3.1.7 (reader), MIT, https://github.com/Sec-Ant/zxing-wasm (ZXing-C++, Apache-2.0)
+barcodes.js                      - generated from the Paint Commons catalog (github.com/paintcommons/catalog, commit 46946c5), data CC0 1.0. Barcodes only, no colours.

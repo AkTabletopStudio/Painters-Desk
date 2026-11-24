@@ -2,11 +2,11 @@
 // Two ways in, both run on the phone; nothing is uploaded:
 //  - Label text: Tesseract OCR (scan/, loaded the first time you read a label) reads the words, then names and codes are matched
 //    against data.js the same way the CSV import matches rows (csvIndex/csvNorm in account.js, plus import-aliases.js).
-//  - Barcodes: the browser's BarcodeDetector where there is one, else ZXing (scan/zxing-reader.js). There is no public list of paint
-//    barcodes we can check, so only barcodes that carry the paint's own code are read: Vallejo's EAN-13 is 8429551 + the 5-digit
-//    code (72.001 Dead White = 8429551720014, as on retailer listings). Any other barcode says so and asks for the label instead.
+//  - Barcodes: the browser's BarcodeDetector where there is one, else ZXing (scan/zxing-reader.js). Looked up in scan/barcodes.js
+//    (Paint Commons catalog, see tools/build_scan_barcodes.py), then Vallejo's pattern (8429551 + the 5-digit code + check digit,
+//    72.001 Dead White = 8429551720014). Any other barcode says so and asks for the label instead.
 // Loaded on demand by account.js, which hands over its matching and collection helpers (it runs inside its own closure).
-window.pdScan=function(A){const{csvIndex,csvNorm,csvCode,csvLev,csvAlLoad,CSV_BR,setOwned,undoBar,askBulk,BULK,esc}=A;const paintsRedraw=A.redraw;
+window.pdScan=function(A){const{csvIndex,csvNorm,csvCode,csvLev,csvAlLoad,csvMatch,CSV_BR,setOwned,undoBar,askBulk,BULK,esc}=A;const paintsRedraw=A.redraw;
 const SCAN={sig:null,still:0,lastSig:null,autoT:0,rows:[],stream:null,ocr:null,ocrP:null,zx:null,zxP:null,bd:undefined,timer:0,busy:false,seen:new Map(),n:0};
 const scanEl=id=>document.getElementById(id);
 const scanLoad=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)});
@@ -49,7 +49,13 @@ function scanText(text){const X=csvIndex(),N=csvNorm(text),W=N.trim().split(' ')
  return{s:sure?'ok':twin?'pick':'close',l:l.map(o=>o.p),bi}}
 const scanEanOk=s=>{if(!/^\d{13}$/.test(s))return false;let t=0;for(let i=0;i<12;i++)t+=(+s[i])*(i%2?3:1);return(10-t%10)%10===+s[12]};
 // A barcode -> paints. Only Vallejo's (8429551 + code) can be read without a lookup list.
-function scanCode(raw){const s=String(raw||'').replace(/\D/g,'');const v=/^8429551(\d{5})\d$/.exec(s);
+// Barcode list (scan/barcodes.js, from the Paint Commons catalog, CC0): brand, code, name and range for about 2,300 barcodes that are
+// published on manufacturer or retailer listings, or worked out from the code (Army Painter, Vallejo). Matched to our paints with the
+// CSV import's matcher, so a barcode for a paint we don't list says so instead of guessing.
+let SCAN_BCP=null;const scanBcLoad=()=>SCAN_BCP||(SCAN_BCP=scanLoad('scan/barcodes.js').catch(()=>{SCAN_BCP=null}));
+function scanCode(raw){const s=String(raw||'').replace(/\D/g,''),e=s.length===12?'0'+s:s,B=window.SCAN_BC&&SCAN_BC[e];
+ if(B){const r=csvMatch(B[0],B[2],B[1],B[3]);return Object.assign(r,{lbl:B[0]+' '+B[2]})}
+ const v=/^8429551(\d{5})\d$/.exec(s);
  if(v&&scanEanOk(s)){const c=v[1],X=csvIndex(),bi=3,l=[...new Set([...(X.cd.get(c)||[]),...P.filter(p=>!p.mix&&BR_OF[p.g]===bi&&csvCode(p.c).startsWith(c)&&csvCode(p.c).length>c.length)])].filter(p=>BR_OF[p.g]===bi);
   return l.length?{s:l.length===1?'ok':'pick',l,bi,code:c.slice(0,2)+'.'+c.slice(2)}:{s:'none',l:[],bi,code:c.slice(0,2)+'.'+c.slice(2)}}
  return{s:'bar',l:[],bi:null}}
@@ -69,7 +75,7 @@ function scanCanvas(src,max){const w=src.videoWidth||src.naturalWidth||src.width
 // ---------- dialog ----------
 const SCAN_HINT='Hold one pot\'s label in the box and keep it still. It reads on its own (or tap Read label).';
 const scanSt=t=>{const e=scanEl('scSt');if(e)e.textContent=t};
-function scanOpen(){scanWire();csvAlLoad();const d=scanEl('scDlg');SCAN.rows=[];SCAN.seen=new Map();SCAN.n=0;scanDraw();scanSt('');d.showModal();scanCam();
+function scanOpen(){scanWire();csvAlLoad();scanBcLoad();const d=scanEl('scDlg');SCAN.rows=[];SCAN.seen=new Map();SCAN.n=0;scanDraw();scanSt('');d.showModal();scanCam();
  // Start fetching the label reader straight away so the first Read label is quicker.
  scanOcr().then(()=>{if(/^Getting/.test(scanEl('scSt').textContent))scanSt(SCAN.stream?SCAN_HINT:'')}).catch(()=>{})}
 async function scanCam(){const v=scanEl('scV'),box=scanEl('scCam');
@@ -92,7 +98,7 @@ function scanLoop(){clearTimeout(SCAN.timer);if(!SCAN.stream)return;SCAN.timer=s
  scanLoop()},450)}
 function scanGotBar(c){const t=Date.now();if(SCAN.seen.has(c)&&t-SCAN.seen.get(c)<6000)return;const again=SCAN.seen.has(c);SCAN.seen.set(c,t);if(again)return;
  const r=scanCode(c);if(navigator.vibrate)try{navigator.vibrate(40)}catch(e){}
- scanPush(Object.assign(r,{src:'Barcode '+c+(r.code?' (Vallejo '+r.code+')':'')}))}
+ scanPush(Object.assign(r,{src:'Barcode '+c+(r.lbl?' ('+r.lbl+')':r.code?' (Vallejo '+r.code+')':'')}))}
 async function scanRead(src,auto){if(SCAN.busy)return;SCAN.busy=true;const b=scanEl('scRead');b.disabled=true;
  try{scanSt('Reading the label…');const w=await scanOcr();
   const c=scanCanvas(src,1600),{data}=await w.recognize(c),txt=(data.text||'').replace(/\s+/g,' ').trim();
@@ -116,7 +122,7 @@ function scanDraw(){const out=scanEl('scOut');if(!out)return;const R=SCAN.rows;
  const opt=(p,sel)=>`<option value="${esc(p.k)}"${sel?' selected':''}>${esc(p.n.trim())}${p.c?' '+esc(p.c):''} · ${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} ${esc(GL[p.g])}${A.own().has(p.k)?' ★ owned':''}</option>`;
  out.innerHTML=R.length?`<div class="csvt">`+R.map(r=>{const p=r.l[0],own=p&&A.own().has(p.k),i=r.i;
   const tag=r.s==='bar'?'<span class="csvs kn">Barcode not listed</span>':!p?'<span class="csvs no">Not found</span>':own?'<span class="csvs ow">Already yours</span>':r.s==='ok'?'<span class="csvs ok">Match</span>':r.s==='pick'?'<span class="csvs pk">Check range</span>':'<span class="csvs cl">Best guess</span>';
-  const pick=r.s==='bar'?'<span class="s">We can only read Vallejo barcodes so far. Tap Read label with the name facing the camera.</span>':!p?`<span class="s">${r.code?'Vallejo '+esc(r.code)+' isn\'t on the site yet.':'No paint matched.'}</span>`:r.l.length>1?`<select data-scp="${i}" aria-label="Which paint">${r.l.map((q,j)=>opt(q,!j)).join('')}</select>`:`<span class="csvp">${esc(p.n.trim())}${p.c?' <span class="s">'+esc(p.c)+'</span>':''} <span class="s">${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} · ${esc(GL[p.g])}</span></span>`;
+  const pick=r.s==='bar'?'<span class="s">This barcode isn\'t in our list yet. Tap Read label with the name facing the camera.</span>':!p?`<span class="s">${r.lbl?esc(r.lbl)+' isn\'t on the site yet.':r.code?'Vallejo '+esc(r.code)+' isn\'t on the site yet.':'No paint matched.'}</span>`:r.l.length>1?`<select data-scp="${i}" aria-label="Which paint">${r.l.map((q,j)=>opt(q,!j)).join('')}</select>`:`<span class="csvp">${esc(p.n.trim())}${p.c?' <span class="s">'+esc(p.c)+'</span>':''} <span class="s">${esc(BRANDS[BR_OF[p.g]][0].split(' / ')[0])} · ${esc(GL[p.g])}</span></span>`;
   return`<label class="csvr"><input type="checkbox" data-sci="${i}"${p&&!own&&r.s!=='close'?' checked':''}${p?'':' disabled'}><i class="csvsw" style="background:${p?p.h:'transparent'}"></i><span class="csvm"><span class="csvsrc">${esc(r.src)} ${tag}</span>${pick}</span></label>`}).join('')+`</div>`:'<p class="s">Paints you scan show up here. Nothing is added until you tap Add.</p>';
  scanSum()}
 function scanPicked(){const m=new Set(),out=scanEl('scOut');out.querySelectorAll('input[data-sci]:checked').forEach(e=>{const i=+e.dataset.sci,s=out.querySelector(`select[data-scp="${i}"]`),r=SCAN.rows.find(x=>x.i===i),k=s?s.value:r&&r.l[0]&&r.l[0].k;if(k&&!A.own().has(k))m.add(k)});return[...m]}
