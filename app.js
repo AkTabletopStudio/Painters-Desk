@@ -1121,6 +1121,7 @@ const TOUR_ON=false;
  new MutationObserver(()=>{if(!vw.hidden)setTimeout(first,700)}).observe(vw,{attributes:true,attributeFilter:['hidden']});setTimeout(first,1200)})();
 
 // A clear (x) button on every search box: shows once there is text, empties the box, re-runs its search and keeps focus.
+// Also any text box marked data-clear (Backlog's Game, Faction and Model boxes).
 (function sxInit(){const D=document,V=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
  const add=i=>{if(i.dataset.sx||!i.parentNode)return;i.dataset.sx=1;i.classList.add('sxi');
   const w=D.createElement('span'),b=D.createElement('button');w.className='sx';b.type='button';b.className='sxb';b.textContent='×';b.title='Clear';b.setAttribute('aria-label','Clear search');b.tabIndex=-1;
@@ -1128,7 +1129,7 @@ const TOUR_ON=false;
   Object.defineProperty(i,'value',{configurable:true,get(){return V.get.call(this)},set(v){V.set.call(this,v);sync()}});
   i.addEventListener('input',sync);b.addEventListener('pointerdown',e=>e.preventDefault());
   b.onclick=()=>{V.set.call(i,'');sync();i.dispatchEvent(new Event('input',{bubbles:true}));i.focus()}};
- const scan=r=>{if(r.matches&&r.matches('input[type=search]'))add(r);r.querySelectorAll&&r.querySelectorAll('input[type=search]').forEach(add)};
+ const Q='input[type=search],input[data-clear]',scan=r=>{if(r.matches&&r.matches(Q))add(r);r.querySelectorAll&&r.querySelectorAll(Q).forEach(add)};
  scan(D);new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>n.nodeType===1&&scan(n)))).observe(D.body,{childList:true,subtree:true})})();
 
 // Guided tour: spotlight pop-ups on the real wheel page (5 steps), plus one-time tips the first time someone opens a deeper feature.

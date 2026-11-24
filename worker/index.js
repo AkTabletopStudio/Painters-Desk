@@ -1175,7 +1175,7 @@ function blRow(r) {
   let stages = {}, paints = [];
   try { stages = JSON.parse(r.stages); } catch {}
   try { paints = JSON.parse(r.paints || '[]'); } catch {}
-  return { id: r.id, game: r.game || '', faction: r.faction || '', name: r.name, qty: r.qty, stages, notes: r.notes || '', recipe: r.recipe || '', paints, created_at: r.created_at, updated_at: r.updated_at };
+  return { id: r.id, game: r.game || '', faction: r.faction || '', name: r.name, qty: r.qty, stages, notes: r.notes || '', recipe: r.recipe || '', paints, photo: r.photo || '', created_at: r.created_at, updated_at: r.updated_at };
 }
 function blItem(b) {
   const name = blText(b.name, 120);
@@ -1188,7 +1188,8 @@ function blItem(b) {
   st.unbuilt = left;
   const stages = Object.fromEntries(BL_STAGES.map(k => [k, st[k]]));
   const recipe = /^[\w-]{1,64}$/.test(String(b.recipe || '')) ? String(b.recipe) : null;
-  return { game: blText(b.game, 80), faction: blText(b.faction, 80), name, qty, stages: JSON.stringify(stages), notes: String(b.notes || '').trim().slice(0, 2000) || null, recipe, paints: JSON.stringify(paintKeys(b.paints, 40)) };
+  const photo = IMAGE_ID.test(String(b.photo || '')) ? String(b.photo) : null;
+  return { game: blText(b.game, 80), faction: blText(b.faction, 80), name, qty, stages: JSON.stringify(stages), notes: String(b.notes || '').trim().slice(0, 2000) || null, recipe, paints: JSON.stringify(paintKeys(b.paints, 40)), photo };
 }
 async function getBacklog(request, env) {
   const u = await requireUser(request, env);
@@ -1200,23 +1201,31 @@ async function saveBacklog(request, env, id) {
   const u = await requireUser(request, env);
   if (!await hasSchema(env, 'backlog')) throw new HttpError(503, 'The backlog isn\'t switched on yet');
   const b = await body(request), x = blItem(b), t = now();
+  let old = null;
   if (id) {
-    const r = await env.DB.prepare('UPDATE backlog SET game = ?, faction = ?, name = ?, qty = ?, stages = ?, notes = ?, recipe = ?, paints = ?, updated_at = ? WHERE id = ? AND user_id = ?')
-      .bind(x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, t, id, u.id).run();
-    if (!r.meta.changes) throw new HttpError(404, 'Not found');
+    old = await env.DB.prepare('SELECT photo FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+    if (!old) throw new HttpError(404, 'Not found');
+  }
+  if (x.photo && x.photo !== old?.photo) await checkImagesOwned(env, u, [x.photo]);
+  if (id) {
+    await env.DB.prepare('UPDATE backlog SET game = ?, faction = ?, name = ?, qty = ?, stages = ?, notes = ?, recipe = ?, paints = ?, photo = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .bind(x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, x.photo, t, id, u.id).run();
+    if (old.photo && old.photo !== x.photo) await dropUnusedImages(env, [old.photo]);
   } else {
     const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM backlog WHERE user_id = ?').bind(u.id).first();
     if (n && n.n >= BL_MAX) throw new HttpError(400, `Your backlog can hold up to ${BL_MAX} entries`);
     id = crypto.randomUUID();
-    await env.DB.prepare('INSERT INTO backlog (id, user_id, game, faction, name, qty, stages, notes, recipe, paints, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, u.id, x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, t, t).run();
+    await env.DB.prepare('INSERT INTO backlog (id, user_id, game, faction, name, qty, stages, notes, recipe, paints, photo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, u.id, x.game, x.faction, x.name, x.qty, x.stages, x.notes, x.recipe, x.paints, x.photo, t, t).run();
   }
   return json({ item: blRow(await env.DB.prepare('SELECT * FROM backlog WHERE id = ?').bind(id).first()) });
 }
 async function deleteBacklog(request, env, id) {
   const u = await requireUser(request, env);
   if (!await hasSchema(env, 'backlog')) throw new HttpError(503, 'The backlog isn\'t switched on yet');
+  const row = await env.DB.prepare('SELECT photo FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).first();
   await env.DB.prepare('DELETE FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).run();
+  if (row?.photo) await dropUnusedImages(env, [row.photo]);
   return json({ ok: true });
 }
 
@@ -1660,6 +1669,8 @@ async function moderation(request, env) {
     for (const img of JSON.parse(m.images)) add(img, { type: 'chat', id: m.room_id, msg: m.id, title: m.name });
   if (await hasMsgPhotos(env)) for (const m of (await env.DB.prepare("SELECT m.id, m.images, c.id AS conv, c.kind FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE m.images != '[]'").all()).results)
     for (const img of JSON.parse(m.images)) add(img, { type: 'message', id: m.conv, kind: m.kind });
+  if (await hasSchema(env, 'backlog')) for (const b of (await env.DB.prepare('SELECT user_id, name, photo FROM backlog WHERE photo IS NOT NULL').all()).results)
+    add(b.photo, { type: 'backlog', id: b.user_id, title: b.name });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -2428,11 +2439,11 @@ async function cleanPost(env, u, b) {
 
 // Delete photos no recipe, profile, portfolio, chat message or other post still uses (a photo can be reused across them).
 async function dropUnusedImages(env, ids) {
-  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), gone = [];
+  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), bl = await hasSchema(env, 'backlog'), gone = [];
   for (const id of new Set(ids)) {
     const like = `%"${id}"%`;
     const used = await env.DB.prepare(`SELECT 1 FROM recipes WHERE cover = ?1 OR steps LIKE ?2 UNION ALL SELECT 1 FROM users WHERE avatar_image = ?1
-      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''} LIMIT 1`).bind(id, like).first();
+      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''}${bl ? ' UNION ALL SELECT 1 FROM backlog WHERE photo = ?1' : ''} LIMIT 1`).bind(id, like).first();
     if (!used) gone.push(id);
   }
   await deleteImages(env, gone);

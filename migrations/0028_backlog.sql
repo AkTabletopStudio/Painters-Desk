@@ -1,7 +1,7 @@
 -- Backlog ("pile of shame"): the models each painter still has to build and paint, for any game.
 -- game / faction / name are the painter's own text (suggestions come from backlog-names.js, names only).
 -- stages is a JSON object of how many of the qty models sit at each stage: {"unbuilt":3,"built":0,"primed":2,"painted":0,"based":0}.
--- recipe is an optional recipe/tutorial id on this site; paints a JSON array of paint keys picked for it.
+-- recipe is an optional recipe/tutorial id on this site; paints a JSON array of paint keys picked for it; photo an uploaded image id.
 CREATE TABLE backlog (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -13,6 +13,7 @@ CREATE TABLE backlog (
   notes TEXT,
   recipe TEXT,
   paints TEXT,
+  photo TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );

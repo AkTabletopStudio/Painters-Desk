@@ -804,7 +804,7 @@ function blList(k){if(!BLX)return[];const g=blGame(),f=$('blF').value.trim();
  if(k==='g')return[...BLX.values()].map(G=>[G.n,G.u.size?plural(G.u.size,'unit'):'']);
  if(!g)return[];if(k==='f')return[...g.f.keys()].map(n=>[n,plural(g.f.get(n).length,'unit')]);
  if(f&&g.f.has(f))return g.f.get(f).map(n=>[n,'']);return[...g.u.keys()].map(n=>[n,[...g.u.get(n)].join(', ')])}
-function blSug(inp,k,picked){const box=document.createElement('div');box.className='res blsug';box.hidden=true;inp.after(box);
+function blSug(inp,k,picked){const box=document.createElement('div');box.className='res blsug';box.hidden=true;(inp.closest('label')||inp.parentNode).appendChild(box);
  const show=()=>{const t=inp.value.trim().toLowerCase(),all=blList(k);if(!all.length){box.hidden=true;return}
   const seen=new Set(),hits=all.filter(([n])=>!seen.has(n)&&seen.add(n)&&(!t||n.toLowerCase().includes(t)));
   hits.sort((a,b)=>(t?(b[0].toLowerCase().startsWith(t)-a[0].toLowerCase().startsWith(t)):0)||a[0].localeCompare(b[0]));
@@ -826,12 +826,13 @@ function renderBacklog(){
  <div class="row"><button class="btn pri" type="button" id="blAdd">Add models</button></div></div>
  ${items.length?`<div class="bar blfil"><input id="blQ" type="search" placeholder="Search your backlog" class="inp"><select id="blGs" class="inp"><option value="">All games</option>${games.map(g=>`<option value="${esc(g||'-')}"${(g||'-')===gsel?' selected':''}>${esc(g||'No game set')}</option>`).join('')}</select><label class="s"><input type="checkbox" id="blH"${hide?' checked':''}> Hide finished</label></div><div id="blL"></div>`:''}
  <dialog class="pd pickdlg" id="blDlg" aria-labelledby="blT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><div class="pkh"><h2 id="blT">Add models</h2></div>
- <form id="blForm"><div class="blrow"><label class="f"><span>Game</span><input type="text" class="inp" id="blG" maxlength="80" placeholder="e.g. Warhammer 40,000" autocomplete="off"></label>
- <label class="f"><span>Faction or army</span><input type="text" class="inp" id="blF" maxlength="80" placeholder="Optional" autocomplete="off"></label></div>
- <div class="blrow"><label class="f bln"><span>Model or unit</span><input type="text" class="inp" id="blN" maxlength="120" required placeholder="Type any name, or pick a suggestion" autocomplete="off"></label>
+ <form id="blForm"><div class="blrow"><label class="f"><span>Game</span><input type="text" class="inp" id="blG" data-clear maxlength="80" placeholder="e.g. Warhammer 40,000" autocomplete="off"></label>
+ <label class="f"><span>Faction or army</span><input type="text" class="inp" id="blF" data-clear maxlength="80" placeholder="Optional" autocomplete="off"></label></div>
+ <div class="blrow"><label class="f bln"><span>Model or unit</span><input type="text" class="inp" id="blN" data-clear maxlength="120" required placeholder="Type any name, or pick a suggestion" autocomplete="off"></label>
  <label class="f blq"><span>How many models</span><input type="number" class="inp" id="blQty" min="1" max="999" value="1" required></label></div>
  <p class="s" id="blHint"></p>
  <fieldset class="blst"><legend>Where they're at</legend>${BL_ST.map(([k,l,c])=>`<label><i style="background:${c}"></i>${l}<input type="number" class="inp" min="0" max="999" data-bls="${k}" value="0"${k==='unbuilt'?' readonly tabindex="-1" title="The models not counted at a later stage"':''}></label>`).join('')}</fieldset>
+ <div class="f"><span>Photo <span class="s">(optional)</span></span><div class="row blphr" style="justify-content:flex-start"><img id="blPh" class="blph" alt="" hidden><label class="btn sm" for="blPf" id="blPb">Add a photo</label><input type="file" id="blPf" accept="image/*" hidden><button class="btn sm" type="button" id="blPx" hidden>Remove photo</button><span class="s" id="blPm"></span></div></div>
  <label class="f"><span>Tutorial or recipe <span class="s">(optional)</span></span><select class="inp" id="blR"><option value="">None</option></select></label>
  <div class="f"><span>Paints for it <span class="s">(optional)</span></span><div class="chips" id="blP"></div><div class="psearch" id="blPS"></div></div>
  <label class="f"><span>Notes</span><textarea class="inp" id="blNo" rows="3" maxlength="2000" placeholder="Colour scheme, what's left to do, where the box is…"></textarea></label>
@@ -851,12 +852,12 @@ function renderBacklog(){
  draw()}
 const blTabs=()=>PTABS.replace(' class="on" aria-current="page"','').replace('href="#/backlog"','href="#/backlog" class="on" aria-current="page"');
 function blRowHTML(x){const fin=x.stages.based>=x.qty,nx=BL_ST.findIndex(([k])=>x.stages[k]>0);
- return `<div class="bli${fin?' fin':''}"><div class="blt"><b>${esc(x.name)}</b>${x.qty>1?` <span class="tag">×${x.qty}</span>`:''}${x.recipe?` <a class="tag" href="#/recipe/${esc(x.recipe)}">Tutorial / recipe →</a>`:''}</div>
+ return `<div class="bli${fin?' fin':''}${x.photo?' hasph':''}">${x.photo?`<a class="blpa" href="${imgURL(x.photo)}" data-big="${esc(x.photo)}" target="_blank" rel="noopener" title="Show the photo"><img class="blph" src="${imgURL(x.photo)}" alt="${esc(x.name)}" loading="lazy"></a>`:''}<div class="blt"><b>${esc(x.name)}</b>${x.qty>1?` <span class="tag">×${x.qty}</span>`:''}${x.recipe?` <a class="tag" href="#/recipe/${esc(x.recipe)}">Tutorial / recipe →</a>`:''}</div>
  ${blBar(x.stages,x.qty)}<div class="s blsx">${esc(blStTxt(x.stages))}</div>
  ${x.paints.length?`<div class="chips blpc">${x.paints.map(k=>pchip(k)).join('')}</div>`:''}${x.notes?`<p class="s blno">${linkify(x.notes)}</p>`:''}
  <div class="row">${fin?'<span class="s">All done ✓</span>':`<button class="btn sm" type="button" data-blnx="${esc(x.id)}" title="Move one model on to the next stage">${x.qty>1?'One':'It'}'s ${BL_ST[Math.min(nx+1,4)][1].toLowerCase()} ›</button>`}<button class="btn sm" type="button" data-ble="${esc(x.id)}">Edit</button></div></div>`}
 function blSave(x,b){return (x?api('/backlog/'+x.id,{method:'PUT',body:b}):api('/backlog',{method:'POST',body:b})).then(r=>{const i=BLI.findIndex(y=>y.id===r.item.id);if(i>=0)BLI[i]=r.item;else BLI.push(r.item);BLX=null;BLNP=null;return r.item})}
-const blBody=x=>({game:x.game,faction:x.faction,name:x.name,qty:x.qty,stages:x.stages,notes:x.notes,recipe:x.recipe,paints:x.paints});
+const blBody=x=>({game:x.game,faction:x.faction,name:x.name,qty:x.qty,stages:x.stages,notes:x.notes,recipe:x.recipe,paints:x.paints,photo:x.photo});
 function blNext(x,btn){const st=Object.assign({},x.stages),i=BL_ST.findIndex(([k])=>st[k]>0);if(i<0||i>=4)return;st[BL_ST[i][0]]--;st[BL_ST[i+1][0]]++;btn.disabled=true;
  blSave(x,Object.assign(blBody(x),{stages:st})).then(()=>renderBacklog()).catch(e=>{btn.disabled=false;btn.textContent=e.message})}
 function blRecipes(sel,cur){const fill=()=>{sel.innerHTML='<option value="">None</option>'+(BLRC||[]).map(r=>`<option value="${esc(r.id)}">${esc(r.title)}${r.saved?' (saved)':''}</option>`).join('')+(cur&&!(BLRC||[]).some(r=>r.id===cur)?`<option value="${esc(cur)}">Linked tutorial</option>`:'');sel.value=cur||''};
@@ -872,6 +873,11 @@ function blEdit(x){const D=$('blDlg'),F=$('blForm');F.reset();$('blErr').textCon
  const chips=()=>{$('blP').innerHTML=paints.map(k=>pchip(k,true)).join('');$('blP').querySelectorAll('.x').forEach(s=>s.onclick=()=>{paints=paints.filter(k=>k!==s.closest('.chip').dataset.k);chips()})};chips();
  paintSearch($('blPS'),()=>paints,k=>{if(paints.length<40&&!paints.includes(k))paints.push(k);chips();$('blPS').querySelector('input').value='';$('blPS').querySelector('.res').hidden=true});
  blRecipes($('blR'),x?.recipe||'');
+ // Photo: shrunk in the browser and uploaded straight away (the site's usual check runs on it); saved with the entry.
+ let photo=x?.photo||'';const phShow=()=>{$('blPh').hidden=!photo;if(photo)$('blPh').src=imgURL(photo);$('blPx').hidden=!photo;$('blPb').textContent=photo?'Change photo':'Add a photo'};phShow();$('blPm').textContent='';
+ $('blPf').value='';$('blPf').onchange=async()=>{const f=$('blPf').files[0];if(!f)return;$('blPm').textContent='Uploading…';$('blOk').disabled=true;
+  try{photo=await uploadPhoto(f);$('blPm').textContent='';phShow()}catch(e){$('blPm').textContent=e.message}$('blOk').disabled=false;$('blPf').value=''};
+ $('blPx').onclick=()=>{photo='';phShow()};
  const hint=()=>{const g=BLX&&BLX.get($('blG').value.trim().toLowerCase()),u=$('blN').value.trim();
   $('blHint').textContent=!BLX?'':g?(g.u.size?`Tap a box to see suggestions for ${g.n}, or type any name.`:`Type the unit or kit name. Names you add for ${g.n} come up as suggestions next time.`):$('blG').value.trim()?'Any game works: type the names yourself.':'Pick or type a game. Any game, board game, display piece or kitbash works.';
   if(g&&u&&!$('blF').value.trim()){const fs=g.u.get(u);if(fs&&fs.size===1)$('blF').value=[...fs][0]}};
@@ -881,7 +887,7 @@ function blEdit(x){const D=$('blDlg'),F=$('blForm');F.reset();$('blErr').textCon
  $('blDel').onclick=()=>{const b=$('blDel');if(!b.dataset.sure){b.dataset.sure='1';b.textContent='Tap again to delete';return}b.disabled=true;
   api('/backlog/'+x.id,{method:'DELETE'}).then(()=>{BLI=BLI.filter(y=>y.id!==x.id);D.close();renderBacklog()}).catch(e=>{b.disabled=false;$('blErr').textContent=e.message})};
  F.onsubmit=ev=>{ev.preventDefault();fix();const st={};ins.forEach(i=>st[i.dataset.bls]=+i.value);const ok=$('blOk');ok.disabled=true;
-  blSave(x,{game:$('blG').value,faction:$('blF').value,name:$('blN').value,qty:+$('blQty').value,stages:st,notes:$('blNo').value,recipe:$('blR').value,paints}).then(it=>{ok.disabled=false;try{const f=localStorage.getItem('pd-blg');if(f&&f!==(it.game||'-'))localStorage.setItem('pd-blg','')}catch(e){}D.close();renderBacklog()}).catch(e=>{ok.disabled=false;$('blErr').textContent=e.message})};
+  blSave(x,{game:$('blG').value,faction:$('blF').value,name:$('blN').value,qty:+$('blQty').value,stages:st,notes:$('blNo').value,recipe:$('blR').value,paints,photo}).then(it=>{ok.disabled=false;try{const f=localStorage.getItem('pd-blg');if(f&&f!==(it.game||'-'))localStorage.setItem('pd-blg','')}catch(e){}D.close();renderBacklog()}).catch(e=>{ok.disabled=false;$('blErr').textContent=e.message})};
  D.showModal();if(!x)setTimeout(()=>$('blN').focus(),50)}
 function addTicked(empty){if(!OWN)return;const ks=P.filter(p=>p.on&&!p.mix&&p.g!=='B').map(p=>p.k),nw=ks.filter(k=>!OWN.has(k));
  if(!ks.length){if(empty)location.hash='#/paints';return}if(!nw.length)return addLbl('Already in your collection ✓');
@@ -1301,7 +1307,7 @@ async function renderAdmin(){
  let d;try{d=await api('/admin/moderation')}catch(e){el.innerHTML=`<h1>Moderation</h1><p class="err">${esc(e.message)}</p>`;return}
  const pers=u=>u?`<a href="#/u/${esc(u.id)}">${esc(u.name)}</a>${u.blocked?' <span class="tag dang">blocked</span>':''}${u.unconfirmed?' <span class="tag">email not confirmed</span>':''}`:'';
  const blockBtn=u=>u&&u.id!==ME.id&&u.name!=='(deleted account)'?`<button class="btn sm${u.blocked?'':' dan'}" type="button" data-blk="${esc(u.id)}" data-on="${u.blocked?0:1}">${u.blocked?'Unblock':'Block'} ${esc(u.name)}</button>`:'';
- const where=w=>w.type==='message'?(w.kind==='feedback'?`<a href="#/inbox/${esc(w.id)}/team">feedback conversation</a>`:'private message'):w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
+ const where=w=>w.type==='message'?(w.kind==='feedback'?`<a href="#/inbox/${esc(w.id)}/team">feedback conversation</a>`:'private message'):w.type==='chat'?`chat message in <a href="#/chat/${esc(w.id)}?m=${esc(w.msg)}"># ${esc(w.title)}</a>`:w.type==='forum'?`forum thread <a href="#/forum/t/${esc(w.id)}">${esc(w.title)}</a>`:w.type==='icon'?`<a href="#/u/${esc(w.id)}">profile icon</a>`:w.type==='backlog'?`backlog photo: ${esc(w.title)} (<a href="#/u/${esc(w.id)}">owner</a>)`:w.type==='portfolio'?`<a href="#/u/${esc(w.id)}">commission portfolio</a>`:`<a href="#/recipe/${esc(w.id)}">${esc(w.title)}</a> <span class="s">(${esc(w.kind)}, ${esc(w.visibility)})</span>`;
  const imgCard=i=>`<div class="mimg${i.hidden?' hid':''}" data-img="${esc(i.id)}"><a href="${imgURL(i.id)}" target="_blank"><img src="${imgURL(i.id)}" alt="" loading="lazy"></a>
   <div class="s">${i.hidden?'<span class="tag dang">hidden</span>':''}${SCAN[i.scan]??''} ${pers(i.user)} · ${fmtDate(i.created_at)}</div>
   <div class="s">${i.used.length?'Used in '+i.used.map(where).join(', '):'Not used anywhere yet'}</div>
