@@ -1,0 +1,9 @@
+// Only for applying migrations to the PR test-site database (the live one is in wrangler.jsonc):
+//   npx wrangler d1 migrations apply PREVIEW_DB --remote --config wrangler.preview-migrations.jsonc
+// Keep database_id the same as previews.d1_databases in wrangler.jsonc.
+{
+  "name": "painters-desk",
+  "d1_databases": [
+    { "binding": "PREVIEW_DB", "database_name": "painters-desk-preview", "database_id": "d7c0ac57-5cee-4155-83f4-6621dbe8671f", "migrations_dir": "migrations" }
+  ]
+}
