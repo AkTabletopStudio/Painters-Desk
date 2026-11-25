@@ -7,14 +7,14 @@
 <style>
 :root{--bg:#f4f2ee;--fg:#222;--mut:#666;--card:#fff;--line:#d8d4cc}
 @media (prefers-color-scheme:dark){:root{--bg:#1a1a1a;--fg:#eee;--mut:#9a9a9a;--card:#262626;--line:#3a3a3a}}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;padding:12px}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;padding:calc(12px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
 .wrap{max-width:760px;margin:auto}
 h1{font-size:22px;margin:8px 0 2px}h2{font-size:16px;margin:22px 0 4px}
 p,li{margin:6px 0}ul{padding-left:22px}
 .s{color:var(--mut);font-size:13px}
 a{color:inherit}
 </style></head><body><div class="wrap">
-<p><a href="./">← The Painters Desk</a></p>
+<p><a href="/">← The Painters Desk</a></p>
 <h1>Site rules</h1>
 <p class="s">Last updated 31 October 2026</p>
 
