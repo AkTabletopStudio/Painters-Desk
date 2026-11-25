@@ -30,7 +30,7 @@ const NAV0 = '<nav class="top"><a href="/">Colour wheel</a><a href="/paints">Pai
 let THEME = { js: '', css: '', nav: NAV0, dlg: '' };
 
 export function isSeoPath(p) {
-  return p === '/sitemap.xml' || p === '/about' || p === '/paints' || p.startsWith('/paints/') || p === '/guides' || p.startsWith('/guides/');
+  return p === '/sitemap.xml' || p === '/about' || p === '/privacy' || p === '/terms' || p === '/paints' || p.startsWith('/paints/') || p === '/guides' || p.startsWith('/guides/');
 }
 
 export async function seo(request, env, url) {
@@ -40,6 +40,7 @@ export async function seo(request, env, url) {
   let r;
   if (p === '/sitemap.xml') r = send(sitemap(D, await allPaintPhotos(env)), 'application/xml; charset=utf-8');
   else if (p === '/about') r = send(aboutPage(D));
+  else if (p === '/privacy' || p === '/terms') r = send(legalPage(await legalSource(env, url, p), p));
   else if (p === '/paints') r = send(indexPage(D));
   else if (p === '/paints/search.json') return send(searchIndex(D), 'application/json; charset=utf-8');
   else if (p === '/paints/search') {
@@ -325,7 +326,7 @@ export function page({ title, desc, path, crumbs, body, ld = [], og = 'website',
   };
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
 <link rel="canonical" href="${SITE}${path}">
@@ -347,8 +348,11 @@ ${THEME.js}
 :root{--bg:#fff4de;--fg:#1b1b1b;--mut:#5c5444;--card:#fff;--ink:#1b1b1b;--line:#1b1b1b;--soft:#fff9ee;--yel:#ffd23f;--red:#f2545b;--org:#ff9f1c;--tea:#2ec4b6;--blu:#3a86ff;--pur:#8338ec;--sh:var(--ink);--hf:'Archivo Black',sans-serif}
 @media (prefers-color-scheme:dark){:root:not([data-look]){--bg:#1d1a15;--fg:#f6eedd;--mut:#c2b69e;--card:#2b2720;--ink:#e9dcc0;--line:#e9dcc0;--soft:#24211b}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Rubik,system-ui,-apple-system,Segoe UI,sans-serif;padding:0 16px 24px}
-body::before{content:"";display:block;height:12px;margin:0 -16px 14px;background:linear-gradient(90deg,var(--red) 0 16.66%,var(--org) 0 33.33%,var(--yel) 0 50%,var(--tea) 0 66.66%,var(--blu) 0 83.33%,var(--pur) 0)}
+/* In the iPhone app the page runs under the status bar: keep everything below it (and clear of the notch sideways), with a strip of page colour behind the clock. */
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Rubik,system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top,0px) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html::after{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:2147483000;pointer-events:none}
+body::before{content:"";display:block;height:12px;margin:0 calc(-1 * max(16px,env(safe-area-inset-right,0px))) 14px calc(-1 * max(16px,env(safe-area-inset-left,0px)));background:linear-gradient(90deg,var(--red) 0 16.66%,var(--org) 0 33.33%,var(--yel) 0 50%,var(--tea) 0 66.66%,var(--blu) 0 83.33%,var(--pur) 0)}
 .wrap{max-width:960px;margin:auto}.navw{max-width:1100px}@media (min-width:1000px){.navw{max-width:1440px}}
 a{color:inherit}
 .btn{display:inline-block;font:700 15px Rubik,sans-serif;background:var(--yel);color:#1b1b1b;border:3px solid var(--ink);border-radius:12px;padding:8px 14px;box-shadow:3px 3px 0 var(--sh);text-decoration:none}
@@ -417,8 +421,9 @@ dialog.pl{max-width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);
 .plx{position:sticky;top:-10px;float:right;margin:-10px -10px 4px 8px;z-index:3;width:36px;height:36px;border-radius:50%;border:3px solid var(--ink);background:var(--card);color:var(--fg);font:700 20px/1 Rubik,sans-serif;cursor:pointer;box-shadow:2px 2px 0 var(--sh)}
 .plh{display:flex;gap:14px;align-items:center;padding-right:36px}.plh h2{margin:0}dialog.pl .plh p{margin:4px 0 0}.pls{flex:none;width:64px;height:64px;border-radius:50%;border:3px solid var(--ink)}
 dialog.pl .row{justify-content:flex-start;margin:14px 0 4px}dialog.pl h3{margin:14px 0 6px;font-size:16px}dialog.pl ul.m li{padding:4px 0}dialog.pl p.s{margin:8px 0 0;font-size:13px}.btn.pri{background:var(--yel)}
+.legal h2{margin:20px 0 6px}.legal h2:first-child{margin-top:0}.legal p.s{margin:0 0 12px}
 ${THEME.css}</style></head>
-<body><div class="wrap navw">${path === '/' || path === '/about' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') && path !== '/guides/' + ALL_SLUG ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
+<body><div class="wrap navw">${path === '/' || path === '/about' || path === '/privacy' || path === '/terms' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') && path !== '/guides/' + ALL_SLUG ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
 ${ptabs(path)}${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
@@ -1699,6 +1704,24 @@ function guidesPage(D) {
 }
 
 /* ---------- /about: who makes the site and how the colours and matches are worked out ---------- */
+
+// The privacy policy and site rules. Their words live in privacy.html and terms.html (kept as plain pages so they
+// still read without the Worker); here they get the site's look, top nav and footer like every other page.
+async function legalSource(env, url, p) {
+  const r = await env.ASSETS.fetch(new Request(new URL(p, url.origin)));
+  return r.ok ? r.text() : '';
+}
+function legalPage(src, path) {
+  const title = ((src.match(/<title>([^<]*)<\/title>/) || [])[1] || 'The Painters Desk').replace(/&middot;|·/g, '·');
+  const a = src.indexOf('<h1>'), b = src.lastIndexOf('</div></body>');
+  let inner = a >= 0 && b > a ? src.slice(a, b) : '<h1>Not available</h1><p>This page could not be loaded. Please try again.</p>';
+  const h1 = (inner.match(/<h1>[\s\S]*?<\/h1>/) || [''])[0];
+  inner = inner.slice(h1.length);
+  const first = (inner.match(/<p>([\s\S]*?)<\/p>/) || [, ''])[1].replace(/<[^>]+>/g, '');
+  const name = title.split(' · ')[0];
+  return page({ title, desc: first.slice(0, 300), path, crumbs: [['The Painters Desk', '/'], [name, path]],
+    body: `${h1}\n<section class="panel prose legal">${inner}</section>` });
+}
 
 function aboutPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0).toLocaleString('en'), nb = D.brands.length;
