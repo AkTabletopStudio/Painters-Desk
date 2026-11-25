@@ -1686,6 +1686,7 @@ function aboutPage(D) {
 <p>The site is made and run by AK Tabletop Studio, which is me: one painter and gamer. The AK stands for Alaska, where I was born and raised (so no connection to AK Interactive).</p>
 <p>I started playing tabletop games in the 90s, when I got hold of my first Games Workshop miniatures from Rogue Trader, then moved on to Warhammer 40,000. The Black Templars vs Dark Eldar box set started my Black Templars army and my painting journey.</p>
 <p>I took a long break from the hobby, from 4th edition to 9th. In that time I played Magic: The Gathering, D&amp;D, the One Piece and Gundam card games, countless other card games and plenty of video games. Now I'm back in full force, painting, playing Warhammer with friends and enjoying the community again.</p>
+<p>On my desk at the moment: Dark Angels, Tyranids and Necrons for 40K, with a dabble in other Space Marine chapters, and Stormcast Eternals, Sons of Behemat and Soulblight Gravelords for Age of Sigmar.</p>
 <p>The Painters Desk started in October 2026 because, coming back to painting, I kept asking the question every painter asks when a pot runs out: what is the closest paint I can actually buy? New brands, guides and tools are added most weeks; the <a href="/#/changelog">What's new</a> page lists every change.</p>
 <p>The site is independent. It is not owned by, paid by or affiliated with any paint brand, and no brand pays to appear on it or to be listed as a match.</p>
 <h2>Where the colours come from</h2>
