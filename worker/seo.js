@@ -29,7 +29,7 @@ const NAV0 = '<nav class="top"><a href="/">Colour wheel</a><a href="/paints">Pai
 let THEME = { js: '', css: '', nav: NAV0, dlg: '' };
 
 export function isSeoPath(p) {
-  return p === '/sitemap.xml' || p === '/paints' || p.startsWith('/paints/') || p === '/guides' || p.startsWith('/guides/');
+  return p === '/sitemap.xml' || p === '/about' || p === '/paints' || p.startsWith('/paints/') || p === '/guides' || p.startsWith('/guides/');
 }
 
 export async function seo(request, env, url) {
@@ -38,6 +38,7 @@ export async function seo(request, env, url) {
   const p = url.pathname.replace(/\/+$/, '') || '/';
   let r;
   if (p === '/sitemap.xml') r = send(sitemap(D), 'application/xml; charset=utf-8');
+  else if (p === '/about') r = send(aboutPage(D));
   else if (p === '/paints') r = send(indexPage(D));
   else if (p === '/paints/search.json') return send(searchIndex(D), 'application/json; charset=utf-8');
   else if (p === '/paints/search') {
@@ -285,7 +286,8 @@ const CLOSE_TXT = 'under 1.5 is a perfect match (you’d struggle to tell them a
 
 const OG_IMAGE = SITE + '/icons/og-image-2026-11-17.jpg';
 const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painters Desk', url: SITE + '/', publisher: { '@id': SITE + '/#org' } };
-const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png' };
+const FB_PAGE = 'https://www.facebook.com/profile.php?id=61596527891779';
+const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png', sameAs: [FB_PAGE] };
 
 // Paint pop-up on guide pages: tapping a paint opens this instead of leaving the guide, with a button to the full paint page.
 // Paint links are /paints/<brand>/<paint>; ctrl/shift/middle clicks still open the page as normal.
@@ -405,13 +407,13 @@ dialog.pl{max-width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);
 .plh{display:flex;gap:14px;align-items:center;padding-right:36px}.plh h2{margin:0}dialog.pl .plh p{margin:4px 0 0}.pls{flex:none;width:64px;height:64px;border-radius:50%;border:3px solid var(--ink)}
 dialog.pl .row{justify-content:flex-start;margin:14px 0 4px}dialog.pl h3{margin:14px 0 6px;font-size:16px}dialog.pl ul.m li{padding:4px 0}dialog.pl p.s{margin:8px 0 0;font-size:13px}.btn.pri{background:var(--yel)}
 ${THEME.css}</style></head>
-<body><div class="wrap navw">${path === '/' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') && path !== '/guides/' + ALL_SLUG ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
+<body><div class="wrap navw">${path === '/' || path === '/about' ? THEME.nav : THEME.nav.replace(`data-v="${path.startsWith('/guides') && path !== '/guides/' + ALL_SLUG ? 'guides' : 'list'}"`, '$& class="on"')}</div><div class="wrap">
 ${ptabs(path)}${path.startsWith('/paints') ? searchBox(path === '/paints/search' ? q : '') : ''}<nav class="crumbs">${crumbs.map(([n, u], k) => k === crumbs.length - 1 ? esc(n) : `<a href="${u}">${esc(n)}</a>`).join(' › ')}</nav>
 ${body}
 <footer><p>© 2026 AK Tabletop Studio. Swatch colours are estimates and will differ from the real paints; cross-brand matches are close, never exact.
 Chart-listed matches come from the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart; the rest are a nearest-colour calculation.
 The Painters Desk is unofficial and not affiliated with or endorsed by any paint brand. Paint names are trademarks of their owners.
-<a href="/paints">All brands</a> · <a href="/guides">Guides</a> · <a href="/privacy">Privacy policy</a> · <a href="/terms">Site rules</a></p></footer>
+<a href="/paints">All brands</a> · <a href="/guides">Guides</a> · <a href="/about">About</a> · <a href="/privacy">Privacy policy</a> · <a href="/terms">Site rules</a></p></footer>
 </div>
 ${THEME.dlg}
 ${path.startsWith('/guides') ? PL_DLG : ''}
@@ -1671,6 +1673,47 @@ function guidesPage(D) {
   return page({ title, desc, path: '/guides', body, crumbs: [['Guides', '/guides']], ld: [webPage('/guides', title, desc, 'CollectionPage')] });
 }
 
+/* ---------- /about: who makes the site and how the colours and matches are worked out ---------- */
+
+function aboutPage(D) {
+  const n = D.brands.reduce((a, b) => a + b.paints.length, 0).toLocaleString('en'), nb = D.brands.length;
+  const title = 'About The Painters Desk';
+  const desc = `Who makes The Painters Desk, where its ${n} paint swatches and cross-brand matches come from, and how accurate they are.`;
+  const body = `<style>.agal{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:8px 0 14px;max-width:720px}@media (max-width:560px){.agal{grid-template-columns:repeat(2,1fr)}}.agal figure{margin:0}.agal img{width:100%;height:auto;aspect-ratio:3/4;object-fit:cover;border:3px solid var(--ink);border-radius:10px;display:block;box-sizing:border-box}.agal figcaption{font-size:13px;color:var(--mut);margin-top:4px;line-height:1.35}</style>
+<h1>About The Painters Desk</h1>
+<section class="panel prose">
+<p>The Painters Desk is a free colour wheel and paint finder for miniature painters. It puts ${n} hobby paints from ${nb} brands on one wheel, so you can find a paint's closest match in another brand, pick colours that work together, and plan highlight ramps from the paints you own.</p>
+<h2>Who makes it</h2>
+<p>The site is made and run by AK Tabletop Studio, which is me: one painter and gamer. The AK stands for Alaska, where I was born and raised (so no connection to AK Interactive).</p>
+<p>I started playing tabletop games in the 90s, when I got hold of my first Games Workshop miniatures from Rogue Trader, then moved on to Warhammer 40,000. The Black Templars vs Dark Eldar box set started my Black Templars army and my painting journey.</p>
+<p>I took a long break from the hobby, from 4th edition to 9th. In that time I played Magic: The Gathering, D&amp;D, the One Piece and Gundam card games, countless other card games and plenty of video games. Now I'm back in full force, painting, playing Warhammer with friends and enjoying the community again.</p>
+<p>On my desk at the moment: Dark Angels, Imperial Knights, Tyranids and Necrons for 40K, with a dabble in other Space Marine chapters, and Stormcast Eternals, Sons of Behemat and Soulblight Gravelords for Age of Sigmar.</p>
+<p>The Painters Desk started in October 2026 because, coming back to painting, I kept asking the question every painter asks when a pot runs out: what is the closest paint I can actually buy? New brands, guides and tools are added most weeks; the <a href="/#/changelog">What's new</a> page lists every change.</p>
+<p>The site is independent. It is not owned by, paid by or affiliated with any paint brand, and no brand pays to appear on it or to be listed as a match.</p>
+<h2>From my painting desk</h2>
+<p>Some of what I've painted since coming back, mostly Dark Angels, plus the Red Terror, which is still on the desk. The pile of shame is big, so there's always more on the way.</p>
+<div class="agal"><figure><img src="/images/about/dark-angels-army.jpg" alt="My Dark Angels army, with Imperial Knights behind" loading="lazy" width="300" height="400"><figcaption>Dark Angels army</figcaption></figure><figure><img src="/images/about/belial.jpg" alt="Belial, Grand Master of the Deathwing" loading="lazy" width="300" height="400"><figcaption>Belial</figcaption></figure><figure><img src="/images/about/deathwing-knights.jpg" alt="Deathwing Knights" loading="lazy" width="300" height="400"><figcaption>Deathwing Knights</figcaption></figure><figure><img src="/images/about/azrael.jpg" alt="Azrael, Supreme Grand Master of the Dark Angels" loading="lazy" width="300" height="400"><figcaption>Azrael</figcaption></figure><figure><img src="/images/about/phobos-librarian.jpg" alt="Phobos Librarian" loading="lazy" width="300" height="400"><figcaption>Phobos Librarian</figcaption></figure><figure><img src="/images/about/emperors-champion.jpg" alt="Emperor's Champion in Dark Angels green" loading="lazy" width="300" height="400"><figcaption>Emperor's (Lion's?) Champion</figcaption></figure><figure><img src="/images/about/inceptor.jpg" alt="Inceptor on jump-pack smoke trails" loading="lazy" width="300" height="400"><figcaption>Inceptor</figcaption></figure><figure><img src="/images/about/mouse-knight.jpg" alt="Mouse knight from Dragon Trappers Lodge" loading="lazy" width="300" height="400"><figcaption>Dragon Trappers Lodge mouse knight</figcaption></figure><figure><img src="/images/about/red-terror.jpg" alt="The Red Terror, a Tyranid still in progress" loading="lazy" width="300" height="400"><figcaption>The Red Terror (in progress)</figcaption></figure></div>
+<h2>Where the colours come from</h2>
+<p>Every swatch is an estimate. Paint looks different on a screen than in the pot, and different again over a white or black primer, so treat a swatch as a guide, not a promise. Swatches are sampled from the best source available for each range, in this order:</p>
+<ul>
+<li>the maker's own colour charts and equivalence tables,</li>
+<li>photos of hand-painted swatch cards,</li>
+<li>photo databases of airbrushed bottle caps (many Vallejo Game Color swatches and some Pro Acryl and AK 3rd Gen swatches come from Antinea's databases).</li>
+</ul>
+<p>A colour is never replaced from a source that can't be checked. If you think a swatch is wrong, tell us with the Feedback button on any page of the site.</p>
+<h2>How matches are found</h2>
+<p>Each paint page lists its closest paints in every other brand. Matches that a published chart lists come first: the Two Thin Coats Paint Comparison Chart 2024, the Army Painter Warpaints Fanatic conversion chart, the AK 3rd Generation Acrylics equivalence table (2021) and the Herrick Games hobby paint comparison chart. The rest are found by colour difference (CIEDE2000, the standard measure of how different two colours look), comparing only paints of the same kind, so a metallic is matched with metallics and a wash with washes. Matches are close, never exact.</p>
+<p>The <a href="/guides/colour-theory">colour theory guide</a> explains how the wheel places paints and picks complementary and neighbouring colours.</p>
+<h2>Contact</h2>
+<p>Use the Feedback button on any page of the site to report a wrong colour, ask for a brand, or say hello; every message is read. You can also find us on <a href="${FB_PAGE}" rel="noopener">Facebook</a>.</p>
+<p class="s">Paint names are trademarks of their owners. See the <a href="/privacy">privacy policy</a> and <a href="/terms">site rules</a>.</p>
+</section>`;
+  return page({
+    title, desc, path: '/about', crumbs: [['Home', '/'], ['About', '/about']], body,
+    ld: [{ '@type': 'AboutPage', '@id': SITE + '/about#page', image: SITE + '/images/about/dark-angels-army.jpg', url: SITE + '/about', name: title, description: desc, about: { '@id': SITE + '/#site' }, publisher: { '@id': SITE + '/#org' } }],
+  });
+}
+
 function notFound() {
   return page({
     title: 'Paint not found', desc: 'That paint page does not exist.', path: '/paints',
@@ -1694,7 +1737,7 @@ export async function pageNotFound(request, env, url) {
 }
 
 function sitemap(D) {
-  const u = ['/', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...(PALS.length ? ['/guides/palettes', ...PALS.map(x => '/guides/palettes/' + x.s)] : []), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
+  const u = ['/', '/about', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...(PALS.length ? ['/guides/palettes', ...PALS.map(x => '/guides/palettes/' + x.s)] : []), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
     '/paints/colour-standards', ...standards(D).map(x => '/paints/colour-standards/' + x.slug), ...keptVsUrls(D)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     u.map(x => `<url><loc>${SITE}${esc(x)}</loc></url>`).join('\n') + '\n</urlset>\n';
