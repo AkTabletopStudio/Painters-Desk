@@ -660,16 +660,28 @@ const t=p.lab,pool=P.filter(q=>own(q)&&!q.mix&&q!==p&&q.g!=='B'&&nmmOK(q));pool.
 const T=KSv(p.h),W=T.map(k=>1/(k+.08)**2),dl=l=>de00(l,t),n=pool.length;
 const near=pool.map(q=>({q,d:dE(p,q)})).sort((a,b)=>a.d-b.d),one=near[0]||null;
 // Quick pass: for every pair, the best straight-line fit in K/S space (where pigment mixing is linear), weighted toward the target.
-const cand=[];for(let i=0;i<n;i++){const A=pool[i].ks;for(let j=i+1;j<n;j++){const B=pool[j].ks;let num=0,den=0,r=0;
- for(let k=0;k<3;k++){const u=B[k]-A[k];num+=W[k]*u*(T[k]-A[k]);den+=W[k]*u*u}const f=den?Math.min(.9,Math.max(.1,num/den)):.5;
- for(let k=0;k<3;k++){const e=A[k]+f*(B[k]-A[k])-T[k];r+=W[k]*e*e}cand.push([r,i,j])}}
+// Scores go in a typed array and only the best 400 pairs are sorted: with a few hundred paints owned there are tens of thousands of
+// pairs, and building and sorting one object per pair was most of the time the Paints tab took to settle on phones.
+const np=n*(n-1)/2,R=new Float64Array(np);let z=0;
+const KS=new Float64Array(n*3);pool.forEach((q,i)=>{KS[i*3]=q.ks[0];KS[i*3+1]=q.ks[1];KS[i*3+2]=q.ks[2]});
+const[W0,W1,W2]=W,[T0,T1,T2]=T;
+for(let i=0;i<n;i++){const a0=KS[i*3],a1=KS[i*3+1],a2=KS[i*3+2],d0=T0-a0,d1=T1-a1,d2=T2-a2;for(let j=i+1;j<n;j++){
+ const u0=KS[j*3]-a0,u1=KS[j*3+1]-a1,u2=KS[j*3+2]-a2,num=W0*u0*d0+W1*u1*d1+W2*u2*d2,den=W0*u0*u0+W1*u1*u1+W2*u2*u2,f=den?Math.min(.9,Math.max(.1,num/den)):.5;
+ const e0=f*u0-d0,e1=f*u1-d1,e2=f*u2-d2;R[z++]=W0*e0*e0+W1*e1*e1+W2*e2*e2}}
+const lim4=np>400?R.slice().sort()[399]:Infinity,cand=[];z=0;
+for(let i=0;i<n;i++)for(let j=i+1;j<n;j++,z++)if(R[z]<=lim4)cand.push([R[z],i,j]);
 cand.sort((a,b)=>a[0]-b[0]);
 const two=cand.slice(0,400).map(([,i,j])=>{const A=pool[i].ks,B=pool[j].ks;let best=null;
  for(const[a,b]of MX2){const d=dl(ksLab([0,1,2].map(k=>(a*A[k]+b*B[k])/(a+b))));if(!best||d<best.d)best={m:[[pool[i],a],[pool[j],b]],d}}return best}).sort((a,b)=>a.d-b.d);
 // Three paints: the paints that turn up in the best pairs plus the nearest singles, every trio of them, small whole-number parts.
 const top=[...new Set([...two.slice(0,30).flatMap(x=>x.m.map(y=>y[0])),...near.slice(0,8).map(x=>x.q)])].slice(0,22),three=[];
-for(let i=0;i<top.length;i++)for(let j=i+1;j<top.length;j++)for(let k=j+1;k<top.length;k++){const q=[top[i],top[j],top[k]];let best=null;
- for(const w of MX3){const s=w[0]+w[1]+w[2],d=dl(ksLab([0,1,2].map(c=>(w[0]*q[0].ks[c]+w[1]*q[1].ks[c]+w[2]*q[2].ks[c])/s)));if(!best||d<best.d)best={m:q.map((x,z)=>[x,w[z]]),d}}three.push(best)}
+// Each trio first scores its part splits with the same cheap K/S-space fit as the pairs, and only its 6 best splits get the full
+// colour check (about a tenth of the work, which made a big collection slow on phones).
+const r3=new Float64Array(MX3.length),o3=MX3.map((w,z)=>z);
+for(let i=0;i<top.length;i++)for(let j=i+1;j<top.length;j++)for(let k=j+1;k<top.length;k++){const q=[top[i],top[j],top[k]],a=q[0].ks,b=q[1].ks,c=q[2].ks;let best=null;
+ for(let z=0;z<MX3.length;z++){const w=MX3[z],s=w[0]+w[1]+w[2];let r=0;for(let h=0;h<3;h++){const e=(w[0]*a[h]+w[1]*b[h]+w[2]*c[h])/s-T[h];r+=W[h]*e*e}r3[z]=r}
+ o3.sort((x,y)=>r3[x]-r3[y]);
+ for(let u=0;u<6;u++){const w=MX3[o3[u]],s=w[0]+w[1]+w[2],d=dl(ksLab([0,1,2].map(h=>(w[0]*a[h]+w[1]*b[h]+w[2]*c[h])/s)));if(!best||d<best.d)best={m:q.map((x,z)=>[x,w[z]]),d}}three.push(best)}
 three.sort((a,b)=>a.d-b.d);
 // Keep mixes that beat the closest paint they already own, no pair twice, the larger share first. A 3-paint mix has to earn its place.
 const out=[],seen=new Set(),lim=one?one.d-.8:99;
@@ -858,7 +870,10 @@ const SG_ESS=[['bwash','Brown wash','#4a3524',p=>/wash|ink/.test(paintType(p))&&
 function sgEss(ownSet,pref,hide){const pool=P.filter(p=>!p.mix&&p.g!=='B');
  return SG_ESS.map(([id,name,h,ok])=>{const t=hexLab(h),have=pool.filter(p=>ownSet.has(p.k)&&ok(p));if(have.length)return{id,name,have};
   const c=pool.filter(p=>!ownSet.has(p.k)&&!hide.has(p.k)&&ok(p)).sort((a,b)=>(pref(b)-pref(a))||d76(a.lab,t)-d76(b.lab,t));return{id,name,have,p:c[0]||null,alt:c.slice(1,3).filter(q=>pref(q)===pref(c[0]))}})}
-// opt: n = how many suggestions, brand = only shop from this brand (index into BRANDS), hide = paint keys marked Not interested.
+// The mix check is the slow part, so the Paints tab runs it a row at a time (opt.noMix, then sgMixOne per row and sgMixSort).
+function sgMixOne(o){const m=mixFor(o.p).mixes[0];if(m&&m.d<8)o.mix=m}
+const sgMixSort=l=>[...l.filter(o=>!o.mix),...l.filter(o=>o.mix)];
+// opt: n = how many suggestions, noMix = leave out the mix check, brand = only shop from this brand (index into BRANDS), hide = paint keys marked Not interested.
 function suggestPaints(ownSet,opt={}){const all=P.filter(sgOK),own=all.filter(p=>ownSet.has(p.k)),hide=opt.hide||new Set(),N=opt.n||10;if(!own.length)return null;
 // Ramps: fixed bases for NMM, OSL, gems and skin; zenithal and edge highlights on the most saturated owned mid/dark paint of each hue.
 const bases=SG_FIX.map(([q,n,h])=>({q,n,b:{lab:hexLab(h),h}})),pk={};
@@ -877,8 +892,10 @@ Object.values(cells).forEach(c=>{c.ok=c.ps.length>=4;c.t=[0,1,2].map(i=>med(c.ps
 const gain=(p,x,c)=>x.kind==='cov'?(c===x.cell?12+Math.max(0,8-d76(p.lab,x.t))/2:0):(()=>{const d=d76(p.lab,x.t);return d<7&&d<x.d-4?Math.min(x.d,25)-d:0})();
 // Paints from a range the user already has get a small lead, and a paint name is only suggested once (some ranges repeat names).
 const myG=new Set(own.map(p=>p.g)),taken=new Set(own.map(p=>p.n.trim().toLowerCase()));
-function pick(gs,cands,n){const out=[];for(let r=0;r<n;r++){let best=null,bs=0,bf=[];
- cands.forEach(p=>{if(taken.has(p.n.trim().toLowerCase()))return;const c=sgCell(p);let s=0,f=[];gs.forEach(x=>{if(x.done)return;const v=gain(p,x,c);if(v){s+=v;f.push(x)}});if(myG.has(p.g))s*=1.25;if(s>bs){bs=s;best=p;bf=f}});
+// What each candidate would close is worked out once (it doesn't change between rounds); each round only skips the gaps already closed.
+function pick(gs,cands,n){const out=[],GN=new Map();cands.forEach(p=>{const c=sgCell(p),l=[];gs.forEach(x=>{const v=gain(p,x,c);if(v)l.push(x,v)});if(l.length)GN.set(p,l)});
+ for(let r=0;r<n;r++){let best=null,bs=0,bf=[];
+ GN.forEach((l,p)=>{if(taken.has(p.n.trim().toLowerCase()))return;let s=0,f=[];for(let z=0;z<l.length;z+=2){const x=l[z];if(x.done)continue;s+=l[z+1];f.push(x)}if(myG.has(p.g))s*=1.25;if(s>bs){bs=s;best=p;bf=f}});
  if(!best||bs<5)break;bf.forEach(x=>x.done=1);taken.add(best.n.trim().toLowerCase());
  // A couple of alternatives that close most of the same gaps.
  const an=new Set(),alt=cands.filter(p=>!taken.has(p.n.trim().toLowerCase())).map(p=>{const c=sgCell(p);return{p,s:bf.reduce((a,x)=>a+gain(p,x,c),0)}}).filter(a=>a.s>=bs*.6).sort((a,b)=>b.s-a.s).filter(a=>{const k=a.p.n.trim().toLowerCase();return!an.has(k)&&an.add(k)}).slice(0,2).map(a=>a.p);
@@ -887,12 +904,12 @@ function pick(gs,cands,n){const out=[];for(let r=0;r<n;r++){let best=null,bs=0,b
 const myB=new Set(own.map(p=>BR_OF[p.g])),hn=new Set(P.filter(p=>hide.has(p.k)).map(p=>p.n.trim().toLowerCase())),cand=all.filter(p=>!ownSet.has(p.k)&&!hide.has(p.k)&&!hn.has(p.n.trim().toLowerCase())),one=opt.brand!=null&&BRANDS[opt.brand];
 const mine=pick(gaps,cand.filter(p=>one?BR_OF[p.g]===opt.brand:myB.has(BR_OF[p.g])),N),other=one?[]:pick(gaps,cand.filter(p=>!myB.has(BR_OF[p.g])),Math.ceil(N/2));
 // A suggestion you can already mix closely (ΔE under 8) from your own paints says so and moves to the end of its list.
-const mx=l=>{l.forEach(o=>{const m=mixFor(o.p).mixes[0];if(m&&m.d<8)o.mix=m});return[...l.filter(o=>!o.mix),...l.filter(o=>o.mix)]};
+const mx=l=>{l.forEach(sgMixOne);return sgMixSort(l)};
 const pref=p=>one?(BR_OF[p.g]===opt.brand?2:0):(myG.has(p.g)?2:myB.has(BR_OF[p.g])?1:0);
 // An essential that one of the suggestions already covers is tagged on that suggestion instead of getting its own row.
 const ess=sgEss(ownSet,pref,new Set([...hide,...P.filter(p=>taken.has(p.n.trim().toLowerCase())).map(p=>p.k)]));
 ess.forEach(x=>{if(x.have.length)return;const ok=SG_ESS.find(e=>e[0]===x.id)[3],o=[...mine,...other].find(o=>ok(o.p));if(o){o.fills.push({g:'Essential',r:[x.name]});x.by=o.p;x.p=null}});
-return{ramps,cells,mine:mx(mine),other:mx(other),ess,left:gaps.filter(x=>!x.done).length,brands:one?[one[0]]:[...myB].map(i=>BRANDS[i][0]),one:!!one}}
+return{ramps,cells,mine:opt.noMix?mine:mx(mine),other:opt.noMix?other:mx(other),ess,left:gaps.filter(x=>!x.done).length,brands:one?[one[0]]:[...myB].map(i=>BRANDS[i][0]),one:!!one}}
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 // Site theme picker. The choice lives in localStorage pd-look; an inline script in index.html applies it before first paint.

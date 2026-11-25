@@ -496,8 +496,11 @@ fieldset.blst{border:3px solid var(--ink);border-radius:14px;padding:8px 12px 12
 .ctabs a.on{background:var(--ink);color:var(--bg)}
 .ctabs a:focus-visible{outline:3px solid var(--yel);outline-offset:-5px}
 /* Phones: two rows of three tabs, split by the ink showing through the gaps */
-@media (max-width:560px){.ctabs{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--ink)}.ctabs a+a{border-left:0}.ctabs a{font-size:14px;padding:9px 2px}:root[data-look^=classic] .ctabs{gap:1px}}
-/* Paints sub-tabs (All paints | My paints | Conversion chart): .ptabs, shared by the app and the Worker paint/guide pages. Short labels on phones. */
+@media (max-width:560px){.ctabs{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--ink)}.ctabs a+a{border-left:0}.ctabs a{font-size:14px;padding:9px 2px}:root[data-look^=classic] .ctabs{gap:1px}
+/* No empty cells (they showed as a solid ink block): four tabs sit two by two, and a short last row stretches its tabs across. */
+.ctabs a:last-child:nth-child(3n+1){grid-column:1/-1}.ctabs a:last-child:nth-child(3n+2){grid-column:span 2}
+.ctabs:has(>a:nth-child(4):last-child){grid-template-columns:repeat(2,1fr)}.ctabs:has(>a:nth-child(4):last-child) a{grid-column:auto}}
+/* Paints sub-tabs (All paints | My paints | Backlog | Conversion chart): .ptabs, shared by the app and the Worker paint/guide pages. Short labels on phones. */
 .ptabs .sh{display:none}@media (max-width:560px){.ptabs .lg{display:none}.ptabs .sh{display:inline}}
 /* Clear (x) button on search boxes, added by sxInit() in app.js and the paint/guide page script. */
 .sx{position:relative;display:inline-flex;vertical-align:middle;min-width:0}.sx>input{flex:1 1 auto;min-width:0}
@@ -994,6 +997,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>25 November 2026</h2><ul>
+<li data-a="mypaints"><span class="tg fx">Fixed</span><b>Paints tab on phones.</b> The All paints / My paints / Backlog / Chart tabs now sit two by two with no black block beside them, and My paints opens much faster with a big collection: the full paint list in Edit my collection is only built when you open it, and Suggested paints is worked out about three times faster.</li>
 <li data-a="community"><span class="tg nw">New</span><b>Showcase.</b> Under Tutorials &amp; Community, the new <b>Showcase</b> tab is a wall of models painters have posted, each photo with who painted it. Post yours with <b>📷 Post a model</b>: a photo is all it needs, and you can add more photos, tag the paints you used and write as much or as little as you like. Your posts also show in a Showcase section on your profile.</li>
 <li data-a="site"><span class="tg nw">New</span><b>About page.</b> A new <a href="about">About</a> page says who makes The Painters Desk, where the swatch colours come from, how cross-brand matches are found and how to get in touch. It is linked at the bottom of every page.</li>
 <li data-a="recipes"><span class="tg nw">New</span><b>Random palette challenge.</b> Under Tutorials &amp; Community, the new <b>Challenges</b> tab gives you a random palette from your own paints that still works as a colour scheme (complementary, split, analogous, triadic and more), with a shade, a highlight, neutrals and sometimes a metal and a wash. Reroll it or swap single paints, take the challenge, paint a model with only those paints, then post a photo of it with the palette you were given. You can also take on someone else's palette from their post.</li>
