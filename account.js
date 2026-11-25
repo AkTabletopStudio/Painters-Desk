@@ -616,6 +616,8 @@ async function loadPlanRecs(){if(PLRECS)return;const m=new Map();
  PLRECS=m;renderPlan()}
 // Paints sub-tabs, the same strip worker/seo.js puts on /paints and /guides/conversion-chart.
 const PTABS='<nav class="ctabs ptabs" aria-label="Paints"><a href="/paints">All paints</a><a href="#/paints" class="on" aria-current="page">My paints</a><a href="#/backlog">Backlog</a><a href="/guides/conversion-chart"><span class="lg">Conversion chart</span><span class="sh">Chart</span></a></nav>';
+// Suggested paints for the last collection seen, so going back to the Paints tab doesn't work them out again.
+let SUGC=null,SUGT=0;
 function renderPaints(){
  const el=$('v-paints');
  if(!ME){el.innerHTML=PTABS+'<h1>My paints</h1>'+signInLink('Your collection is saved to your account.');return}
@@ -648,7 +650,7 @@ function renderPaints(){
  <p class="s">Each day you change your collection, a copy of how it looked before that day's first change is kept for 14 days. Restoring puts that list back and takes off paints added since.</p><div id="rstL"></div></dialog>`;
  // Fold-away sections remember whether they were left open (Suggested paints and Plan keep their own keys).
  [['shopd','pd-shopd'],['mixd','pd-mixd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
- const colOpen=bi=>{const d=$('colDlg');d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
+ const colOpen=bi=>{const d=$('colDlg');trBuild();d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
  $('pEdit').onclick=()=>colOpen();$('pRst').onclick=rstOpen;
  $('pCsv').onclick=csvOpen;$('pScan').onclick=scanStart;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
  $('csvFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>csvShow(String(rd.result));rd.onerror=()=>{$('csvOut').innerHTML='<p class="s">That file could not be read.</p>'};rd.readAsText(f)};
@@ -659,11 +661,13 @@ function renderPaints(){
   if(ks.length>=BULK){askBulk(ks,'from your CSV',true,det);return}setOwned(ks,true);det();undoBar(ks,true);if(paintsRedraw)paintsRedraw()};$('pTip').onclick=()=>colOpen();$('colOk').onclick=()=>$('colDlg').close();
  $('pbr').addEventListener('click',e=>{const c=e.target.closest('[data-bi]');if(c)colOpen(+c.dataset.bi)});
  renderShop();renderMixes();renderPlan();loadPlanRecs();{const d=$('plnd');if(!d.open)try{d.open=localStorage.getItem('pd-plnd')==='1'}catch(e){}d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-plnd',d.open?'1':'0')}catch(e){}})}const tr=$('ptree');
- tr.innerHTML=treeHTML('data-pc','data-pb');
+ // The collection tree (every paint in the database, tens of thousands of elements) is only built the first time the pop-up
+ // opens: building it with the page made the Paints tab slow to open on phones.
+ let trOk=false;const trBuild=()=>{if(trOk)return;trOk=true;tr.innerHTML=treeHTML('data-pc','data-pb');counts();filt()};
  const q=()=>$('pq').value.trim().toLowerCase(),only=()=>$('pOwned').checked,vis=p=>(!q()||(p.n+' '+p.c).toLowerCase().includes(q()))&&(!only()||OWN.has(p.k));
- const counts=()=>{tr.querySelectorAll('input[data-i]').forEach(e=>e.checked=OWN.has(P[+e.dataset.i].k));
+ const counts=()=>{if(trOk){tr.querySelectorAll('input[data-i]').forEach(e=>e.checked=OWN.has(P[+e.dataset.i].k));
   TREE.forEach(([bn,ss],bi)=>{let bo=0;ss.forEach(x=>bo+=x.ps.filter(i=>OWN.has(P[i].k)).length);tr.querySelector(`[data-pb="${bi}"]`).textContent=bo?'('+bo+' owned)':''});
-  Object.entries(SETS).forEach(([id,x])=>{const o=x.ps.filter(i=>OWN.has(P[i].k)).length,n=x.ps.length;const cb=tr.querySelector(`input[data-r="${id}"]`);if(!cb)return;cb.checked=o===n&&o>0;cb.indeterminate=o>0&&o<n;tr.querySelector(`[data-pc="${id}"]`).textContent=o+'/'+n});
+  Object.entries(SETS).forEach(([id,x])=>{const o=x.ps.filter(i=>OWN.has(P[i].k)).length,n=x.ps.length;const cb=tr.querySelector(`input[data-r="${id}"]`);if(!cb)return;cb.checked=o===n&&o>0;cb.indeterminate=o>0&&o<n;tr.querySelector(`[data-pc="${id}"]`).textContent=o+'/'+n})}
   $('pcnt').textContent=OWN.size?`You own ${OWN.size} paint${OWN.size===1?'':'s'}`:'Your collection is empty';$('pcnt2').textContent=OWN.size+' owned';
   const by={};[...OWN].forEach(k=>{const p=BYKEY.get(k);if(p&&!p.mix)by[BR_OF[p.g]]=(by[BR_OF[p.g]]||0)+1});
   const bs=Object.entries(by).sort((a,b)=>b[1]-a[1]);$('pcnt').textContent+=bs.length?` from ${bs.length} brand${bs.length===1?'':'s'}`:'';
@@ -704,7 +708,15 @@ function renderPaints(){
  // Panel settings (how many, which brand) and paints marked Not interested stay on this device.
  const sgGet=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},sgSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
  const sugGo=()=>{const box=$('sug');if(!box)return;const so=sgGet('pd-sugo',{n:10,b:''}),hide=new Set(sgGet('pd-sugx',[])),bi=so.b===''||so.b==null||!BRANDS[+so.b]?null:+so.b;
-  const r=sugLast=suggestPaints(OWN,{n:+so.n||10,brand:bi,hide});
+  const sk=JSON.stringify([+so.n||10,bi,[...hide].sort(),[...OWN].sort()]);
+  // Not worked out for this collection yet: do it in small pieces so the page keeps scrolling and tapping meanwhile, then draw.
+  if(!SUGC||SUGC.k!==sk){const tok=++SUGT,r=suggestPaints(OWN,{n:+so.n||10,brand:bi,hide,noMix:true});
+   if(!r){SUGC={k:sk,r};sugGo();return}
+   const l=[...r.mine,...r.other];let i=0;
+   const step=()=>{if(tok!==SUGT)return;const t=performance.now();while(i<l.length&&performance.now()-t<12)sgMixOne(l[i++]);
+    if(i<l.length){setTimeout(step,0);return}r.mine=sgMixSort(r.mine);r.other=sgMixSort(r.other);SUGC={k:sk,r};sugGo()};
+   setTimeout(step,0);return}
+  const r=sugLast=SUGC.r;
   if(!r){box.innerHTML='<p class="s">Tick the paints you own below and suggestions for filling the gaps in your collection show up here.</p>';$('sugN').textContent='';return}
   const fl=f=>`<span class="sgt">${esc(f.g)}: ${esc(f.r.join(', ').toLowerCase())}</span>`;
   const ess=r.ess.filter(x=>!x.have.length&&x.p).map(x=>({p:x.p,alt:x.alt,fills:[{g:'Essential',r:[x.name]}],ess:1}));
@@ -775,7 +787,7 @@ function renderPaints(){
   if(o&&o.alt[j]){const p=o.p;o.p=o.alt[j];o.alt[j]=p;el.outerHTML=sugRow(o);const n=$('sug').querySelector(`.sgr[data-ri="${sugRows.indexOf(o)}"] [data-sa]`);if(n)n.focus()}return}
   const b=e.target.closest('[data-sa]');if(!b)return;setOwned([b.dataset.sa],true);$('pmsg').textContent='Saving…';counts();filt();sugGo()});
  tr.addEventListener('change',sugLater);
- setTimeout(sugGo,0);
+ requestAnimationFrame(()=>setTimeout(sugGo,30));
  $('pq').oninput=filt;$('pOwned').onchange=filt;
  $('pWheel').onclick=showMine;
  counts();filt()}
