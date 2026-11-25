@@ -1683,8 +1683,11 @@ function aboutPage(D) {
 <section class="panel prose">
 <p>The Painters Desk is a free colour wheel and paint finder for miniature painters. It puts ${n} hobby paints from ${nb} brands on one wheel, so you can find a paint's closest match in another brand, pick colours that work together, and plan highlight ramps from the paints you own.</p>
 <h2>Who makes it</h2>
-<p>The site is made and run by AK Tabletop Studio, an independent tabletop hobby studio. It is not owned by, paid by or affiliated with any paint brand, and no brand pays to appear on it or to be listed as a match. AK Tabletop Studio is not connected to AK Interactive.</p>
-<p>It started in October 2026 as a way to answer the question every painter asks when a pot runs out: what is the closest paint I can actually buy? New brands, guides and tools are added most weeks; the <a href="/#/changelog">What's new</a> page lists every change.</p>
+<p>The site is made and run by AK Tabletop Studio, which is me: one painter and gamer. The AK stands for Alaska, where I was born and raised (so no connection to AK Interactive).</p>
+<p>I started playing tabletop games in the 90s, when I got hold of my first Games Workshop miniatures from Rogue Trader, then moved on to Warhammer 40,000. The Black Templars vs Dark Eldar box set started my Black Templars army and my painting journey.</p>
+<p>I took a long break from the hobby, from 4th edition to 9th. In that time I played Magic: The Gathering, D&amp;D, the One Piece and Gundam card games, countless other card games and plenty of video games. Now I'm back in full force, painting, playing Warhammer with friends and enjoying the community again.</p>
+<p>The Painters Desk started in October 2026 because, coming back to painting, I kept asking the question every painter asks when a pot runs out: what is the closest paint I can actually buy? New brands, guides and tools are added most weeks; the <a href="/#/changelog">What's new</a> page lists every change.</p>
+<p>The site is independent. It is not owned by, paid by or affiliated with any paint brand, and no brand pays to appear on it or to be listed as a match.</p>
 <h2>Where the colours come from</h2>
 <p>Every swatch is an estimate. Paint looks different on a screen than in the pot, and different again over a white or black primer, so treat a swatch as a guide, not a promise. Swatches are sampled from the best source available for each range, in this order:</p>
 <ul>
