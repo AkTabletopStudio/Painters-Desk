@@ -107,6 +107,7 @@ function paintLook(p,o={}){const d=$('pqDlg'),ql=x=>mq(x.d)[0],
  ad.onclick=()=>{setOwned([p.k],true);if(o.onAdd)o.onAdd();d.close()};
  $('pqWant').innerHTML=wantBtn(p);
  $('pqW').href='#/?paint='+encodeURIComponent(p.k);$('pqW').onclick=()=>{d.close();if(o.onWheel)o.onWheel()};$('pqP').href='paints/find?k='+encodeURIComponent(p.g+'|'+p.c+'|'+p.n);
+ if(!p.mix&&p.g!=='B')paintPhotosInto($('pqB'),p.k,p.n,{h:'h3',before:$('pqB').firstChild,onGo:()=>d.close()});
  d.onclose=()=>{$('pqB').innerHTML=''};d.showModal();d.querySelector('.pqx').focus()}
 // Tapping the dimmed page outside a look-only pop-up (quick look, details, Change paints, theme, photo palette) closes it.
 // Only a tap outside the frame counts, not one on its padding. Forms and confirm boxes are left out so typed text isn't lost.
@@ -1331,11 +1332,25 @@ async function renderEdit(id,kind){
    busy--;drawPh();if(err){const s2=$('dPh').querySelector('[data-st]');s2.className='err';s2.textContent=err}}}
  if(r.kind==='challenge')drawChal();else if(r.kind==='desk')drawDesk();else draw()}
 
+/* ---------- community photos of a paint ---------- */
+// Tutorial step photos (steps that mix the paint), Showcase models, challenge entries and other public posts that use
+// the paint, from /api/paint-photos (worker/photos.js). Small copies load from /photos/<id>/s, only when scrolled to.
+const PFOR=new Map(),PH_KIND={tutorial:'Tutorial',desk:'Showcase',challenge:'Challenge',palette:'Palette',recipe:'Recipe'};
+function paintPhotosInto(el,k,name,o={}){
+ if(!API||!el)return;const box=document.createElement('div');box.className='mt pphs';box.hidden=true;
+ if(o.before)el.insertBefore(box,o.before);else el.appendChild(box);
+ const show=list=>{if(!box.isConnected||!list.length)return;box.hidden=false;
+  box.innerHTML=`<${o.h||'h2'}>Painted with ${esc(name)}</${o.h||'h2'}><ul class="ppstrip">${list.map(x=>`<li><a class="ppimg" href="#/recipe/${esc(x.post)}" title="${esc(x.title)}"><img src="/photos/${esc(x.img)}/s" alt="${esc(name+' on '+x.title+(x.step?', '+x.step:'')+', by '+x.author)}" loading="lazy" decoding="async"></a><b><a href="#/recipe/${esc(x.post)}">${esc(x.title)}</a></b><em>${PH_KIND[x.kind]||'Post'}${x.step?': '+esc(x.step):''} · <a href="#/u/${esc(x.author_id)}">${esc(x.author)}</a></em></li>`).join('')}</ul>`;
+  if(o.onGo)box.querySelectorAll('a').forEach(a=>a.addEventListener('click',o.onGo))};
+ if(PFOR.has(k)){show(PFOR.get(k));return}
+ api('/paint-photos?paint='+encodeURIComponent(k)).then(d=>{PFOR.set(k,d.photos||[]);show(d.photos||[])}).catch(()=>box.remove())}
+
 /* ---------- wheel: recipes using the selected paint ---------- */
 // The wheel's side panel calls this after showing a paint. Results are cached per paint, so redraws don't refetch.
 const RFOR=new Map();
 window.pdRecipesFor=p=>{
  if(!API)return;const el=$('sel');if(!el)return;
+ if(!p.mix)paintPhotosInto(el,p.k,p.n);
  const box=document.createElement('div');box.className='mt rfor';el.appendChild(box);
  const show=list=>{if(!box.isConnected)return;
   box.innerHTML=`<h2>Recipes using this paint</h2>${list.length?`<div class="rcl">${list.slice(0,6).map(r=>`<a class="rcm" href="#/recipe/${esc(r.id)}">${stripHTML(r.layers||[])}<b>${esc(r.title)}</b><span>${esc(r.author.name)} · ${bottle(1)} ${r.votes}</span></a>`).join('')}</div>`:'<p class="s">No public recipes use this paint yet.</p>'}

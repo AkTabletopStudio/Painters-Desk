@@ -477,6 +477,12 @@ fieldset.blst{border:3px solid var(--ink);border-radius:14px;padding:8px 12px 12
 .chl .chip{border-radius:14px}@media (max-width:560px){.chl .lc,.chl .chsw{display:none}}
 /* Showcase: a wall of model photos (all cut to the same portrait shape so new ones join the end in order), each with who posted it */
 .tag.tdesk{background:#9be7c4}
+/* Community photos of a paint (wheel side panel, paint quick look): one row that scrolls sideways */
+.ppstrip{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 8px;margin:6px 0 0;list-style:none}
+.ppstrip li{flex:0 0 120px;scroll-snap-align:start;margin:0;font-size:12px;line-height:1.3;min-width:0}
+.ppstrip a.ppimg{display:block;aspect-ratio:4/5;border:3px solid var(--ink);border-radius:10px;overflow:hidden;background:var(--card);box-shadow:2px 2px 0 var(--sh);margin-bottom:4px}
+.ppstrip img{display:block;width:100%;height:100%;object-fit:cover}
+.ppstrip b,.ppstrip em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ppstrip em{font-style:normal;color:var(--mut)}
 .dwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
 .dtile{display:block;position:relative;aspect-ratio:4/5;border:3px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:3px 3px 0 var(--sh);color:#fff;text-decoration:none}
 .dtile>img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .2s}.dtile:hover>img{transform:scale(1.03)}
@@ -997,6 +1003,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>25 November 2026</h2><ul>
+<li data-a="paints"><span class="tg nw">New</span><b>Photos of each paint in use.</b> Paint pages, the paint pop-up and the colour wheel's side panel now show photos painters have shared with that paint: tutorial steps that use it, Showcase models and challenge entries that tag it. Each photo says who painted it and opens the post.</li>
 <li data-a="mypaints"><span class="tg fx">Fixed</span><b>Paints tab on phones.</b> The All paints / My paints / Backlog / Chart tabs now sit two by two with no black block beside them, and My paints opens much faster with a big collection: the full paint list in Edit my collection is only built when you open it, and Suggested paints is worked out about three times faster.</li>
 <li data-a="community"><span class="tg nw">New</span><b>Showcase.</b> Under Tutorials &amp; Community, the new <b>Showcase</b> tab is a wall of models painters have posted, each photo with who painted it. Post yours with <b>📷 Post a model</b>: a photo is all it needs, and you can add more photos, tag the paints you used and write as much or as little as you like. Your posts also show in a Showcase section on your profile.</li>
 <li data-a="site"><span class="tg nw">New</span><b>About page.</b> A new <a href="about">About</a> page says who makes The Painters Desk, where the swatch colours come from, how cross-brand matches are found and how to get in touch. It is linked at the bottom of every page.</li>
