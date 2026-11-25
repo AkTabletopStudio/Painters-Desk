@@ -83,7 +83,7 @@ const cardHTML=r=>{const ch=r.kind==='challenge',rec=r.kind!=='tutorial'&&!ch,K=
  return `<a class="card${rec?' rcard':''}${ch?' chcard':''}" href="#/recipe/${esc(r.id)}">${strip||(r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:'')}${ch?stripHTML(r.layers||[]):''}<h3>${esc(r.title)}</h3><span class="tag ${K.c}">${K.t}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} ${K.u}${r.steps===1?'':'s'}</span>`:''}${ch?chalTags(r.meta):rec?'':metaTags(r.meta)}${strip&&r.cover?`<img class="rthumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}${ch?'':`<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div>`}<div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`};
 // Showcase: one tile per post, just the photo with who posted it along the bottom (and a count when there are more photos).
 // The tiles sit in columns that keep each photo's own shape, so the wall of pictures runs on without gaps.
-const deskTile=(r,me)=>`<a class="dtile" href="#/recipe/${esc(r.id)}" title="${esc(r.title)}"><img src="${imgURL(r.cover)}" alt="${esc(r.title)} by ${esc(r.author.name)}" loading="lazy">${r.photos>1?`<span class="dn" aria-label="${r.photos} photos">▣ ${r.photos}</span>`:''}${r.visibility==='private'?'<span class="dn dp">Private</span>':''}${me?'':`<span class="dwho">${avHTML(r.author)}<b>${esc(r.author.name)}</b></span>`}</a>`;
+const deskTile=(r,me)=>`<a class="dtile" href="#/recipe/${esc(r.id)}" title="${esc(r.title)}"><img src="${imgURL(r.cover)}" alt="${esc(r.title)} by ${esc(r.author.name)}" loading="lazy">${r.kind==='challenge'?'<span class="dn" title="Random palette challenge">🎲 Challenge</span>':r.photos>1?`<span class="dn" aria-label="${r.photos} photos">▣ ${r.photos}</span>`:''}${r.visibility==='private'?'<span class="dn dp">Private</span>':''}${me?'':`<span class="dwho">${avHTML(r.author)}<b>${esc(r.author.name)}</b></span>`}</a>`;
 // A layer's colour: the rough mix of its paints, or the paint itself. Water is left out.
 const layerHex=mix=>{const ps=(mix||[]).filter(m=>m.k!==WATER.k);return mixColour(ps)||BYKEY.get(ps[0]?.k)?.h||null};
 const stripHTML=(layers,cls='')=>{const c=layers.map(layerHex).filter(Boolean);return c.length?`<div class="rstrip ${cls}" aria-hidden="true">${c.map(h=>`<i style="background:${h}"></i>`).join('')}</div>`:''};
@@ -919,11 +919,13 @@ $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
 let rScope='public',rKind='tutorial',rPaint='';
 // Tutorials & Community: one page with tabs. Tutorials, Recipes and Palettes share the card list (#/recipes/<kind>);
 // Painters is the painter list (#/people), with Takes commissions (#/painters) as a filter inside it.
-const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['desk','Showcase','#/recipes/desk'],['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette'],['challenge','Challenges','#/recipes/challenge'],['people','Painters','#/people']];
+// Four tabs. Palettes sit inside Recipes and Challenges inside Showcase, each as a second chip under the tabs (CSUB), so old links still land.
+const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['desk','Showcase','#/recipes/desk'],['recipe','Recipes','#/recipes/recipe'],['people','Painters','#/people']];
+const COMM_PARENT={palette:'recipe',challenge:'desk'},CSUB={recipe:[['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette']],desk:[['desk','Models','#/recipes/desk'],['challenge','🎲 Challenges','#/recipes/challenge']]};
 window.pdCommHead=tab=>commHead(tab);
 // The Commissions button sits beside the heading on every tab, so hiring a painter is always one tap away.
-const commHead=tab=>{const cm=tab==='commissions';if(cm)tab='people';
- return `<div class="chead"><h1>Tutorials &amp; Community</h1><a class="btn${cm?' pri':''} cmbtn" href="#/painters"${cm?' aria-current="page"':''} title="Painters you can hire to paint your models">🖌 Commissions</a></div><nav class="ctabs" aria-label="Tutorials and community sections">${COMM_TABS.map(([k,t,u])=>`<a href="${u}"${k===tab?' class="on"'+(cm?'':' aria-current="page"'):''}>${t}</a>`).join('')}</nav>`};
+const commHead=tab=>{const cm=tab==='commissions';if(cm)tab='people';const sub=tab,top=COMM_PARENT[tab]||tab,subs=CSUB[top];tab=top;
+ return `<div class="chead"><h1>Tutorials &amp; Community</h1><a class="btn${cm?' pri':''} cmbtn" href="#/painters"${cm?' aria-current="page"':''} title="Painters you can hire to paint your models">🖌 Commissions</a></div><nav class="ctabs" aria-label="Tutorials and community sections">${COMM_TABS.map(([k,t,u])=>`<a href="${u}"${k===tab?' class="on"'+(cm||subs?'':' aria-current="page"'):''}>${t}</a>`).join('')}</nav>${subs?`<nav class="csub" aria-label="${esc(COMM_TABS.find(x=>x[0]===top)[1])}">${subs.map(([k,t,u])=>`<a class="btn sm${k===sub?' pri':''}" href="${u}"${k===sub?' aria-current="page"':''}>${t}</a>`).join('')}</nav>`:''}`};
 /* ---------- Random palette challenge ----------
    The Challenges tab: a random palette from your paints (window.pdChal in app.js picks it), which you can reroll or swap paint by
    paint until you take it on. A taken challenge stays put (in this browser) until you post your finished model or give up.
@@ -978,7 +980,7 @@ async function renderRecipes(k){
  const T={tutorial:['tutorials','A whole model, step by step with photos and video. Steps can use recipes.','<a class="btn pri" href="#/new">+ New tutorial</a>'],
   recipe:['recipes','One colour, layer by layer from base to highlight: bone, purple robes, rusty metal and so on.','<a class="btn pri" href="#/new/recipe">+ New recipe</a>'],
   palette:['palettes','Palette cards painters have shared, then our themed Inspiration palettes matched to your paints. Make your own with + New palette, or let From a photo pick the paints from a picture.','<a class="btn pri" href="#/new/palette">+ New palette</a>'],
-  desk:['models','Models from painters\' desks: finished, half done or still in grey. Post yours with as much or as little as you like: a photo is all it needs, and you can tag the paints and say a few words.',ME?'<a class="btn pri" href="#/new/desk">📷 Post a model</a>':''],
+  desk:['models','Models from painters\' desks: finished, half done or still in grey. Post yours with as much or as little as you like: a photo is all it needs, and you can tag the paints and say a few words. Finished 🎲 Challenges show up here too.',ME?'<a class="btn pri" href="#/new/desk">📷 Post a model</a>':''],
   challenge:['challenge models','Get a random palette from your own paints that still works as a colour scheme, paint a model with only those paints, then post a photo of it here with the palette you were given.',ME?'<a class="btn pri" href="#/new/challenge">+ Post my model</a>':'']}[rKind];
  // From a photo works signed out too (saving the card asks to sign in), so it shows for everyone on the Palettes tab.
  const phB=rKind==='palette'&&window.pdPhotoPalette?'<button class="btn" id="rPhoto" type="button" title="Pick the main colours out of a photo and find the closest paints">📷 From a photo</button>':'';
@@ -1004,7 +1006,7 @@ async function renderRecipes(k){
  // Showcase loads a page of photos at a time and fetches the next page as you scroll near the end.
  let dOff=0,dBusy=false,dMore=false,dGen=0,dObs=null;
  async function loadDesk(L,next){const g=next?dGen:++dGen,M=$('rmore');if(!next){dOff=0;dMore=false}else if(dBusy)return;dBusy=true;
-  try{const d=await api(`/recipes?scope=${rScope}&kind=desk&limit=30&offset=${dOff}&paint=${encodeURIComponent(rPaint)}&q=${encodeURIComponent($('rq').value)}`);
+  try{const d=await api(`/recipes?scope=${rScope}&kind=desk,challenge&limit=30&offset=${dOff}&paint=${encodeURIComponent(rPaint)}&q=${encodeURIComponent($('rq').value)}`);
    if(g!==dGen||!L.isConnected)return;
    const html=d.recipes.map(x=>deskTile(x)).join('');
    if(!next)L.innerHTML=html||`<p class="s">${rScope==='mine'?'You have not posted any models yet. Press 📷 Post a model to show one.':rScope==='saved'?'Nothing saved yet. Press ☆ Save on a post to keep it here.':rScope==='following'?'Nothing here yet. <a href="#/people">Find painters</a> and press Follow on their profile to see their new models here.':'No models posted yet. Be the first to show one.'}</p>`;
