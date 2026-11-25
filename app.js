@@ -468,6 +468,51 @@ document.getElementById('hSch').onclick=()=>d.showModal();
 d.addEventListener('change',e=>{if(e.target.name==='sch'){SCH=e.target.value;schUI()}schSave();draw()});
 t.oninput=()=>{HTOL=+t.value;tv.textContent='±'+HTOL+'°';schSave();draw()};
 document.getElementById('sel').addEventListener('click',e=>{const o=e.target.closest('.hbo');if(o){const bl=HBL[+o.dataset.g];if(bl)hOpenBlend(bl);return}const c=e.target.closest('.hch,.hramp button');if(!c)return;const p=P[+c.dataset.i];if(p&&CH.includes(p)){sel=p;NB=p;draw()}})})();
+/* ---------- Random palette challenge ----------
+   Picks a random colour scheme and a random main paint, then fills each colour in the scheme with a random paint from that
+   hue band (±20°, wider only when the band is empty), so the set is random but still follows colour theory. The main colour also
+   gets a shade and a highlight, and the set gets a dark and a light neutral, and sometimes a metal and a wash.
+   Paints come from the painter's collection; signed out (or with too few paints) they come from every paint.
+   window.pdChal is used by the Challenges tab (account.js). */
+const CHAL_S={comp:3,split:3,ana:3,triad:2,rect:1,square:1};
+const chRnd=a=>a[Math.floor(Math.random()*a.length)];
+function chalPool(all){const ps=P.filter(p=>!p.mix&&(all||own(p)));
+ return{ch:ps.filter(p=>nmmOK(p)&&onWheel(p)),ne:ps.filter(p=>nmmOK(p)&&!onWheel(p)),met:ps.filter(p=>paintType(p)==='met'),wash:ps.filter(p=>paintType(p)==='wash')}}
+// Lab chroma: picks lean on clearly coloured paints so the scheme reads, falling back to duller ones when a band has nothing else.
+const chC=p=>Math.hypot(p.lab[1],p.lab[2]),chBest=(c,m)=>{const v=c.filter(p=>chC(p)>=m);return v.length?v:c};
+function chalDE(a,b){return Math.hypot(a.lab[0]-b.lab[0],a.lab[1]-b.lab[1],a.lab[2]-b.lab[2])}
+// One random paint for an item, skipping paints already in the set. Returns null when nothing fits.
+function chalPick(pool,it,used,base){const free=p=>!used.has(p.k);let c=[];
+ if(it.t==='hue'){for(const tol of [20,30,40]){c=pool.ch.filter(p=>free(p)&&hd(p.W,it.h)<=tol);if(c.length)break}c=chBest(c,18)}
+ else if(it.t==='sh'||it.t==='hi'){const L=base.lab[0],up=it.t==='hi',tg=L+(up?20:-20);
+  c=pool.ch.filter(p=>free(p)&&hd(p.W,base.W)<=25&&(up?p.lab[0]>=L+8:p.lab[0]<=L-8)&&chC(p)>=Math.min(10,chC(base)*.5)).sort((x,y)=>Math.abs(x.lab[0]-tg)-Math.abs(y.lab[0]-tg)).slice(0,4)}
+ else if(it.t==='dk')c=pool.ne.filter(p=>free(p)&&p.lab[0]<35);
+ else if(it.t==='lt')c=pool.ne.filter(p=>free(p)&&p.lab[0]>70);
+ // Metals: plain silvers and steels go with anything; coloured metals (gold, copper, candy) only when near one of the palette's hues.
+ else if(it.t==='met')c=pool.met.filter(p=>free(p)&&(Math.hypot(p.lab[1],p.lab[2])<10||(it.hs||[]).some(h=>hd(p.W,h)<=30)));
+ else if(it.t==='wash'){const tg={lab:[base.lab[0]*.45,base.lab[1]*.6,base.lab[2]*.6]};c=pool.wash.filter(free).sort((x,y)=>chalDE(x,tg)-chalDE(y,tg)).slice(0,4)}
+ return c.length?chRnd(c):null}
+function chalMake(all,want){const pool=chalPool(all);if(pool.ch.length<4)return null;
+ const ks=Object.keys(CHAL_S),bag=ks.flatMap(k=>Array(CHAL_S[k]).fill(k));
+ for(let n=0;n<60;n++){const s=want&&HSC[want]&&want!=='mono'?want:chRnd(bag),sc=HSC[s],base=chRnd(chBest(pool.ch,25)),used=new Set([base.k]),items=[];
+  const roles=s==='comp'?['Main','Complement']:sc.roles;let ok=true;
+  sc.offs.forEach((o,i)=>{if(!ok)return;const h=(base.W+o+360)%360,it={r:roles[i],t:'hue',h:Math.round(h)};
+   const p=o===0?base:chalPick(pool,it,used,base);if(!p){ok=false;return}used.add(p.k);items.push({...it,k:p.k})});
+  if(!ok)continue;
+  const add=(r,t,chance=1)=>{if(Math.random()>chance)return;const it={r,t},p=chalPick(pool,it,used,base);if(p){used.add(p.k);items.push({...it,k:p.k})}};
+  const mi=items.findIndex(x=>x.k===base.k);
+  add('Main shade','sh');add('Main highlight','hi');add('Dark neutral','dk');add('Light neutral','lt');if(Math.random()<.6){const it={r:'Metal',t:'met',hs:items.filter(x=>x.t==='hue').map(x=>x.h)},p=chalPick(pool,it,used,base);if(p){used.add(p.k);items.push({...it,k:p.k})}}add('Wash','wash',.5);
+  // Keep the main colour's shade and highlight next to it.
+  const sh=items.find(x=>x.t==='sh'),hi=items.find(x=>x.t==='hi'),rest=items.filter(x=>x!==sh&&x!==hi),m=rest.splice(mi,1)[0];
+  rest.splice(mi,0,...[sh,m,hi].filter(Boolean));
+  return{s,b:base.k,items:rest,all:!!all,at:Date.now(),acc:0}}
+ return null}
+// Swap one paint for another random one that fills the same role. Returns false when there is no other paint for it.
+function chalSwap(c,i){const pool=chalPool(c.all),it=c.items[i],used=new Set(c.items.map(x=>x.k)),base=BYKEY_A(c.b);
+ if(!base)return false;const p=chalPick(pool,it,used,base);if(!p)return false;if(it.k===c.b)c.b=p.k;c.items[i]={...it,k:p.k};return true}
+const BYKEY_A=k=>P.find(p=>p.k===k)||null;
+window.pdChal={make:chalMake,swap:chalSwap,enough:()=>!!OWN&&chalPool(false).ch.length>=12,name:s=>(HSC[s]||{}).n||'',scheme:s=>HSC[s]||null,
+ schemes:()=>Object.keys(CHAL_S).map(k=>[k,HSC[k].n]),icon:s=>HSC[s]?hIcon(HSC[s].offs):''};
 schUI();
 
 function draw(){let s='';OFF=[];

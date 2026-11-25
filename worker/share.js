@@ -8,7 +8,7 @@ import { load, page, esc } from './seo.js';
 import { cardPNG, cardResponse } from './card.js';
 
 const SITE = 'https://paintersdesk.com';
-const KIND = { recipe: 'Recipe', tutorial: 'Tutorial', palette: 'Palette' };
+const KIND = { recipe: 'Recipe', tutorial: 'Tutorial', palette: 'Palette', challenge: 'Palette challenge' };
 
 export const isSharePath = p => p === '/r' || p.startsWith('/r/');
 
@@ -65,6 +65,7 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 function noteOf(r, c) {
   const n = c.steps.length, p = c.paints.length;
   if (r.kind === 'palette') return plural(c.colours.length, 'colour');
+  if (r.kind === 'challenge') return plural(c.colours.length, 'paint') + ' palette';
   if (r.kind === 'recipe') return [n && plural(n, 'layer'), p && plural(p, 'paint')].filter(Boolean).join(' · ');
   return [n && plural(n, 'step'), p && plural(p, 'paint')].filter(Boolean).join(' · ');
 }
@@ -88,11 +89,11 @@ const clip = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return
 function sharePage(D, r) {
   const K = KIND[r.kind] || 'Recipe', c = coloursOf(D, r), path = '/r/' + r.id, app = '/#/recipe/' + encodeURIComponent(r.id);
   const list = paintList(D, c.paints);
-  const what = { recipe: 'A miniature painting recipe', tutorial: 'A miniature painting tutorial', palette: 'A miniature colour palette' }[r.kind] || 'A miniature painting recipe';
+  const what = { recipe: 'A miniature painting recipe', tutorial: 'A miniature painting tutorial', palette: 'A miniature colour palette', challenge: 'A random palette challenge model' }[r.kind] || 'A miniature painting recipe';
   const desc = clip(r.summary, 200) || `${what} by ${r.author} on The Painters Desk${list ? `, using ${list}` : ''}.`;
   const title = `${clip(r.title, 90)}: ${K.toLowerCase()} by ${clip(r.author, 40)}`;
-  // A tutorial with a photo of the finished model shows the photo; everything else shows its swatch card.
-  const photo = r.kind === 'tutorial' && r.cover_ok;
+  // A tutorial or challenge with a photo of the finished model shows the photo; everything else shows its swatch card.
+  const photo = (r.kind === 'tutorial' || r.kind === 'challenge') && r.cover_ok;
   const img = photo ? `${SITE}/api/images/${encodeURIComponent(r.cover)}` : `${SITE}${path}/card.png?v=${encodeURIComponent(ver(r))}`;
   const strip = c.colours.length ? `<div class="shs" aria-hidden="true">${c.colours.map(h => `<i style="background:${h}"></i>`).join('')}</div>` : '';
   const body = `<h1>${esc(r.title)}</h1>
