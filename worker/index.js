@@ -1399,7 +1399,9 @@ async function getRecipe(request, env, id) {
 const IMAGE_ID = /^[0-9a-f-]{36}$/, RECIPE_ID = /^[\w-]{1,64}$/;
 const LEVELS = ['beginner', 'intermediate', 'advanced'];
 // 'palette': paints matched to a photo's colours, stored like a recipe (one step per colour, no recipe links or video).
-const KINDS = ['recipe', 'tutorial', 'palette'];
+// 'challenge': a random palette challenge entry: the palette the painter was given (one step per paint) and a photo of the finished model.
+const KINDS = ['recipe', 'tutorial', 'palette', 'challenge'];
+const CHAL_SCHEMES = ['comp', 'split', 'ana', 'triad', 'rect', 'square'];
 
 // Validate the steps and make sure every photo they use was uploaded by this user.
 function cleanSteps(raw) {
@@ -1446,8 +1448,13 @@ async function saveRecipe(request, env, id) {
   const m = b.meta && typeof b.meta === 'object' ? b.meta : {};
   const meta = kind === 'tutorial' ? {
     level: LEVELS.includes(m.level) ? m.level : '', time: str(m.time, 40, 'Time'), model: str(m.model, 120, 'Model'),
-  } : {};
+  } : kind === 'challenge' ? { scheme: CHAL_SCHEMES.includes(m.scheme) ? m.scheme : '', model: str(m.model, 120, 'Model') } : {};
   const cover = typeof b.cover === 'string' && IMAGE_ID.test(b.cover) ? b.cover : '';
+  if (kind === 'challenge') {
+    if (!cover) throw new HttpError(400, 'Add a photo of your finished model');
+    if (!steps.length || steps.length > 12) throw new HttpError(400, 'A challenge palette has 1 to 12 paints');
+    steps.forEach(s => { s.text = ''; s.image = ''; s.mix = s.mix.slice(0, 1); });
+  }
   // "paints" is every paint in the steps plus any extras listed separately; it drives list swatches and the wheel button.
   // Water can be part of a step's mix (to show a thinning ratio) but isn't a paint, so it's left out here.
   const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])].filter(k => k !== 'water'), 60);

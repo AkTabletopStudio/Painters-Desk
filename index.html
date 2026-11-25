@@ -255,7 +255,7 @@ dialog.pd.fb textarea{min-height:120px;resize:vertical}.fbhp{position:absolute;l
 .rstrip.big{height:54px;width:calc(100% + 28px);margin:-12px -14px 10px;border:0;border-bottom:3px solid var(--ink);border-radius:0}
 .rstrip.tall{height:64px;border-radius:18px;margin:10px 0 14px}
 .rthumb{float:right;width:64px;height:64px;object-fit:cover;border-radius:12px;border:2px solid var(--ink);margin:0 0 6px 8px}
-.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}.tag.tpal{background:#c9b3ff}.tag.topen{background:#8fe3a1}
+.tag.trec{background:#ffd23f}.tag.ttut{background:#7ad7f0}.tag.tpal{background:#c9b3ff}.tag.tchal{background:#ffa36b}.tag.topen{background:#8fe3a1}
 .pgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}.pgal img{width:100%;aspect-ratio:1;object-fit:cover;border:3px solid var(--ink);border-radius:12px;display:block;background:var(--bg)}
 .pgal.ed>div{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}.pgal.ed .x{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:2px solid var(--ink);background:var(--card);color:var(--fg);font-size:18px;line-height:1;cursor:pointer}.pgal.ed .lnk{font-size:13px;padding:0}
 .pcard h3 .av,.ppl h3 .av{width:26px;height:26px}.ppl h3{display:flex;align-items:center;gap:8px}.pmini{display:flex;gap:6px;margin:-4px 0 8px}.pmini img{width:48px;height:48px;object-fit:cover;border:2px solid var(--ink);border-radius:8px}
@@ -469,11 +469,18 @@ fieldset.blst{border:3px solid var(--ink);border-radius:14px;padding:8px 12px 12
 #blDlg .psearch .res{max-height:220px;overflow:auto}
 .blph{width:64px;height:64px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);flex:none;cursor:zoom-in}.bli.hasph{display:grid;grid-template-columns:64px 1fr;gap:0 12px}.bli.hasph>.blpa{grid-row:span 6;display:block}.bli.hasph>.blpa .blph{display:block}.blphr .blph{cursor:default}
 .blsug{margin-top:4px}.blsug .pi{cursor:pointer}.blsug em{color:var(--mut);font-style:normal;font-size:13px}.blsug .pi:hover em{color:inherit}
+/* Random palette challenge */
+.chal .chh{display:flex;gap:10px;align-items:flex-start}.chal .chh svg{flex:none;width:34px;height:34px;margin-top:2px}.chal .chh h2{margin:0 0 2px}
+.chl{list-style:none;padding:0;margin:0 0 10px;display:grid;gap:6px}.chl li{display:flex;align-items:center;gap:10px}.chl li>div{flex:1;min-width:0}.chl li>div>b{display:block;font-size:13px}
+.chl .chip>i{flex:none}.chl .lc{width:30px;height:30px;flex:none;border-radius:50%;border:3px solid var(--ink)}.chl .chip{cursor:pointer;margin:2px 0 0}
+.chcard .rstrip{margin:-4px 0 8px}
+.chl .chip{border-radius:14px}@media (max-width:560px){.chl .lc,.chl .chsw{display:none}}
 .ctabs{display:flex;border:3px solid var(--ink);border-radius:14px;overflow:hidden;margin:4px 0 10px;box-shadow:4px 4px 0 var(--sh);max-width:680px}
 .ctabs a{flex:1;text-align:center;padding:9px 4px;color:var(--fg);background:var(--card);text-decoration:none;font-weight:700;font-size:15px;min-width:0}
 .ctabs a+a{border-left:3px solid var(--ink)}
 .ctabs a.on{background:var(--ink);color:var(--bg)}
 .ctabs a:focus-visible{outline:3px solid var(--yel);outline-offset:-5px}
+@media (max-width:560px){.ctabs a{font-size:12.5px;padding:9px 1px;letter-spacing:-.2px}}
 /* Paints sub-tabs (All paints | My paints | Conversion chart): .ptabs, shared by the app and the Worker paint/guide pages. Short labels on phones. */
 .ptabs .sh{display:none}@media (max-width:560px){.ptabs .lg{display:none}.ptabs .sh{display:inline}}
 /* Clear (x) button on search boxes, added by sxInit() in app.js and the paint/guide page script. */
@@ -970,6 +977,9 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <section id="v-changelog" hidden>
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
+<div class="panel cl"><h2>25 November 2026</h2><ul>
+<li data-a="recipes"><span class="tg nw">New</span><b>Random palette challenge.</b> Under Tutorials &amp; Community, the new <b>Challenges</b> tab gives you a random palette from your own paints that still works as a colour scheme (complementary, split, analogous, triadic and more), with a shade, a highlight, neutrals and sometimes a metal and a wash. Reroll it or swap single paints, take the challenge, paint a model with only those paints, then post a photo of it with the palette you were given. You can also take on someone else's palette from their post.</li>
+</ul></div>
 <div class="panel cl"><h2>24 November 2026</h2><ul>
 <li data-a="paints"><span class="tg pt">Paints</span><b>Gilded Goblin, a new brand.</b> All 18 Gilded Goblin paints from the Complete Paint Collection: the core colours, natural tones and fantasy colours, plus the six Arcane Expansion colours. Colours come from Gilded Goblin's own swatch sheets.</li>
 <li data-a="mypaints"><span class="tg nw">New</span><b>Track your backlog.</b> Under Paints, the new <b>Backlog</b> tab keeps your pile of shame for any game: add each kit or unit with how many models, then move them along from unbuilt to built, primed, painted and based. Tap the Game, Faction and Model boxes for suggestions: about 16,000 unit names from over 20 games, or type any name you like. Link a tutorial or recipe and the paints you plan to use, add a photo and notes, and see how much of the pile is painted.</li>

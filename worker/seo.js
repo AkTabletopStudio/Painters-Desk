@@ -457,7 +457,7 @@ const webPage = (path, name, description, type = 'WebPage', extra = {}) => ({
   isPartOf: { '@id': SITE + '/#site' }, breadcrumb: { '@id': SITE + path + '#crumbs' }, ...extra,
 });
 
-const KIND_LABEL = { tutorial: 'Tutorial', recipe: 'Recipe', palette: 'Palette' };
+const KIND_LABEL = { tutorial: 'Tutorial', recipe: 'Recipe', palette: 'Palette', challenge: 'Challenge' };
 
 function usedInHTML(p, rs) {
   if (!rs) return '';
