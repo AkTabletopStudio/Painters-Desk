@@ -8,6 +8,7 @@ import { TECH_TEXT } from './tech-guides.js';
 import { ANATOMY, HAIR, SHAPES, JOBS, CARE, MISTAKES, PICKS } from './brush-guides.js';
 import { CRAFT, CRAFT_DATE } from './craft-guides.js';
 import { cardPNG, cardResponse } from './card.js';
+import { paintPhotos, allPaintPhotos } from './photos.js';
 
 const SITE = 'https://paintersdesk.com';
 // The all-brands conversion chart (allChartPage): its address, the colour-match cut-off, the 'closer by colour' gap and the default columns.
@@ -37,7 +38,7 @@ export async function seo(request, env, url) {
   const D = await load(env, url);
   const p = url.pathname.replace(/\/+$/, '') || '/';
   let r;
-  if (p === '/sitemap.xml') r = send(sitemap(D), 'application/xml; charset=utf-8');
+  if (p === '/sitemap.xml') r = send(sitemap(D, await allPaintPhotos(env)), 'application/xml; charset=utf-8');
   else if (p === '/about') r = send(aboutPage(D));
   else if (p === '/paints') r = send(indexPage(D));
   else if (p === '/paints/search.json') return send(searchIndex(D), 'application/json; charset=utf-8');
@@ -103,7 +104,10 @@ export async function seo(request, env, url) {
     const br2 = vs === 'vs' && D.brands.find(x => x.slug === b2), other = br2 && s2 && br2.bySlug.get(s2);
     if (br && !s) r = send(brandPage(D, br));
     else if (paint && !vs && url.searchParams.has('look')) return send(JSON.stringify(paintLook(D, paint)), 'application/json; charset=utf-8');
-    else if (paint && !vs) r = send(paintPage(D, paint, await usedIn(env, paint)));
+    else if (paint && !vs) {
+      const [rs, ph] = await Promise.all([usedIn(env, paint), paintPhotos(env, paint.g + '|' + paint.c + '|' + paint.n, 12)]);
+      r = send(paintPage(D, paint, rs, ph));
+    }
     else if (paint && other && !extra && paint !== other) {
       // One address per pair: the other order redirects, so search engines see a single page.
       const c = vsUrl(paint, other);
@@ -375,6 +379,13 @@ ul.m li{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
 i.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);flex:none;margin-top:1px}
 .m em{display:block;font-style:normal;font-size:13px;color:var(--mut)}
 .ck{color:#2a9d5c;font-weight:700}
+/* Community photos on paint pages: one row that scrolls sideways, so the matches stay near the top. */
+.ppstrip{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 8px;margin:0;list-style:none}
+.ppstrip li{flex:0 0 150px;scroll-snap-align:start;margin:0}
+.ppstrip a.ppimg{display:block;aspect-ratio:4/5;border:3px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:3px 3px 0 var(--sh)}
+.ppstrip img{display:block;width:100%;height:100%;object-fit:cover}
+.ppstrip figcaption{font-size:13px;line-height:1.3;margin-top:5px}.ppstrip figcaption b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppstrip figcaption em{display:block;font-style:normal;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ul.u li:first-child{border-top:0}
 ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}ul.list li i.sw{display:inline-block;width:14px;height:14px;border-width:1.5px;vertical-align:-2px;margin:0 6px 0 0}ul.m.list{padding-left:0}ul.m.list li{display:block}
 ul.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 20px}ul.gl li{display:block;padding:6px 0}ul.gl b{font-size:17px}ul.gl .chip{height:12px;margin:6px 0 4px;max-width:240px}.prose h3,.panel h3{font-size:17px;margin:4px 0 6px}
@@ -469,7 +480,18 @@ function usedInHTML(p, rs) {
     : `<p class="s">No shared tutorials use ${esc(p.n)} yet. <a href="/#/new">Make the first one</a>.</p>`) + '</section>';
 }
 
-function paintPage(D, p, rs) {
+const PHOTO_KIND = { tutorial: 'Tutorial', desk: 'Showcase', challenge: 'Challenge', palette: 'Palette', recipe: 'Recipe' };
+const photoAlt = (p, x) => `${p.n} on ${x.title}${x.step ? ', ' + x.step : ''}, painted by ${x.author}`;
+
+// A sideways row of photos from public posts that use the paint (worker/photos.js), each linking to its post.
+function photosHTML(p, ph) {
+  if (!ph || !ph.length) return '';
+  const li = x => `<li><figure><a class="ppimg" href="/#/recipe/${encodeURIComponent(x.post)}"><img src="/photos/${x.img}/s" alt="${esc(photoAlt(p, x))}" width="480" height="600" loading="lazy" decoding="async"></a>
+<figcaption><b><a href="/#/recipe/${encodeURIComponent(x.post)}">${esc(x.title)}</a></b><em>${PHOTO_KIND[x.kind] || 'Post'}${x.step ? ': ' + esc(x.step) : ''} · by <a href="/#/u/${encodeURIComponent(x.author_id)}">${esc(x.author)}</a></em></figcaption></figure></li>`;
+  return `<section class="panel"><h2>Painted with ${esc(p.n)}</h2><p class="s">Photos from painters on The Painters Desk: tutorial steps, Showcase models and challenge entries that use ${esc(p.n)}. Tap one to see how it was painted.</p><ul class="ppstrip">${ph.map(li).join('')}</ul></section>`;
+}
+
+function paintPage(D, p, rs, ph) {
   const br = D.brands[p.b], range = D.GL[p.g] || '', md = matches(D, p), mdAll = matches(D, p, true);
   const best = md.map(o => ({ br: o.br, m: [...o.ch, ...o.near].sort((a, b) => a.d - b.d)[0] })).filter(o => o.m);
   const mt = isMetT(p), grid = (a, b, md0 = md) => { const g = md0.filter(o => o[a].length || o[b].length); return g.length ? `<div class="grid">${g.map(o => `<section class="panel br"><h2>${esc(o.br.name)}</h2><ul class="m">${o[a].map(m => item(m, 1)).join('')}${o[b].map(m => item(m, 0)).join('')}</ul></section>`).join('')}</div>` : '' };
@@ -493,6 +515,7 @@ function paintPage(D, p, rs) {
 ${p.now ? `<p>${esc(p.n)} is an old Army Painter Warpaints colour. Army Painter's Warpaints Fanatic conversion chart lists <a href="${paintUrl(p.now)}">${esc(p.now.n)}</a> as its replacement in Warpaints Fanatic, a close match but not always exact. The swatch shown here is ${esc(p.now.n)}'s.</p>` : ''}
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;own=1" rel="nofollow">＋ Add ${esc(p.n)} to My paints</a></p>
 ${stdLinksHTML(D, p)}
+${photosHTML(p, ph)}
 ${mt ? `<h2 class="sec">Metallic matches</h2><p class="s">${esc(p.n)} is a metallic${p.t === 'pearl' ? ' (pearl)' : ''} paint, so these are metallic and pearl paints only.</p>` : ''}
 ${grid('ch', 'near')}
 ${xgrid ? `<h2 class="sec">${mt ? 'Non-metallic colours' : 'Metallic matches'}</h2><p class="s">${mt
@@ -504,7 +527,9 @@ ${usedInHTML(p, rs)}`;
   return page({
     title, desc, path: paintUrl(p), body, img: `${SITE}${paintUrl(p)}/card.png?v=${cardVer(paintCard(D, p, best.map(o => o.m)))}`, imgAlt: `${brandName} ${p.n} swatch and its closest matches`,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug], [p.n, paintUrl(p)]],
-    ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` } })],
+    ld: [webPage(paintUrl(p), title, desc, 'WebPage', { about: { '@type': 'Thing', name: `${brandName} ${p.n}`, description: `${range} paint${p.c ? ', code ' + p.c : ''}` },
+      ...(ph && ph.length ? { image: ph.map(x => ({ '@type': 'ImageObject', contentUrl: `${SITE}/photos/${x.img}`, thumbnailUrl: `${SITE}/photos/${x.img}/s`,
+        caption: photoAlt(p, x), creditText: x.author, creator: { '@type': 'Person', name: x.author } })) } : {}) })],
   });
 }
 
@@ -1736,11 +1761,15 @@ export async function pageNotFound(request, env, url) {
   return request.method === 'HEAD' ? new Response(null, r) : r;
 }
 
-function sitemap(D) {
+// ph: paint key -> its community photos (worker/photos.js), listed as image entries on that paint's page.
+function sitemap(D, ph = new Map()) {
   const u = ['/', '/about', '/paints', '/guides', ...GUIDES.map(g => '/guides/' + g.slug), ...(PALS.length ? ['/guides/palettes', ...PALS.map(x => '/guides/palettes/' + x.s)] : []), ...D.brands.map(b => '/paints/' + b.slug), ...D.brands.flatMap(b => b.paints.map(paintUrl)),
     '/paints/colour-standards', ...standards(D).map(x => '/paints/colour-standards/' + x.slug), ...keptVsUrls(D)];
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    u.map(x => `<url><loc>${SITE}${esc(x)}</loc></url>`).join('\n') + '\n</urlset>\n';
+  const imgs = new Map();
+  for (const b of D.brands) for (const q of b.paints) { const a = ph.get(q.g + '|' + q.c + '|' + q.n); if (a) imgs.set(paintUrl(q), a); }
+  const im = x => (imgs.get(x) || []).map(i => `<image:image><image:loc>${SITE}/photos/${i.img}</image:loc></image:image>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
+    u.map(x => `<url><loc>${SITE}${esc(x)}</loc>${im(x)}</url>`).join('\n') + '\n</urlset>\n';
 }
 
 /* ---------- inspiration palettes: /guides/palettes and /guides/palettes/<slug> ---------- */

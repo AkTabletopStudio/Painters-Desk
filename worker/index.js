@@ -2,6 +2,7 @@
 // Static files are served from the assets binding; only /api/* and the paint pages and guides (/paints, /guides, /sitemap.xml, see seo.js) run through this Worker.
 import { isSeoPath, seo, pageNotFound } from './seo.js';
 import { isSharePath, share } from './share.js';
+import { isPhotoPath, servePhoto, paintPhotos } from './photos.js';
 
 const SESSION_COOKIE = 'pd_session';
 const OAUTH_COOKIE = 'pd_oauth';
@@ -124,6 +125,8 @@ async function handle(request, env, ctx) {
     return /text\/html/.test(r.headers.get('content-type') || '')
       ? new HTMLRewriter().on('body', { element: e => e.append(PEOPLE_JS, { html: true }) }).transform(r) : r;
   }
+  // Community photos used in public posts (paint pages and the app show them; search engines may fetch them).
+  if (isPhotoPath(url.pathname)) return servePhoto(request, env, url);
   if (isSharePath(url.pathname)) {
     const r = await share(request, env, url);
     // Shared-link visits are counted together (with where they came from), not one row per item.
@@ -273,6 +276,7 @@ async function route(request, env, url) {
   if (p === '/api/admin/announce' && m === 'POST') return announce(request, env, url);
   if (p === '/api/images' && m === 'POST') return uploadImage(request, env);
   if ((r = p.match(/^\/api\/images\/([\w-]+)$/)) && m === 'GET') return getImage(request, env, r[1]);
+  if (p === '/api/paint-photos' && m === 'GET') return json({ photos: (await paintPhotos(env, url.searchParams.get('paint') || '', 24)) || [] });
   if (p === '/api/reports' && m === 'POST') return addReport(request, env, url);
   if (p === '/api/admin/moderation' && m === 'GET') return moderation(request, env);
   if ((r = p.match(/^\/api\/admin\/images\/([\w-]+)$/))) {
@@ -1444,7 +1448,7 @@ const recipeImages = r => new Set([r.cover, ...r.steps.map(s => s.image)].filter
 async function deleteImages(env, ids) {
   ids = [...ids];
   if (!ids.length) return;
-  if (env.IMAGES) await env.IMAGES.delete(ids.map(id => `img/${id}`));
+  if (env.IMAGES) await env.IMAGES.delete(ids.flatMap(id => [`img/${id}`, `thumb/${id}`]));
   await env.DB.batch(ids.map(id => env.DB.prepare('DELETE FROM images WHERE id = ?').bind(id)));
 }
 
