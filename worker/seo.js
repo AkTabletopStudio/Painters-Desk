@@ -1679,16 +1679,20 @@ function aboutPage(D) {
   const n = D.brands.reduce((a, b) => a + b.paints.length, 0).toLocaleString('en'), nb = D.brands.length;
   const title = 'About The Painters Desk';
   const desc = `Who makes The Painters Desk, where its ${n} paint swatches and cross-brand matches come from, and how accurate they are.`;
-  const body = `<h1>About The Painters Desk</h1>
+  const body = `<style>.agal{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:8px 0 14px;max-width:720px}@media (max-width:560px){.agal{grid-template-columns:repeat(2,1fr)}}.agal figure{margin:0}.agal img{width:100%;height:auto;aspect-ratio:3/4;object-fit:cover;border:3px solid var(--ink);border-radius:10px;display:block;box-sizing:border-box}.agal figcaption{font-size:13px;color:var(--mut);margin-top:4px;line-height:1.35}</style>
+<h1>About The Painters Desk</h1>
 <section class="panel prose">
 <p>The Painters Desk is a free colour wheel and paint finder for miniature painters. It puts ${n} hobby paints from ${nb} brands on one wheel, so you can find a paint's closest match in another brand, pick colours that work together, and plan highlight ramps from the paints you own.</p>
 <h2>Who makes it</h2>
 <p>The site is made and run by AK Tabletop Studio, which is me: one painter and gamer. The AK stands for Alaska, where I was born and raised (so no connection to AK Interactive).</p>
 <p>I started playing tabletop games in the 90s, when I got hold of my first Games Workshop miniatures from Rogue Trader, then moved on to Warhammer 40,000. The Black Templars vs Dark Eldar box set started my Black Templars army and my painting journey.</p>
 <p>I took a long break from the hobby, from 4th edition to 9th. In that time I played Magic: The Gathering, D&amp;D, the One Piece and Gundam card games, countless other card games and plenty of video games. Now I'm back in full force, painting, playing Warhammer with friends and enjoying the community again.</p>
-<p>On my desk at the moment: Dark Angels, Tyranids and Necrons for 40K, with a dabble in other Space Marine chapters, and Stormcast Eternals, Sons of Behemat and Soulblight Gravelords for Age of Sigmar.</p>
+<p>On my desk at the moment: Dark Angels, Imperial Knights, Tyranids and Necrons for 40K, with a dabble in other Space Marine chapters, and Stormcast Eternals, Sons of Behemat and Soulblight Gravelords for Age of Sigmar.</p>
 <p>The Painters Desk started in October 2026 because, coming back to painting, I kept asking the question every painter asks when a pot runs out: what is the closest paint I can actually buy? New brands, guides and tools are added most weeks; the <a href="/#/changelog">What's new</a> page lists every change.</p>
 <p>The site is independent. It is not owned by, paid by or affiliated with any paint brand, and no brand pays to appear on it or to be listed as a match.</p>
+<h2>From my painting desk</h2>
+<p>Some of what I've painted since coming back, plus one Tyranid that's still on the desk. The pile of shame is big, so there's always more on the way.</p>
+<div class="agal"><figure><img src="/images/about/collection.jpg" alt="Part of the collection: Imperial Knights and Dark Angels on the shelf" loading="lazy" width="300" height="400"><figcaption>Part of the collection</figcaption></figure><figure><img src="/images/about/dark-angels-captain.jpg" alt="A Dark Angels captain" loading="lazy" width="300" height="400"><figcaption>A Dark Angels captain</figcaption></figure><figure><img src="/images/about/deathwing-terminators.jpg" alt="Terminators with their robed followers" loading="lazy" width="300" height="400"><figcaption>Terminators with their robed followers</figcaption></figure><figure><img src="/images/about/dark-angels-banner.jpg" alt="A Dark Angels character with a banner, on a rocky base" loading="lazy" width="300" height="400"><figcaption>A Dark Angels character with a banner, on a rocky base</figcaption></figure><figure><img src="/images/about/inquisitor.jpg" alt="A hooded agent with a sword, in red robes and blue armour" loading="lazy" width="300" height="400"><figcaption>A hooded agent with a sword, in red robes and blue armour</figcaption></figure><figure><img src="/images/about/green-marine.jpg" alt="A Space Marine in green armour, sword raised" loading="lazy" width="300" height="400"><figcaption>A Space Marine in green armour, sword raised</figcaption></figure><figure><img src="/images/about/jump-pack-marine.jpg" alt="A Space Marine in green armour on jump-pack smoke trails" loading="lazy" width="300" height="400"><figcaption>A Space Marine in green armour on jump-pack smoke trails</figcaption></figure><figure><img src="/images/about/mouse-knight.jpg" alt="A mouse knight in armour and a purple cloak, leaning on a sword" loading="lazy" width="300" height="400"><figcaption>A mouse knight in armour and a purple cloak, leaning on a sword</figcaption></figure><figure><img src="/images/about/tyranid-wip.jpg" alt="A Tyranid monster in progress: red carapace, bone claws" loading="lazy" width="300" height="400"><figcaption>A Tyranid monster in progress: red carapace, bone claws</figcaption></figure></div>
 <h2>Where the colours come from</h2>
 <p>Every swatch is an estimate. Paint looks different on a screen than in the pot, and different again over a white or black primer, so treat a swatch as a guide, not a promise. Swatches are sampled from the best source available for each range, in this order:</p>
 <ul>
@@ -1706,7 +1710,7 @@ function aboutPage(D) {
 </section>`;
   return page({
     title, desc, path: '/about', crumbs: [['Home', '/'], ['About', '/about']], body,
-    ld: [{ '@type': 'AboutPage', '@id': SITE + '/about#page', url: SITE + '/about', name: title, description: desc, about: { '@id': SITE + '/#site' }, publisher: { '@id': SITE + '/#org' } }],
+    ld: [{ '@type': 'AboutPage', '@id': SITE + '/about#page', image: SITE + '/images/about/collection.jpg', url: SITE + '/about', name: title, description: desc, about: { '@id': SITE + '/#site' }, publisher: { '@id': SITE + '/#org' } }],
   });
 }
 
