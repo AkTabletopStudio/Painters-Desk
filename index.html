@@ -475,12 +475,28 @@ fieldset.blst{border:3px solid var(--ink);border-radius:14px;padding:8px 12px 12
 .chl .chip>i{flex:none}.chl .lc{width:30px;height:30px;flex:none;border-radius:50%;border:3px solid var(--ink)}.chl .chip{cursor:pointer;margin:2px 0 0}
 .chcard .rstrip{margin:-4px 0 8px}
 .chl .chip{border-radius:14px}@media (max-width:560px){.chl .lc,.chl .chsw{display:none}}
+/* From my desk: a wall of model photos (all cut to the same portrait shape so new ones join the end in order), each with who posted it */
+.tag.tdesk{background:#9be7c4}
+.dwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
+.dtile{display:block;position:relative;aspect-ratio:4/5;border:3px solid var(--ink);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:3px 3px 0 var(--sh);color:#fff;text-decoration:none}
+.dtile>img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .2s}.dtile:hover>img{transform:scale(1.03)}
+.dtile:focus-visible{outline:3px solid var(--yel);outline-offset:2px}
+.dwho{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;padding:22px 8px 7px;background:linear-gradient(transparent,rgba(0,0,0,.75));font-size:13px;line-height:1.2}
+.dwho b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.dwho .av{margin:0;flex:none;border-color:#fff}
+.dn{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:1;padding:4px 7px;border-radius:10px}.dn.dp{right:auto;left:6px}
+.dmore{text-align:center;margin:12px 0}
+.dsh{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.dsh h2{margin:0}
+.dsec .dwall{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.dgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:8px 0 12px}.dgal a{display:block}.dgal .ph{width:100%;aspect-ratio:1;height:auto;object-fit:cover;margin:0}
+.dphs{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px}.dph{position:relative;width:116px}.dph>img{width:116px;height:116px;object-fit:cover;border:3px solid var(--ink);border-radius:10px;display:block;box-sizing:border-box}.dph .dn{right:auto;left:6px}.dphb{display:flex;gap:4px;margin-top:4px}.dphb .btn{padding:3px 9px}
+@media (max-width:560px){.dwall{grid-template-columns:repeat(2,1fr);gap:5px}.dsec .dwall{grid-template-columns:repeat(3,1fr)}.dsec .dwho{display:none}}
 .ctabs{display:flex;border:3px solid var(--ink);border-radius:14px;overflow:hidden;margin:4px 0 10px;box-shadow:4px 4px 0 var(--sh);max-width:680px}
 .ctabs a{flex:1;text-align:center;padding:9px 4px;color:var(--fg);background:var(--card);text-decoration:none;font-weight:700;font-size:15px;min-width:0}
 .ctabs a+a{border-left:3px solid var(--ink)}
 .ctabs a.on{background:var(--ink);color:var(--bg)}
 .ctabs a:focus-visible{outline:3px solid var(--yel);outline-offset:-5px}
-@media (max-width:560px){.ctabs a{font-size:12.5px;padding:9px 1px;letter-spacing:-.2px}}
+/* Phones: two rows of three tabs, split by the ink showing through the gaps */
+@media (max-width:560px){.ctabs{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;background:var(--ink)}.ctabs a+a{border-left:0}.ctabs a{font-size:14px;padding:9px 2px}:root[data-look^=classic] .ctabs{gap:1px}}
 /* Paints sub-tabs (All paints | My paints | Conversion chart): .ptabs, shared by the app and the Worker paint/guide pages. Short labels on phones. */
 .ptabs .sh{display:none}@media (max-width:560px){.ptabs .lg{display:none}.ptabs .sh{display:inline}}
 /* Clear (x) button on search boxes, added by sxInit() in app.js and the paint/guide page script. */
@@ -978,6 +994,7 @@ var bn=document.createElement('span');bn.className='an';bn.textContent=bm.name;b
 <h1>What's new</h1>
 <p class="s">The main changes to The Painters Desk, newest first. Found a bug or have an idea? Use the Feedback button on any page.</p>
 <div class="panel cl"><h2>25 November 2026</h2><ul>
+<li data-a="community"><span class="tg nw">New</span><b>From my desk.</b> Under Tutorials &amp; Community, the new <b>From my desk</b> tab is a wall of models painters have posted, each photo with who painted it. Post yours with <b>📷 Post a model</b>: a photo is all it needs, and you can add more photos, tag the paints you used and write as much or as little as you like. Your posts also show in a From my desk section on your profile.</li>
 <li data-a="site"><span class="tg nw">New</span><b>About page.</b> A new <a href="about">About</a> page says who makes The Painters Desk, where the swatch colours come from, how cross-brand matches are found and how to get in touch. It is linked at the bottom of every page.</li>
 <li data-a="recipes"><span class="tg nw">New</span><b>Random palette challenge.</b> Under Tutorials &amp; Community, the new <b>Challenges</b> tab gives you a random palette from your own paints that still works as a colour scheme (complementary, split, analogous, triadic and more), with a shade, a highlight, neutrals and sometimes a metal and a wash. Reroll it or swap single paints, take the challenge, paint a model with only those paints, then post a photo of it with the palette you were given. You can also take on someone else's palette from their post.</li>
 </ul></div>

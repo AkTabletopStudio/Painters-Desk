@@ -932,13 +932,20 @@ async function getProfile(request, env, id) {
     `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
-     FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' ORDER BY r.updated_at DESC LIMIT 100`
+     FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' AND r.kind != 'desk' ORDER BY r.updated_at DESC LIMIT 100`
+  ).bind(id).all()).results;
+  // From my desk: their models, newest first (the profile shows a page; the Community tab has the rest).
+  const desk = blocked ? [] : (await env.DB.prepare(
+    `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
+       (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
+       (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
+     FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' AND r.kind = 'desk' ORDER BY r.created_at DESC LIMIT 61`
   ).bind(id).all()).results;
   const commission = blocked ? null : await commissionFor(env, id);
   // canMessage: shows the Message button. The checks that depend on who is asking happen when they open it.
   p.canMessage = !blocked && await hasMessages(env) && !!(await env.DB.prepare('SELECT dm FROM users WHERE id = ?').bind(id).first()).dm;
   p.follows = blocked ? null : await followInfo(env, id, await currentUser(request, env));
-  return json({ profile: p, recipes: rows.map(listItem), commission });
+  return json({ profile: p, recipes: rows.map(listItem), desk: desk.slice(0, 60).map(listItem), deskMore: desk.length > 60, commission });
 }
 
 async function deleteAccount(request, env) {
@@ -1334,13 +1341,16 @@ async function listRecipes(request, env, url) {
   const paint = url.searchParams.get('paint');
   if (paint && paint.length <= 120) { where.push("r.paints LIKE ? ESCAPE '\\'"); args.push(`%${JSON.stringify(paint).replace(/[\\%_]/g, c => '\\' + c)}%`); }
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit')) || 100));
+  // From my desk scrolls on and on: newest posts first (an edit doesn't bring one back to the top), a page at a time.
+  const offset = Math.min(100000, Math.max(0, parseInt(url.searchParams.get('offset')) || 0));
+  if (kind === 'desk' && scope !== 'saved') order = 'r.created_at DESC';
   const rows = (await env.DB.prepare(
     `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
-     FROM ${from} JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${limit}`
+     FROM ${from} JOIN users u ON u.id = r.user_id WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${limit + 1} OFFSET ${offset}`
   ).bind(...args).all()).results;
-  return json({ recipes: rows.map(r => ({ ...listItem(r), saved: scope === 'saved' })) });
+  return json({ recipes: rows.slice(0, limit).map(r => ({ ...listItem(r), saved: scope === 'saved' })), more: rows.length > limit });
 }
 
 // The list only needs a picture: the main photo, else the last step photo (usually the finished model).
@@ -1348,7 +1358,8 @@ async function listRecipes(request, env, url) {
 function listItem(r) {
   const o = recipeOut(r);
   o.cover = o.cover || [...o.steps].reverse().find(s => s.image)?.image || '';
-  if (o.kind !== 'tutorial') o.layers = o.steps.map(s => s.mix);
+  if (o.kind === 'desk') o.photos = 1 + o.steps.length;
+  else if (o.kind !== 'tutorial') o.layers = o.steps.map(s => s.mix);
   o.steps = o.steps.length; o.saved = false; delete o.body;
   return o;
 }
@@ -1400,7 +1411,10 @@ const IMAGE_ID = /^[0-9a-f-]{36}$/, RECIPE_ID = /^[\w-]{1,64}$/;
 const LEVELS = ['beginner', 'intermediate', 'advanced'];
 // 'palette': paints matched to a photo's colours, stored like a recipe (one step per colour, no recipe links or video).
 // 'challenge': a random palette challenge entry: the palette the painter was given (one step per paint) and a photo of the finished model.
-const KINDS = ['recipe', 'tutorial', 'palette', 'challenge'];
+// 'desk': From my desk, a model a painter wants to show: 1 to DESK_PHOTOS photos (the first is the cover, the rest are
+// photo-only steps), with optional title, model, description and tagged paints (the paints list).
+const KINDS = ['recipe', 'tutorial', 'palette', 'challenge', 'desk'];
+const DESK_PHOTOS = 6, DESK_PAINTS = 40;
 const CHAL_SCHEMES = ['comp', 'split', 'ana', 'triad', 'rect', 'square'];
 
 // Validate the steps and make sure every photo they use was uploaded by this user.
@@ -1448,8 +1462,18 @@ async function saveRecipe(request, env, id) {
   const m = b.meta && typeof b.meta === 'object' ? b.meta : {};
   const meta = kind === 'tutorial' ? {
     level: LEVELS.includes(m.level) ? m.level : '', time: str(m.time, 40, 'Time'), model: str(m.model, 120, 'Model'),
-  } : kind === 'challenge' ? { scheme: CHAL_SCHEMES.includes(m.scheme) ? m.scheme : '', model: str(m.model, 120, 'Model') } : {};
+  } : kind === 'challenge' ? { scheme: CHAL_SCHEMES.includes(m.scheme) ? m.scheme : '', model: str(m.model, 120, 'Model') }
+    : kind === 'desk' ? { model: str(m.model, 120, 'Model') } : {};
   const cover = typeof b.cover === 'string' && IMAGE_ID.test(b.cover) ? b.cover : '';
+  if (kind === 'desk') {
+    if (!cover) throw new HttpError(400, 'Add a photo of your model');
+    // Extra photos only: no step names, text or paints.
+    const extra = steps.filter(s => s.image && s.image !== cover).map(s => ({ title: '', text: '', image: s.image, mix: [], recipe: '' }));
+    if (extra.length > DESK_PHOTOS - 1) throw new HttpError(400, `Up to ${DESK_PHOTOS} photos per post`);
+    steps.splice(0, steps.length, ...extra);
+    // Nothing has to be filled in but the photo, so an empty title becomes the model name, else "From my desk".
+    if (!str(b.title, 120, 'Title')) b.title = meta.model || 'From my desk';
+  }
   if (kind === 'challenge') {
     if (!cover) throw new HttpError(400, 'Add a photo of your finished model');
     if (!steps.length || steps.length > 12) throw new HttpError(400, 'A challenge palette has 1 to 12 paints');
@@ -1457,7 +1481,7 @@ async function saveRecipe(request, env, id) {
   }
   // "paints" is every paint in the steps plus any extras listed separately; it drives list swatches and the wheel button.
   // Water can be part of a step's mix (to show a thinning ratio) but isn't a paint, so it's left out here.
-  const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])].filter(k => k !== 'water'), 60);
+  const paints = paintKeys([...steps.flatMap(s => s.mix.map(m => m.k)), ...(Array.isArray(b.paints) ? b.paints : [])].filter(k => k !== 'water'), kind === 'desk' ? DESK_PAINTS : 60);
   for (const k of linkedPaints) if (paints.length < 60 && !paints.includes(k)) paints.push(k);
   const rec = {
     kind,
