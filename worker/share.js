@@ -8,7 +8,7 @@ import { load, page, esc } from './seo.js';
 import { cardPNG, cardResponse } from './card.js';
 
 const SITE = 'https://paintersdesk.com';
-const KIND = { recipe: 'Recipe', tutorial: 'Tutorial', palette: 'Palette', challenge: 'Palette challenge', desk: 'From my desk' };
+const KIND = { recipe: 'Recipe', tutorial: 'Tutorial', palette: 'Palette', challenge: 'Palette challenge', desk: 'Showcase' };
 
 export const isSharePath = p => p === '/r' || p.startsWith('/r/');
 

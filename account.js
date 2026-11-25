@@ -77,11 +77,11 @@ async function api(path,{method='GET',body,keepalive=false}={}){
 const fmtDate=t=>new Date(t).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
 // Recipe and palette cards lead with the colour strip (one band per layer or colour); tutorial cards lead with the model photo.
 // A palette is a set of paints matched to a photo's colours; it is stored and shown like a recipe whose layers are its colours.
-const KIND={recipe:{c:'trec',t:'Recipe',u:'layer'},tutorial:{c:'ttut',t:'Tutorial',u:'step'},palette:{c:'tpal',t:'Palette',u:'colour'},challenge:{c:'tchal',t:'Challenge',u:'colour'},desk:{c:'tdesk',t:'From my desk',u:'photo'}},kindOf=r=>KIND[r.kind]||KIND.recipe;
+const KIND={recipe:{c:'trec',t:'Recipe',u:'layer'},tutorial:{c:'ttut',t:'Tutorial',u:'step'},palette:{c:'tpal',t:'Palette',u:'colour'},challenge:{c:'tchal',t:'Challenge',u:'colour'},desk:{c:'tdesk',t:'Showcase',u:'photo'}},kindOf=r=>KIND[r.kind]||KIND.recipe;
 // A challenge card leads with the photo of the finished model, with the palette it was given as a strip under it.
 const cardHTML=r=>{const ch=r.kind==='challenge',rec=r.kind!=='tutorial'&&!ch,K=kindOf(r),strip=rec?stripHTML(r.layers||[],'big'):'';
  return `<a class="card${rec?' rcard':''}${ch?' chcard':''}" href="#/recipe/${esc(r.id)}">${strip||(r.cover?`<img class="thumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:'')}${ch?stripHTML(r.layers||[]):''}<h3>${esc(r.title)}</h3><span class="tag ${K.c}">${K.t}</span>${r.visibility==='private'?'<span class="tag">Private</span>':''}${r.steps?`<span class="tag">${r.steps} ${K.u}${r.steps===1?'':'s'}</span>`:''}${ch?chalTags(r.meta):rec?'':metaTags(r.meta)}${strip&&r.cover?`<img class="rthumb" src="${imgURL(r.cover)}" alt="" loading="lazy">`:''}${ch?'':`<div class="sw">${r.paints.slice(0,16).map(k=>swatch(BYKEY.get(k))).join('')}</div>`}<div class="s">${esc(r.summary)}</div><div class="n">${esc(r.author.name)} · ${fmtDate(r.updated_at)}${r.visibility==='public'?` · ${r.comments} comment${r.comments===1?'':'s'}`:''}</div>${r.visibility==='public'?`<div class="n stats">${statsHTML(r)}</div>`:''}</a>`};
-// From my desk: one tile per post, just the photo with who posted it along the bottom (and a count when there are more photos).
+// Showcase: one tile per post, just the photo with who posted it along the bottom (and a count when there are more photos).
 // The tiles sit in columns that keep each photo's own shape, so the wall of pictures runs on without gaps.
 const deskTile=(r,me)=>`<a class="dtile" href="#/recipe/${esc(r.id)}" title="${esc(r.title)}"><img src="${imgURL(r.cover)}" alt="${esc(r.title)} by ${esc(r.author.name)}" loading="lazy">${r.photos>1?`<span class="dn" aria-label="${r.photos} photos">▣ ${r.photos}</span>`:''}${r.visibility==='private'?'<span class="dn dp">Private</span>':''}${me?'':`<span class="dwho">${avHTML(r.author)}<b>${esc(r.author.name)}</b></span>`}</a>`;
 // A layer's colour: the rough mix of its paints, or the paint itself. Water is left out.
@@ -417,7 +417,7 @@ async function renderProfile(id){
  ${mine?'<a class="btn" href="#/account">Edit profile</a>':`${(F&&INFO.follows)||(p.canMessage&&INFO.messages)?`<p class="row">${F&&INFO.follows?(ME?`<button class="btn${F.followed?'':' pri'}" type="button" id="pFol" aria-pressed="${F.followed}">${F.followed?'✓ Following':'+ Follow'}</button>`:'<a class="btn pri" href="#/account">+ Follow</a>'):''}${p.canMessage&&INFO.messages?`<a class="btn" href="#/inbox/u/${esc(p.id)}">✉ Message</a>`:''}</p>`:''}<button class="lnk rpb" type="button" id="pRep">⚑ Report this profile</button>`}</div></div>
  ${p.bio?`<div class="panel"><div class="steps">${linkify(p.bio)}</div></div>`:''}
  ${d.commission?commissionHTML(d.commission,p,mine):''}
- ${d.desk?`<div class="panel dsec"><div class="dsh"><h2>From my desk</h2>${mine?'<a class="btn pri" href="#/new/desk">📷 Post a model</a>':''}</div>${d.desk.length?`<div class="dwall">${d.desk.map(x=>deskTile(x,1)).join('')}</div>${d.deskMore?'<p class="s">Showing the newest 60.</p>':''}`:`<p class="s">${mine?'Show what\'s on your painting desk: post a photo of a model, with paints and a few words if you like.':'No models posted yet.'}</p>`}</div>`:''}
+ ${d.desk?`<div class="panel dsec"><div class="dsh"><h2>Showcase</h2>${mine?'<a class="btn pri" href="#/new/desk">📷 Post a model</a>':''}</div>${d.desk.length?`<div class="dwall">${d.desk.map(x=>deskTile(x,1)).join('')}</div>${d.deskMore?'<p class="s">Showing the newest 60.</p>':''}`:`<p class="s">${mine?'Show what\'s on your painting desk: post a photo of a model, with paints and a few words if you like.':'No models posted yet.'}</p>`}</div>`:''}
  <div class="panel"><h2>Favourite paints</h2>${p.favourites.length?`<div class="chips" id="fp">${p.favourites.map(k=>pchip(k)).join('')}</div><button class="btn" id="fWheel" type="button">Show these on the wheel</button>`:`<p class="s">${mine?'You haven\'t picked any favourites yet. Add them on your account page.':'No favourite paints picked yet.'}</p>`}</div>
  <h2>Public recipes &amp; tutorials</h2>
  <div class="cards">${d.recipes.map(cardHTML).join('')||`<p class="s">${mine?'Nothing public yet. Make a recipe or tutorial public to show it here.':'Nothing shared yet.'}</p>`}</div>`;
@@ -590,7 +590,7 @@ function planRow(t){const mineP=P.filter(q=>!q.mix&&q.g!=='B'&&OWN.has(q.k)&&plK
 function renderPlan(){const box=$('pln');if(!box||!OWN)return;let v='';try{v=localStorage.getItem('pd-plan')||''}catch(e){}
  const m=location.hash.match(/[?&]plan=([^&]+)/);if(m){try{v=decodeURIComponent(m[1])}catch(e){}history.replaceState(null,'','#/paints');try{localStorage.setItem('pd-plan',v)}catch(e){}$('plnd').open=true}
  const pals=typeof PALETTES==='undefined'?[]:PALETTES,rs=PLRECS?[...PLRECS.values()]:[],opt=(val,t)=>`<option value="${esc(val)}"${val===v?' selected':''}>${esc(t)}</option>`;
- const kn={tutorial:'Tutorial',recipe:'Recipe',palette:'Palette',challenge:'Challenge',desk:'From my desk'},mine=rs.filter(r=>r.author&&ME&&r.author.id===ME.id),sv=rs.filter(r=>!mine.includes(r));
+ const kn={tutorial:'Tutorial',recipe:'Recipe',palette:'Palette',challenge:'Challenge',desk:'Showcase'},mine=rs.filter(r=>r.author&&ME&&r.author.id===ME.id),sv=rs.filter(r=>!mine.includes(r));
  const sel=`<label class="plnl">Project <select id="plnS"><option value="">Pick a palette, tutorial or recipe…</option><optgroup label="Inspiration palettes">${pals.map(x=>opt('pal:'+x.s,x.n)).join('')}</optgroup>`+
   (mine.length?`<optgroup label="Yours">${mine.map(r=>opt('rec:'+r.id,(kn[r.kind]||'Recipe')+': '+r.title)).join('')}</optgroup>`:'')+(sv.length?`<optgroup label="Saved">${sv.map(r=>opt('rec:'+r.id,(kn[r.kind]||'Recipe')+': '+r.title)).join('')}</optgroup>`:'')+`</select></label>`;
  const T=planTargets(v);
@@ -919,7 +919,7 @@ $('onlyMine').onchange=e=>{ONLY_MINE=e.target.checked;if(sel||NB)draw()};
 let rScope='public',rKind='tutorial',rPaint='';
 // Tutorials & Community: one page with tabs. Tutorials, Recipes and Palettes share the card list (#/recipes/<kind>);
 // Painters is the painter list (#/people), with Takes commissions (#/painters) as a filter inside it.
-const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['desk','From my desk','#/recipes/desk'],['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette'],['challenge','Challenges','#/recipes/challenge'],['people','Painters','#/people']];
+const COMM_TABS=[['tutorial','Tutorials','#/recipes/tutorial'],['desk','Showcase','#/recipes/desk'],['recipe','Recipes','#/recipes/recipe'],['palette','Palettes','#/recipes/palette'],['challenge','Challenges','#/recipes/challenge'],['people','Painters','#/people']];
 window.pdCommHead=tab=>commHead(tab);
 // The Commissions button sits beside the heading on every tab, so hiring a painter is always one tap away.
 const commHead=tab=>{const cm=tab==='commissions';if(cm)tab='people';
@@ -1001,7 +1001,7 @@ async function renderRecipes(k){
    L.innerHTML=d.recipes.length?d.recipes.map(cardHTML).join('')
     :`<p class="s">${rScope==='mine'?`You have not written any ${what} yet.`:rScope==='saved'?'Nothing saved yet. Press ☆ Save on one to keep it here.':rScope==='following'?'Nothing here yet. <a href="#/people">Find painters</a> and press Follow on their profile to see their new work here.':`No public ${what} yet. Be the first to share one.`}</p>`}
   catch(e){L.innerHTML=`<p class="err">${esc(e.message)}</p>`}}
- // From my desk loads a page of photos at a time and fetches the next page as you scroll near the end.
+ // Showcase loads a page of photos at a time and fetches the next page as you scroll near the end.
  let dOff=0,dBusy=false,dMore=false,dGen=0,dObs=null;
  async function loadDesk(L,next){const g=next?dGen:++dGen,M=$('rmore');if(!next){dOff=0;dMore=false}else if(dBusy)return;dBusy=true;
   try{const d=await api(`/recipes?scope=${rScope}&kind=desk&limit=30&offset=${dOff}&paint=${encodeURIComponent(rPaint)}&q=${encodeURIComponent($('rq').value)}`);
@@ -1087,12 +1087,12 @@ async function renderRecipe(id){
  const el=$('v-recipe');el.innerHTML='<p class="s">Loading…</p>';
  let d;try{d=await api('/recipes/'+encodeURIComponent(id))}catch(e){el.innerHTML=`<p class="err">${esc(e.message)}</p><a href="#/recipes">Back to recipes</a>`;return}
  const r=d.recipe;r.paints=r.paints.filter(k=>k!==WATER.k);const mine=ME&&ME.id===r.author.id,canMod=c=>ME&&(ME.id===c.author.id||mine||ME.admin);
- // A From my desk post reads as photos: the main one, any others under it, then what they wrote and the paints they tagged.
+ // A Showcase post reads as photos: the main one, any others under it, then what they wrote and the paints they tagged.
  const dsk=r.kind==='desk',rec=r.kind!=='tutorial'&&!dsk,pal=r.kind==='palette'||r.kind==='challenge',chl=r.kind==='challenge',K=kindOf(r),L=d.linked||{};
  // A recipe reads as one colour: a strip of its layers, then each layer's paints. A tutorial reads as a model, step by step.
  const layersHTML=(ls,cls='',W='Layer')=>`<ol class="layers ${cls}">${ls.map((s,i)=>{const h=layerHex(s.mix);return `<li><span class="lc"${h?` style="background:${h}"`:''}></span><div><b>${esc(s.title||W+' '+(i+1))}</b>${mixHTML(s.mix)}${s.text?`<div class="steps s">${linkify(s.text)}</div>`:''}${s.image?`<a href="${imgURL(s.image)}" target="_blank" data-big="${esc(s.image)}"><img class="ph" src="${imgURL(s.image)}" alt="${esc(s.title||'Layer '+(i+1))}" loading="lazy"></a>`:''}</div></li>`}).join('')}</ol>`;
  const linkHTML=id=>{const l=L[id];return l?`<div class="lrec"><a href="#/recipe/${esc(l.id)}">${stripHTML(l.layers.map(x=>x.mix))}<b>Recipe: ${esc(l.title)}</b> <span class="s">by ${esc(l.author.name)}</span></a>${layersHTML(l.layers,'sm')}</div>`:'<p class="s">This step used a recipe that is no longer shared.</p>'};
- el.innerHTML=`<p>${dsk?'<a href="#/recipes/desk">← From my desk</a>':'<a href="#/recipes">← Recipes &amp; tutorials</a>'}</p><h1>${esc(r.title)}</h1>
+ el.innerHTML=`<p>${dsk?'<a href="#/recipes/desk">← Showcase</a>':'<a href="#/recipes">← Recipes &amp; tutorials</a>'}</p><h1>${esc(r.title)}</h1>
  <p class="s"><span class="tag ${K.c}">${K.t}</span><span class="tag">${r.visibility==='public'?'Public':'Private'}</span>${chl?chalTags(r.meta):rec?'':metaTags(r.meta)}by ${who(r.author)} · updated ${fmtDate(r.updated_at)}</p>
  ${voteHTML(r,mine)}
  ${rec&&r.steps.length?stripHTML(r.steps.map(s=>s.mix),'tall'):''}
@@ -1283,7 +1283,7 @@ async function renderEdit(id,kind){
   try{const d=await api(id?'/recipes/'+id:'/recipes',{method:id?'PUT':'POST',body:b});RFOR.clear();location.hash='#/recipe/'+d.recipe.id}
   catch(e){$('eErr').textContent=e.message;$('eSave').disabled=false}}
 
- // From my desk: only a photo is needed. Up to 6 photos (the first leads), and an optional title, model, description and paint tags.
+ // Showcase: only a photo is needed. Up to 6 photos (the first leads), and an optional title, model, description and paint tags.
  const DESK_MAX=6;let dph=r.kind==='desk'?[r.cover,...r.steps.map(s=>s.image)].filter(Boolean):[];
  function drawDesk(){const bk=id?back:'#/recipes/desk';
   el.innerHTML=`<p><a href="${bk}">← Back</a></p><h1>${id?'Edit your post':'Post a model'}</h1><p class="s">Show something from your desk: a finished model, one still in progress, a whole army. Only the photo is needed; everything else is up to you.</p><div class="panel">
@@ -1292,7 +1292,7 @@ async function renderEdit(id,kind){
   <label class="f"><span>Model or army (optional)</span><input type="text" id="eModel" maxlength="120" placeholder="e.g. Ork Warboss"></label>
   <label class="f"><span>Description (optional)</span><textarea id="eBody" maxlength="20000" style="min-height:90px" placeholder="How you painted it, what you'd do differently, anything you like"></textarea></label>
   <div class="f"><span>Paints you used (optional)</span><div id="eX"></div></div>
-  <div class="f"><span>Who can see it</span><label><input type="radio" name="eVis" value="public"> Public, in Community › From my desk and on your profile</label><br><label><input type="radio" name="eVis" value="private"> Private, only me</label></div>
+  <div class="f"><span>Who can see it</span><label><input type="radio" name="eVis" value="public"> Public, in Community › Showcase and on your profile</label><br><label><input type="radio" name="eVis" value="private"> Private, only me</label></div>
   <div class="row"><button class="btn pri" id="eSave" type="button">${id?'Save':'Post it'}</button><a class="btn" href="${bk}">Cancel</a><span class="err" id="eErr"></span></div></div>`;
   const bind=(eid,get,set)=>{const e=$(eid);e.value=get();e.oninput=()=>set(e.value)};
   bind('eTitle',()=>r.title,v=>r.title=v);bind('eBody',()=>r.body,v=>r.body=v);bind('eModel',()=>r.meta.model||'',v=>r.meta.model=v);

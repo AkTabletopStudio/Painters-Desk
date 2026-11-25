@@ -934,7 +934,7 @@ async function getProfile(request, env, id) {
        (SELECT COUNT(*) FROM votes v WHERE v.recipe_id = r.id) AS vote_count
      FROM recipes r JOIN users u ON u.id = r.user_id WHERE r.user_id = ? AND r.visibility = 'public' AND r.kind != 'desk' ORDER BY r.updated_at DESC LIMIT 100`
   ).bind(id).all()).results;
-  // From my desk: their models, newest first (the profile shows a page; the Community tab has the rest).
+  // Showcase: their models, newest first (the profile shows a page; the Community tab has the rest).
   const desk = blocked ? [] : (await env.DB.prepare(
     `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
@@ -1341,7 +1341,7 @@ async function listRecipes(request, env, url) {
   const paint = url.searchParams.get('paint');
   if (paint && paint.length <= 120) { where.push("r.paints LIKE ? ESCAPE '\\'"); args.push(`%${JSON.stringify(paint).replace(/[\\%_]/g, c => '\\' + c)}%`); }
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit')) || 100));
-  // From my desk scrolls on and on: newest posts first (an edit doesn't bring one back to the top), a page at a time.
+  // Showcase scrolls on and on: newest posts first (an edit doesn't bring one back to the top), a page at a time.
   const offset = Math.min(100000, Math.max(0, parseInt(url.searchParams.get('offset')) || 0));
   if (kind === 'desk' && scope !== 'saved') order = 'r.created_at DESC';
   const rows = (await env.DB.prepare(
@@ -1411,7 +1411,7 @@ const IMAGE_ID = /^[0-9a-f-]{36}$/, RECIPE_ID = /^[\w-]{1,64}$/;
 const LEVELS = ['beginner', 'intermediate', 'advanced'];
 // 'palette': paints matched to a photo's colours, stored like a recipe (one step per colour, no recipe links or video).
 // 'challenge': a random palette challenge entry: the palette the painter was given (one step per paint) and a photo of the finished model.
-// 'desk': From my desk, a model a painter wants to show: 1 to DESK_PHOTOS photos (the first is the cover, the rest are
+// 'desk': Showcase, a model a painter wants to show: 1 to DESK_PHOTOS photos (the first is the cover, the rest are
 // photo-only steps), with optional title, model, description and tagged paints (the paints list).
 const KINDS = ['recipe', 'tutorial', 'palette', 'challenge', 'desk'];
 const DESK_PHOTOS = 6, DESK_PAINTS = 40;
@@ -1471,8 +1471,8 @@ async function saveRecipe(request, env, id) {
     const extra = steps.filter(s => s.image && s.image !== cover).map(s => ({ title: '', text: '', image: s.image, mix: [], recipe: '' }));
     if (extra.length > DESK_PHOTOS - 1) throw new HttpError(400, `Up to ${DESK_PHOTOS} photos per post`);
     steps.splice(0, steps.length, ...extra);
-    // Nothing has to be filled in but the photo, so an empty title becomes the model name, else "From my desk".
-    if (!str(b.title, 120, 'Title')) b.title = meta.model || 'From my desk';
+    // Nothing has to be filled in but the photo, so an empty title becomes the model name, else "<name>'s model".
+    if (!str(b.title, 120, 'Title')) b.title = meta.model || `${u.name}'s model`.slice(0, 120);
   }
   if (kind === 'challenge') {
     if (!cover) throw new HttpError(400, 'Add a photo of your finished model');
