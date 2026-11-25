@@ -1336,16 +1336,14 @@ async function listRecipes(request, env, url) {
   else where.push("r.visibility = 'public'");
   if (q) { where.push('(r.title LIKE ? OR r.summary LIKE ?)'); args.push(`%${q}%`, `%${q}%`); }
   const kind = url.searchParams.get('kind');
-  // One kind, or a few joined by commas (Showcase lists 'desk,challenge': challenge posts are finished models too).
-  const kinds = [...new Set((kind || '').split(','))].filter(k => KINDS.includes(k));
-  if (kinds.length) { where.push(`r.kind IN (${kinds.map(() => '?').join(',')})`); args.push(...kinds); }
+  if (KINDS.includes(kind)) { where.push('r.kind = ?'); args.push(kind); }
   // Recipes that use one paint (the wheel's "Recipes using this paint"). Keys are stored as a JSON array, so match the quoted key.
   const paint = url.searchParams.get('paint');
   if (paint && paint.length <= 120) { where.push("r.paints LIKE ? ESCAPE '\\'"); args.push(`%${JSON.stringify(paint).replace(/[\\%_]/g, c => '\\' + c)}%`); }
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit')) || 100));
   // Showcase scrolls on and on: newest posts first (an edit doesn't bring one back to the top), a page at a time.
   const offset = Math.min(100000, Math.max(0, parseInt(url.searchParams.get('offset')) || 0));
-  if (kinds.includes('desk') && scope !== 'saved') order = 'r.created_at DESC';
+  if (kind === 'desk' && scope !== 'saved') order = 'r.created_at DESC';
   const rows = (await env.DB.prepare(
     `SELECT r.*, u.name AS author_name, ${AVATAR} AS author_avatar,
        (SELECT COUNT(*) FROM comments c WHERE c.recipe_id = r.id) AS comment_count,
