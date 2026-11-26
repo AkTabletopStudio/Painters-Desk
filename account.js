@@ -30,38 +30,45 @@ window.pdDelMix=async id=>{await api('/mixes/'+encodeURIComponent(id),{method:'D
 // DET: pots, SKU and colour per owned paint (from a CSV import or the count buttons); DETOK once the server has migration 0024.
 let DET=new Map(),DETOK=false;
 let WANT=new Set(),WANTOK=false,wantPend={add:new Set(),remove:new Set()},wantT=0;
-const wantBtn=p=>!WANTOK||!p||p.mix||p.g==='B'||(OWN&&OWN.has(p.k))?'':`<button type="button" class="lnk sgw${WANT.has(p.k)?' on':''}" data-want="${esc(p.k)}" aria-pressed="${WANT.has(p.k)}">${WANT.has(p.k)?'★ On shopping list':'☆ Add to shopping list'}</button>`;
+// A paint you already own can go on the list too, when it has run out or is running low: it stays in your collection,
+// flagged Restock on the list and in My paints list, and Got it just takes it off the list.
+const wantTxt=k=>OWN&&OWN.has(k)?(WANT.has(k)?'★ On shopping list to restock':'↻ Ran out / running low'):(WANT.has(k)?'★ On shopping list':'☆ Add to shopping list');
+const wantTip=k=>OWN&&OWN.has(k)?(WANT.has(k)?'Tap to take it off your shopping list':'Put it on your shopping list to buy again. It stays in your collection'):'';
+const wantBtn=p=>!WANTOK||!p||p.mix||p.g==='B'?'':`<button type="button" class="lnk sgw${WANT.has(p.k)?' on':''}" data-want="${esc(p.k)}" aria-pressed="${WANT.has(p.k)}"${wantTip(p.k)?` title="${wantTip(p.k)}"`:''}>${wantTxt(p.k)}</button>`;
+function wantSync(){document.querySelectorAll('[data-want]').forEach(b=>{const k=b.dataset.want,o=WANT.has(k);b.classList.toggle('on',o);b.setAttribute('aria-pressed',o);b.textContent=wantTxt(k);if(wantTip(k))b.title=wantTip(k);else b.removeAttribute('title')});
+ document.querySelectorAll('#ownL [data-ok]').forEach(c=>c.classList.toggle('rs',WANT.has(c.dataset.ok)))}
 window.pdWantBtn=wantBtn;
 // Add to / remove from My paints straight from the wheel's selected paint (guideLinks in app.js). Signed out, a link to sign in.
 const ownTxt=o=>o?'★ In my paints':'＋ Add to my paints';
 const ownBtn=p=>!p||p.mix||p.g==='B'?'':OWN?`<button type="button" class="btn sm sgo${OWN.has(p.k)?' on':''}" data-own="${esc(p.k)}" aria-pressed="${OWN.has(p.k)}" title="${OWN.has(p.k)?'In your collection. Tap to remove it':'Add it to your collection'}">${ownTxt(OWN.has(p.k))}</button>`:API?'<a href="#/account">Sign in to add it to My paints</a>':'';
 window.pdOwnBtn=ownBtn;
-// Keeps every Add to my paints button (and the shopping list buttons, which hide for owned paints) in step with the collection.
+// Keeps every Add to my paints button (and the shopping list buttons, which say Ran out for owned paints) in step with the collection.
 function ownSync(){if(!OWN)return;document.querySelectorAll('[data-own]').forEach(b=>{const o=OWN.has(b.dataset.own);b.classList.toggle('on',o);b.setAttribute('aria-pressed',o);b.textContent=ownTxt(o);b.title=o?'In your collection. Tap to remove it':'Add it to your collection'});
- document.querySelectorAll('[data-want]').forEach(b=>b.hidden=OWN.has(b.dataset.want))}
+ wantSync()}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-own]');if(!b||!OWN)return;e.preventDefault();const k=b.dataset.own,on=!OWN.has(k);setOwned([k],on);undoBar([k],on);if(paintsRedraw)paintsRedraw();
  // On the wheel, redraw so the ★ marks in the selected paint's chips update too.
  if(b.closest('#sel')&&typeof sel!=='undefined'&&sel&&sel.k===k)draw()});
 // Paint pages link here with &own=1 (app.js paintLink sets pdOwnAsk): add that paint once the account has loaded.
 window.pdOwnNow=()=>{const k=window.pdOwnAsk;if(!k||!ME||!OWN)return;window.pdOwnAsk=null;if(BYKEY.has(k)&&!OWN.has(k)){setOwned([k],true);undoBar([k],true)}};
+// Paint pages and their pop-up link here with &want=1 (app.js paintLink sets pdWantAsk): put that paint on the shopping list.
+window.pdWantNow=()=>{const k=window.pdWantAsk;if(!k||!ME||!WANTOK)return;window.pdWantAsk=null;if(BYKEY.has(k)&&!WANT.has(k))setWant([k],true)};
 function setWant(keys,on){keys.forEach(k=>{if(on){WANT.add(k);wantPend.add.add(k);wantPend.remove.delete(k)}else{WANT.delete(k);wantPend.remove.add(k);wantPend.add.delete(k)}});
- document.querySelectorAll('[data-want]').forEach(b=>{const o=WANT.has(b.dataset.want);b.classList.toggle('on',o);b.setAttribute('aria-pressed',o);b.textContent=o?'★ On shopping list':'☆ Add to shopping list'});
- renderShop();clearTimeout(wantT);wantT=setTimeout(async()=>{const b={add:[...wantPend.add],remove:[...wantPend.remove]};wantPend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
+ wantSync();renderShop();clearTimeout(wantT);wantT=setTimeout(async()=>{const b={add:[...wantPend.add],remove:[...wantPend.remove]};wantPend={add:new Set(),remove:new Set()};if(!b.add.length&&!b.remove.length)return;
   try{const r=await api('/wants',{method:'PUT',body:b});if(!r.unavailable){WANT=new Set(r.paints);renderShop()}}catch(e){const m=$('shopM');if(m)m.textContent=e.message}},500)}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-want]');if(!b||!WANTOK)return;e.preventDefault();setWant([b.dataset.want],!WANT.has(b.dataset.want))});
 function shopText(){const by={};[...WANT].map(k=>BYKEY.get(k)).filter(Boolean).forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
- return'My Painters Desk shopping list\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')').join('\n')).join('\n')+'\n'}
+ return'My Painters Desk shopping list\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')'+(OWN&&OWN.has(p.k)?' - restock':'')).join('\n')).join('\n')+'\n'}
 function renderShop(){const el=$('shopP');if(!el)return;const wr=$('shopd')||el;if(!WANTOK){wr.hidden=true;return}wr.hidden=false;
  const ps=[...WANT].map(k=>BYKEY.get(k)).filter(Boolean),by={};ps.forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
  if($('shopN'))$('shopN').textContent=ps.length?`(${ps.length})`:'';
  el.innerHTML=(ps.length?`<div class="row shb"><button type="button" class="btn" id="shopCopy">Copy list</button><button type="button" class="btn" id="shopWheel">Show on wheel</button><span class="s" id="shopM"></span></div>`+
-  Object.entries(by).map(([b,l])=>`<h3>${esc(b)}</h3><div class="shl">${l.map(p=>`<div class="shr"><span class="nsw" style="background:${p.h}"></span><div class="nnm"><b>${esc(p.n)}</b><span>${esc(GL[p.g])}${p.c?' · '+esc(p.c):''}</span></div><button type="button" class="btn" data-got="${esc(p.k)}" title="Add ${esc(p.n)} to my collection">Got it</button><button type="button" class="lnk sgx" data-wrm="${esc(p.k)}" aria-label="Remove ${esc(p.n)} from the list">Remove</button></div>`).join('')}</div>`).join('')+
-  '<p class="s">Tap <b>Got it</b> when you buy one: it moves into your collection.</p>'
-  :'<p class="s">Nothing on your list yet. Tap <b>☆ Add to shopping list</b> on a suggested paint below, or on any paint you select on the wheel.</p>');
+  Object.entries(by).map(([b,l])=>`<h3>${esc(b)}</h3><div class="shl">${l.map(p=>`<div class="shr"><span class="nsw" style="background:${p.h}"></span><div class="nnm"><b>${esc(p.n)}</b><span>${esc(GL[p.g])}${p.c?' · '+esc(p.c):''}</span>${OWN&&OWN.has(p.k)?'<span class="shrs" title="You own this one and it has run out or is running low">↻ Restock</span>':''}</div><button type="button" class="btn" data-got="${esc(p.k)}" title="${OWN&&OWN.has(p.k)?'Bought more: take '+esc(p.n)+' off the list':'Add '+esc(p.n)+' to my collection'}">Got it</button><button type="button" class="lnk sgx" data-wrm="${esc(p.k)}" aria-label="Remove ${esc(p.n)} from the list">Remove</button></div>`).join('')}</div>`).join('')+
+  '<p class="s">Tap <b>Got it</b> when you buy one: it moves into your collection. A <b>↻ Restock</b> paint is already in your collection, so it just comes off the list.</p>'
+  :'<p class="s">Nothing on your list yet. Tap <b>☆ Add to shopping list</b> on a suggested paint below, on a paint page, or on any paint you select on the wheel. Run out of a paint you own? Tap it in <b>My paints list</b> and choose <b>↻ Ran out / running low</b>.</p>');
  const c=$('shopCopy');if(c)c.onclick=async()=>{try{await navigator.clipboard.writeText(shopText());$('shopM').textContent='Copied.'}catch(e){$('shopM').textContent='Could not copy here.'}};
  const w=$('shopWheel');if(w)w.onclick=()=>showOnWheel([...WANT]);
  el.querySelectorAll('[data-wrm]').forEach(b=>b.onclick=()=>setWant([b.dataset.wrm],false));
- el.querySelectorAll('[data-got]').forEach(b=>b.onclick=()=>{const k=b.dataset.got;setOwned([k],true);setWant([k],false);if(paintsRedraw)paintsRedraw()})}
+ el.querySelectorAll('[data-got]').forEach(b=>b.onclick=()=>{const k=b.dataset.got;if(OWN&&OWN.has(k)){setWant([k],false);return}setOwned([k],true);setWant([k],false);if(paintsRedraw)paintsRedraw()})}
 window.pdApi=()=>API; // the wheel's From a photo offers Save as palette card only when accounts work
 
 // Someone who sends feedback without signing in keeps a random token in this browser, so the team's replies can
@@ -194,7 +201,7 @@ async function loadMe(){
  if(ME&&INFO.messages&&fbToken())api('/inbox/claim',{method:'POST'}).then(()=>{localStorage.removeItem(FBT);unread()}).catch(()=>{});
  unread();
  askUpdates();
- window.pdOwnNow();
+ window.pdOwnNow();window.pdWantNow();
  renderNeu();draw()}
 // Collections edited on another device: when this tab comes back after a minute or more, fetch the collection again.
 // Leaving the tab (or closing it) sends any ticks still waiting to save, so they aren't lost.
@@ -681,7 +688,7 @@ function renderPaints(){
   $('ownN').textContent=OWN.size?'('+OWN.size+(qOn()?', '+pots+' pot'+(pots===1?'':'s'):'')+')':'';if(!d.open){box.innerHTML='';return}
   const by=new Map();P.forEach(p=>{if(p.mix||!OWN.has(p.k))return;const b=BR_OF[p.g];if(!by.has(b))by.set(b,new Map());const g=by.get(b);if(!g.has(p.g))g.set(p.g,[]);g.get(p.g).push(p)});
   box.innerHTML=[...by.keys()].sort((a,b)=>a-b).map(b=>{const gs=by.get(b),n=[...gs.values()].reduce((a,l)=>a+l.length,0);
-   return`<section class="owg"><h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="owl">${esc(GL[g])} <span class="owc">${ps.length}</span></div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>{const ch=`<button type="button" class="chip" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`,q=qtyOf(p.k);
+   return`<section class="owg"><h3 class="owb">${esc(BRANDS[b][0])} <span class="s">${n} paint${n===1?'':'s'}</span></h3>`+[...gs].map(([g,ps])=>`<div class="owr"><div class="owl">${esc(GL[g])} <span class="owc">${ps.length}</span></div><div class="chips">${ps.sort((x,y)=>x.n.localeCompare(y.n)).map(p=>{const ch=`<button type="button" class="chip${WANT.has(p.k)?' rs':''}" data-ok="${esc(p.k)}" title="More about ${esc(p.n)}${WANT.has(p.k)?' (on your shopping list to restock)':''}"><i style="background:${p.h}"></i>${esc(p.n)}${p.c?` <span class="s">${esc(p.c)}</span>`:''}</button>`,q=qtyOf(p.k);
     return qOn()?`<span class="owq">${ch}<span class="qst"><button type="button" data-qd="${esc(p.k)}" aria-label="One less pot of ${esc(p.n)}"${q<=1?' disabled':''}>−</button><b aria-label="${q} pots">${q}</b><button type="button" data-qu="${esc(p.k)}" aria-label="One more pot of ${esc(p.n)}">+</button></span></span>`:ch}).join('')}</div></div>`).join('')+'</section>'}).join('')};
  {const d=$('ownd');try{const v=localStorage.getItem('pd-ownd');d.open=v==null?OWN.size<=40:v==='1'}catch(e){d.open=OWN.size<=40}
   d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-ownd',d.open?'1':'0')}catch(e){}ownList()});
