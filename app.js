@@ -1040,6 +1040,8 @@ window.pdPalettes=id=>{const el=$('v-palettes');if(!el)return;const x=id&&PL.fin
 function paintLink(){const m=location.hash.match(/[?&]paint=([^&]*)/);if(!m)return;let k='';try{k=decodeURIComponent(m[1])}catch(e){}
  // &own=1 (the paint pages' Add to My paints button) also adds it to the collection once signed in (account.js pdOwnNow).
  if(/[?&]own=1/.test(location.hash)){window.pdOwnAsk=k;window.pdOwnNow&&pdOwnNow()}
+ // &want=1 (Add to shopping list on the paint pages and their pop-up) puts it on the shopping list (account.js pdWantNow).
+ if(/[?&]want=1/.test(location.hash)){window.pdWantAsk=k;window.pdWantNow&&pdWantNow()}
  history.replaceState(null,'','#/');const p=P.find(q=>q.k===k);if(!p)return;if(MODE!=='col')setMode('col');if(!p.on){p.on=true;sync()}
  if(CH.includes(p)){if(sel!==p)pick(p)}else neutralShow(p);document.getElementById('w').scrollIntoView({block:'start'})}
 paintLink();addEventListener('hashchange',paintLink);

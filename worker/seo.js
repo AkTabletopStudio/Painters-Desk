@@ -300,7 +300,7 @@ const PL_DLG = `<dialog class="pd pl" id="plDlg" aria-labelledby="plT"><button c
 <script>(function(){var d=document,g=d.getElementById('plDlg'),B=d.getElementById('plB'),C={},n=0;if(!g||!g.showModal)return;
 function e(t){return String(t).replace(/[&<>"']/g,function(c){return'&#'+c.charCodeAt(0)+';'})}
 function show(u,x){B.innerHTML='<div class="plh"><span class="pls" style="background:'+e(x.h)+'"></span><div><h2 id="plT">'+e(x.n)+'</h2><p class="s">'+e(x.b)+' · '+e(x.r)+(x.c?' · '+e(x.c):'')+'</p></div></div>'
- +'<div class="row"><a class="btn pri" href="'+e(x.u)+'">View paint page</a><a class="btn" href="'+e(x.w)+'">Show on wheel</a></div>'
+ +'<div class="row"><a class="btn pri" href="'+e(x.u)+'">View paint page</a><a class="btn" href="'+e(x.w)+'">Show on wheel</a><a class="btn" href="'+e(x.w)+'&amp;want=1" rel="nofollow">☆ Add to shopping list</a></div>'
  +(x.m.length?'<h3>Closest in other brands</h3><ul class="m">'+x.m.map(function(m){return'<li><i class="sw" style="background:'+e(m.h)+'"></i><span>'+(m.ck?'<span class="ck" title="Listed in a conversion chart">✓</span> ':'≈ ')+'<a href="'+e(m.u)+'">'+e(m.n)+'</a><em>'+e(m.b)+' · ΔE '+m.d+', '+e(m.q)+'</em></span></li>'}).join('')+'</ul>':'')
  +'<p class="s">✓ = listed in a conversion chart, ≈ = closest swatch colour. Swatch colours are estimates, so check the paint in person.</p>';
  g.scrollTop=0;if(!g.open)g.showModal();g.querySelector('.plx').focus()}
@@ -518,7 +518,7 @@ function paintPage(D, p, rs, ph) {
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
 ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Swatches are estimates, so check the real paints before you commit.</p>
 ${p.now ? `<p>${esc(p.n)} is an old Army Painter Warpaints colour. Army Painter's Warpaints Fanatic conversion chart lists <a href="${paintUrl(p.now)}">${esc(p.now.n)}</a> as its replacement in Warpaints Fanatic, a close match but not always exact. The swatch shown here is ${esc(p.now.n)}'s.</p>` : ''}
-<p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;own=1" rel="nofollow">＋ Add ${esc(p.n)} to My paints</a></p>
+<p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;own=1" rel="nofollow">＋ Add ${esc(p.n)} to My paints</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;want=1" rel="nofollow">☆ Add to shopping list</a></p>
 ${stdLinksHTML(D, p)}
 ${photosHTML(p, ph)}
 ${mt ? `<h2 class="sec">Metallic matches</h2><p class="s">${esc(p.n)} is a metallic${p.t === 'pearl' ? ' (pearl)' : ''} paint, so these are metallic and pearl paints only.</p>` : ''}
