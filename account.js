@@ -24,6 +24,9 @@ const VIEWS=['welcome','changelog','palettes','wheel','paints','recipes','recipe
 let ME=null,INFO=null,API=false;
 // Saved mixes (My mix paints): loaded with the collection, handed to the wheel (app.js pdSetMixes). MIXOK is false until migration 0020 is live.
 let MIXES=[],MIXOK=false;window.pdMixOK=()=>MIXOK;
+// Custom paints (migration 0029): the user's own paints that aren't in the catalogue, loaded with the collection and handed to the
+// wheel (app.js pdSetCustom). CUSOK is false until the migration is live. Private to the user; their colour never touches data.js.
+let CUS=[],CUSOK=false;
 window.pdAddMix=async m=>{const r=await api('/mixes',{method:'POST',body:m});MIXES.push(r.mix);pdSetMixes(MIXES);if(location.hash==='#/paints')renderMixes()};
 window.pdDelMix=async id=>{await api('/mixes/'+encodeURIComponent(id),{method:'DELETE'});MIXES=MIXES.filter(x=>x.id!==id);pdSetMixes(MIXES);if(location.hash==='#/paints')renderMixes()};
 // Shopping list: paints the painter wants to buy (table wants, migration 0022). WANTOK is false until that is live, which hides every ☆ button.
@@ -183,14 +186,15 @@ async function loadMe(){
  if(ME){
   // The account's collection, wheel, mixes and shopping list load side by side, so the page settles sooner.
   const no=()=>null,B=BOOT||{},got=(k,path)=>B[k]?Promise.resolve(B[k]):api(path).catch(no);
-  const [col,wh,mx,wn]=await Promise.all([got('collection','/collection'),got('wheel','/me/wheel'),got('mixes','/mixes'),got('wants','/wants')]);
+  const [col,wh,mx,wn,cu]=await Promise.all([got('collection','/collection'),got('wheel','/me/wheel'),got('mixes','/mixes'),got('wants','/wants'),got('custom','/custom')]);
   if(col){const ks=col.paints;OWN=ownSet(ks);DETOK=col.details!=null;DET=new Map(Object.entries(col.details||{}));const old=ks.filter(k=>RENAMED[k]);if(old.length)api('/collection',{method:'PUT',body:{add:old.map(k=>RENAMED[k]),remove:old}}).catch(()=>{})}else OWN=new Set();
   wheelSync(wh);
   MIXOK=!!mx&&!mx.unavailable;MIXES=mx&&mx.mixes||[];
+  CUSOK=!!cu&&!cu.unavailable;CUS=cu&&cu.paints||[];
   WANTOK=!!wn&&!wn.unavailable;WANT=new Set(wn&&wn.paints||[]);
   meAt=Date.now()}
- else{OWN=null;DET=new Map();DETOK=false;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;SEL_U='';MIXOK=false;MIXES=[];WANTOK=false;WANT=new Set()}
- window.pdSetMixes&&pdSetMixes(MIXES);
+ else{OWN=null;DET=new Map();DETOK=false;ONLY_MINE=false;$('onlyMine').checked=false;onSelSave=null;SEL_U='';MIXOK=false;MIXES=[];CUSOK=false;CUS=[];WANTOK=false;WANT=new Set()}
+ window.pdSetMixes&&pdSetMixes(MIXES);window.pdSetCustom&&pdSetCustom(CUS);
  document.querySelectorAll('#v-welcome [data-api]').forEach(a=>a.hidden=!API);
  $('acct').innerHTML=ME?avHTML(ME)+'<span class="an">'+esc(ME.name)+'</span>':'Sign in';$('acct').title=ME?ME.name:'';
  $('mine').hidden=!ME;$('mineBtn').hidden=!ME;if(ME)mineLbl();
@@ -573,9 +577,89 @@ async function rstOpen(){const d=$('rstDlg'),L=$('rstL');L.innerHTML='<p class="
   if(e.dataset.sure!=='1'){L.querySelectorAll('[data-rst]').forEach(o=>{o.dataset.sure='';o.textContent='Restore';o.className='btn sm'});e.dataset.sure='1';e.textContent=`Yes, go back to these ${n}`;e.className='btn sm dan';return}
   e.disabled=true;e.textContent='Restoring…';clearTimeout(saveT);await flush();
   try{colShow(await api('/collection/restore',{method:'POST',body:{day:e.dataset.rst}}));d.close();const m=$('pmsg');if(m)m.textContent='Restored. You own '+OWN.size+' paints again.'}catch(er){e.disabled=false;e.textContent=er.message}})}
+/* ---------- custom paints (My paints > My custom paints, and Edit on the wheel) ---------- */
+// A paint that isn't on the site: a photo (tap it to pick the colour) or a typed hex, a name, a brand or range and a paint type.
+// It joins the collection and the wheel (dotted outline) and shows its closest catalogue paints. Only its owner sees it.
+const CUS_KEY=x=>'¤|'+x.id+'|',cusP=x=>P.find(p=>p.k===CUS_KEY(x));
+function renderCustom(){const el=$('cusP');if(!el)return;
+ const wr=$('cusd'),bt=$('pCus');wr.hidden=bt.hidden=!CUSOK;if(!CUSOK)return;
+ $('cusN').textContent=CUS.length?`(${CUS.length})`:'';
+ el.innerHTML=`<p class="s">${CUS.length?'Paints you added yourself. Only you can see them. They show on the wheel with a dotted outline, and their colour is your own estimate.':'No custom paints yet. Add a homemade mix or a paint from a brand the site doesn\'t list: take a photo of a swatch and tap it to pick the colour, or type its hex code.'}</p>`+
+ CUS.map(x=>`<div class="mxr cur"><span class="mxsw">${x.photo?`<img class="cuph" src="${imgURL(x.photo)}" alt="">`:''}<i style="background:${esc(x.hex)}"></i></span><div class="mxt"><b>${esc(x.name)}</b><span class="s">${esc(x.brand||'No brand')} · ${esc(CUS_TL[x.type]||'')} · ${esc(x.hex)}</span></div><span class="mxb">${x.suggested_at?'<span class="s">Suggested ✓</span>':`<button type="button" class="mxsv" data-cusg="${esc(x.id)}" title="Send it to the team to look at adding to the site's paint list">Suggest for main list</button>`}<button type="button" class="mxsv" data-cued="${esc(x.id)}">Edit</button></span></div>`).join('')+
+ '<div class="row"><button class="btn sm" type="button" id="cusAdd">Add custom paint</button></div>';
+ $('cusAdd').onclick=()=>cuOpen(null);
+ el.querySelectorAll('[data-cued]').forEach(e=>e.onclick=()=>cuOpen(CUS.find(x=>x.id===e.dataset.cued)));
+ el.querySelectorAll('[data-cusg]').forEach(e=>e.onclick=async()=>{
+  if(e.dataset.sure!=='1'){e.dataset.sure='1';e.textContent='Send it to the team?';return}
+  e.disabled=true;e.textContent='Sending…';
+  try{await api('/custom/'+encodeURIComponent(e.dataset.cusg)+'/suggest',{method:'POST',body:{}});const x=CUS.find(y=>y.id===e.dataset.cusg);if(x)x.suggested_at=Date.now();renderCustom();
+   const m=$('pmsg');if(m)m.textContent='Thanks! The team will check it against the maker\'s own colours before adding it.'}
+  catch(er){e.disabled=false;e.dataset.sure='';e.textContent=er.message||'Could not send'}})}
+window.pdCustomEdit=id=>{const x=CUS.find(y=>y.id===id);if(x)cuOpen(x)};
+function cuDlg(){let d=$('cuDlg');if(d)return d;
+ const ty=CUS_T.map(t=>`<option value="${t}">${esc(CUS_TL[t])}</option>`).join(''),br=['Homemade',...BRANDS.map(b=>b[0])].map(b=>`<option value="${esc(b)}">`).join('');
+ document.body.insertAdjacentHTML('beforeend',`<dialog class="pd pickdlg" id="cuDlg" aria-labelledby="cuT"><button class="cpx pqx" type="button" aria-label="Close" data-cux>×</button><div class="pkh"><h2 id="cuT">Add a custom paint</h2></div>
+ <p class="s">For paints that aren't on the site: your own mixes, or a brand the site doesn't list yet. Only you can see them. Take a photo of a painted swatch and tap it to pick the colour, or type the hex code.</p>
+ <div class="row csvin"><label class="btn" for="cuFile">Take or pick a photo</label><input type="file" id="cuFile" accept="image/*" capture="environment" hidden><button class="btn sm" type="button" id="cuNoPh" hidden>Remove photo</button></div>
+ <div class="cupic" id="cuPic" hidden><canvas id="cuCv"></canvas><i class="cudot" id="cuDot" hidden></i></div>
+ <p class="s" id="cuPicT" hidden>Tap the painted swatch to pick its colour. It takes the average of a small patch, so a dry swatch photographed in daylight works best.</p>
+ <div class="cuf"><label>Colour <span class="cuhx"><input type="color" id="cuCol" value="#808080" aria-label="Colour picker"><input id="cuHex" class="inp" maxlength="7" placeholder="#4a7a2c" spellcheck="false" autocomplete="off" aria-label="Hex code"></span></label>
+ <label>Name <input id="cuName" class="inp" maxlength="60" placeholder="e.g. My skin base mix" autocomplete="off"></label>
+ <label>Brand or range <input id="cuBrand" class="inp" maxlength="60" list="cuBrL" placeholder="e.g. Homemade" autocomplete="off"></label><datalist id="cuBrL">${br}</datalist>
+ <label>Type <select id="cuType" class="inp">${ty}</select></label>
+ <label>Notes <span class="s">(optional)</span><textarea id="cuNotes" class="inp" rows="2" maxlength="1000"></textarea></label></div>
+ <div id="cuNear"></div><p class="err" id="cuErr" role="alert"></p>
+ <div class="pkft"><button class="btn dan" type="button" id="cuDel" hidden>Delete</button><span style="margin-right:auto"></span><button class="btn" type="button" data-cux>Cancel</button><button class="btn pri" type="button" id="cuOk">Save paint</button></div></dialog>`);
+ d=$('cuDlg');d.querySelectorAll('[data-cux]').forEach(b=>b.onclick=()=>d.close());
+ const cv=$('cuCv'),hx=$('cuHex'),col=$('cuCol');
+ const setHex=(h,from)=>{h=h.toLowerCase();if(from!=='hex')hx.value=h;if(from!=='col')col.value=h;cuNear(h)};
+ hx.oninput=()=>{let v=hx.value.trim();if(/^[0-9a-f]{6}$/i.test(v))v='#'+v;if(/^#[0-9a-f]{6}$/i.test(v))setHex(v,'hex');else if(/^#?[0-9a-f]{3}$/i.test(v)){const t=v.replace('#','');setHex('#'+t[0]+t[0]+t[1]+t[1]+t[2]+t[2],'hex')}};
+ col.oninput=()=>{setHex(col.value,'col');$('cuDot').hidden=true};
+ $('cuFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;$('cuErr').textContent='';
+  try{if(!/^image\//.test(f.type))throw new Error('Please choose a photo');await cuDraw(await createImageBitmap(f));CU.file=f;CU.photo=''}catch(er){$('cuErr').textContent=er.message||'That photo could not be opened'}};
+ $('cuNoPh').onclick=()=>{CU.file=null;CU.photo='';$('cuPic').hidden=$('cuPicT').hidden=$('cuNoPh').hidden=true};
+ // Tap the photo: average a small square (in linear light) around the spot and use it as the colour.
+ cv.onclick=e=>{const b=cv.getBoundingClientRect(),x=Math.round((e.clientX-b.left)/b.width*cv.width),y=Math.round((e.clientY-b.top)/b.height*cv.height),r=Math.max(2,Math.round(Math.max(cv.width,cv.height)/120));
+  const x0=Math.max(0,x-r),y0=Math.max(0,y-r),w=Math.min(cv.width,x+r+1)-x0,h=Math.min(cv.height,y+r+1)-y0;if(w<1||h<1)return;
+  const px=cv.getContext('2d').getImageData(x0,y0,w,h).data,lin=v=>{v/=255;return v>.04045?Math.pow((v+.055)/1.055,2.4):v/12.92},gam=v=>Math.round(255*(v>.0031308?1.055*Math.pow(v,1/2.4)-.055:12.92*v)),c=[0,0,0];
+  for(let i=0;i<px.length;i+=4)for(let k=0;k<3;k++)c[k]+=lin(px[i+k]);const n=px.length/4;
+  setHex('#'+c.map(v=>Math.max(0,Math.min(255,gam(v/n))).toString(16).padStart(2,'0')).join(''));
+  const dt=$('cuDot');dt.hidden=false;dt.style.left=(x/cv.width*100)+'%';dt.style.top=(y/cv.height*100)+'%';dt.style.background=hx.value};
+ $('cuOk').onclick=cuSave;
+ $('cuDel').onclick=async()=>{const b=$('cuDel');if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent='Delete for good?';return}
+  b.disabled=true;try{await api('/custom/'+encodeURIComponent(CU.x.id),{method:'DELETE'});CUS=CUS.filter(y=>y.id!==CU.x.id);cuDone();d.close()}catch(er){b.disabled=false;$('cuErr').textContent=er.message}};
+ return d}
+let CU={x:null,file:null,photo:''};
+async function cuDraw(bmp){const cv=$('cuCv'),k=Math.min(1,900/Math.max(bmp.width,bmp.height));cv.width=Math.max(1,Math.round(bmp.width*k));cv.height=Math.max(1,Math.round(bmp.height*k));
+ cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);$('cuPic').hidden=$('cuPicT').hidden=$('cuNoPh').hidden=false;$('cuDot').hidden=true}
+// Closest catalogue paints (ΔE2000), so the painter can see what it's near. Paints they own get a ★.
+function cuNear(h){const el=$('cuNear');if(!/^#[0-9a-f]{6}$/i.test(h)){el.innerHTML='';return}const lab=hexLab(h);
+ const top=P.slice(0,P0).filter(q=>q.g!=='B').map(q=>({q,d:de00(lab,q.lab)})).sort((a,b)=>a.d-b.d).slice(0,5);
+ el.innerHTML='<h3>Closest paints on the site</h3><div class="chips">'+top.map(({q,d})=>`<span class="chip"><i style="background:${q.h}"></i>${OWN&&OWN.has(q.k)?'<b class="own" title="In your collection">★</b> ':''}${esc(q.n)} <em>${esc(BRANDS[BR_OF[q.g]][0].split(' / ')[0])} · ΔE ${d.toFixed(0)}</em></span>`).join('')+'</div><p class="s">Swatches on the site are estimates too, so check a close match in person.</p>'}
+async function cuOpen(x){const d=cuDlg();CU={x,file:null,photo:x&&x.photo||''};
+ $('cuT').textContent=x?'Edit custom paint':'Add a custom paint';$('cuErr').textContent='';
+ $('cuName').value=x?x.name:'';$('cuBrand').value=x?x.brand:'';$('cuType').value=x?x.type:'op';$('cuNotes').value=x?x.notes:'';
+ const h=x?x.hex:'';$('cuHex').value=h;$('cuCol').value=h||'#808080';cuNear(h);
+ const del=$('cuDel');del.hidden=!x;del.dataset.sure='';del.textContent='Delete';del.disabled=false;$('cuOk').disabled=false;
+ $('cuPic').hidden=$('cuPicT').hidden=$('cuNoPh').hidden=true;
+ d.showModal();if(!x)$('cuName').focus();
+ if(CU.photo){const ph=CU.photo;try{const b=await (await fetch(imgURL(ph),{credentials:'same-origin'})).blob();if(CU.photo===ph&&d.open)await cuDraw(await createImageBitmap(b))}catch(e){}}}
+async function cuSave(){const b=$('cuOk'),er=$('cuErr');er.textContent='';
+ let h=$('cuHex').value.trim().toLowerCase();if(/^[0-9a-f]{6}$/.test(h))h='#'+h;
+ const name=$('cuName').value.trim();
+ if(!/^#[0-9a-f]{6}$/.test(h)){er.textContent='Pick the colour from your photo, or type a hex code like #4a7a2c.';return}
+ if(!name){er.textContent='Give the paint a name.';$('cuName').focus();return}
+ b.disabled=true;b.textContent='Saving…';
+ try{let photo=CU.photo;if(CU.file){b.textContent='Uploading photo…';photo=await uploadPhoto(CU.file)}
+  const body={name,brand:$('cuBrand').value.trim(),type:$('cuType').value,hex:h,notes:$('cuNotes').value.trim(),photo};
+  const r=CU.x?await api('/custom/'+encodeURIComponent(CU.x.id),{method:'PUT',body}):await api('/custom',{method:'POST',body});
+  const i=CUS.findIndex(y=>y.id===r.paint.id);if(i>=0)CUS[i]=r.paint;else CUS.push(r.paint);cuDone();$('cuDlg').close();
+  const m=$('pmsg');if(m&&!CU.x)m.textContent=`Added ${r.paint.name}. It's on your wheel now.`}
+ catch(e){er.textContent=e.message||'Could not save'}finally{b.disabled=false;b.textContent='Save paint'}}
+function cuDone(){window.pdSetCustom&&pdSetCustom(CUS);if(location.hash==='#/paints')renderCustom()}
 function renderMixes(){const el=$('mixP');if(!el)return;
  const wr=$('mixd')||el;if(!MIXOK){wr.hidden=true;return}wr.hidden=false;
- const ms=P.filter(p=>p.mix);if($('mixN'))$('mixN').textContent=ms.length?`(${ms.length})`:'';
+ const ms=P.filter(p=>p.mix&&!p.cus);if($('mixN'))$('mixN').textContent=ms.length?`(${ms.length})`:'';
  el.innerHTML=`<p class="s">${ms.length?'Mixes you saved. They show on the wheel with a dashed outline and work in matches, Ramps and Blends like your other paints. Colours are worked out from the swatch estimates, so they are approximate.':'No mixes yet. Select a paint you don\'t own on the wheel and tap <b>Add to my paints</b> on one of its suggested mixes.'}</p>`+
  ms.map(p=>`<div class="mxr"><span class="mxsw"><i style="background:${p.h}"></i></span><div class="mxt"><b>${esc(p.n)}</b><span class="s">${p.mix.m.map(([q,k])=>k+' part'+(k>1?'s ':' ')+esc(q.n)+' ('+esc(GL[q.g])+')').join(' + ')}</span></div><button type="button" class="mxsv" data-mxdel="${esc(p.mix.id)}">Remove</button></div>`).join('');
  el.querySelectorAll('[data-mxdel]').forEach(e=>e.onclick=async()=>{e.disabled=true;try{await pdDelMix(e.dataset.mxdel)}catch(er){e.disabled=false;e.textContent=er.message}})}
@@ -632,13 +716,14 @@ function renderPaints(){
  // Layout like the wheel page: a summary of the collection up top (editing happens in a pop-up), then the tools, most used first.
  el.innerHTML=PTABS+`<h1>My paints</h1>
  <div class="panel psum"><div class="psh"><b id="pcnt"></b> <span class="s" id="pmsg"></span></div><div class="chips pbr" id="pbr"></div>
- <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pScan" type="button">Scan paints</button><button class="btn" id="pCsv" type="button">Import from CSV</button><button class="btn" id="pRst" type="button">Restore a backup</button></div>
+ <div class="row"><button class="btn pri" id="pEdit" type="button">Edit my collection</button><button class="btn" id="pWheel" type="button">Show on wheel</button><button class="btn" id="pScan" type="button">Scan paints</button><button class="btn" id="pCus" type="button" hidden>Add custom paint</button><button class="btn" id="pCsv" type="button">Import from CSV</button><button class="btn" id="pRst" type="button">Restore a backup</button></div>
  <p class="s">Your paints get a ★ on the wheel and in matches. Changes save automatically.</p></div>
  <details class="panel" id="ownd" hidden><summary><b>My paints list</b> <span class="s" id="ownN"></span></summary>${DETOK?'<label class="owqt"><input type="checkbox" id="ownQ"> Count pots <span class="s">(how many of each you have)</span></label>':''}<div id="ownL"></div><div class="row"><button class="btn sm" type="button" id="ownCp">Copy list</button><span class="s" id="ownM"></span></div></details>
  <div class="panel ptip" id="ptip" hidden><b>Start by ticking the paints you own.</b> <span class="s">Open your collection, pick a brand and tick a whole range or single paints. Suggestions, plans and matches then work from them.</span><div class="row"><button class="btn pri" id="pTip" type="button">Tick my paints</button></div></div>
  <details class="panel" id="sugd"><summary><b>Suggested paints</b> <span class="s" id="sugN"></span></summary><div id="sug"><p class="s">Working out the gaps in your collection…</p></div></details>
  <details class="panel" id="plnd"><summary><b>Plan for a project</b> <span class="s">What you have, can mix or need to buy</span></summary><div id="pln"></div></details>
  <details class="panel" id="shopd" hidden><summary><b>Shopping list</b> <span class="s" id="shopN"></span></summary><div id="shopP"></div></details>
+ <details class="panel" id="cusd" hidden><summary><b>My custom paints</b> <span class="s" id="cusN"></span></summary><div id="cusP"></div></details>
  <details class="panel" id="mixd" hidden><summary><b>My mixes</b> <span class="s" id="mixN"></span></summary><div id="mixP"></div></details>
  <dialog class="pd pickdlg" id="colDlg" aria-labelledby="colT"><div class="pkh"><h2 id="colT">My collection</h2><span class="s" id="pcnt2"></span></div>
  <div class="bar"><input id="pq" type="search" placeholder="Search paints (name or code)"><label style="align-self:center"><input type="checkbox" id="pOwned"> Only paints I own</label></div>
@@ -657,10 +742,10 @@ function renderPaints(){
  <dialog class="pd" id="rstDlg" aria-labelledby="rstT"><button class="cpx pqx" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button><h2 id="rstT" style="padding-right:40px">Restore a backup</h2>
  <p class="s">Each day you change your collection, a copy of how it looked before that day's first change is kept for 14 days. Restoring puts that list back and takes off paints added since.</p><div id="rstL"></div></dialog>`;
  // Fold-away sections remember whether they were left open (Suggested paints and Plan keep their own keys).
- [['shopd','pd-shopd'],['mixd','pd-mixd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
+ [['shopd','pd-shopd'],['mixd','pd-mixd'],['cusd','pd-cusd']].forEach(([id,k])=>{const d=$(id);try{d.open=localStorage.getItem(k)!=='0'}catch(e){d.open=true}d.addEventListener('toggle',()=>{try{localStorage.setItem(k,d.open?'1':'0')}catch(e){}})});
  const colOpen=bi=>{const d=$('colDlg');trBuild();d.showModal();if(bi!=null){const b=$('ptree').querySelector(`[data-pb="${bi}"]`),br=b&&b.closest('details.br');if(br){br.open=true;br.scrollIntoView({block:'start'})}}else $('pq').focus()};
  $('pEdit').onclick=()=>colOpen();$('pRst').onclick=rstOpen;
- $('pCsv').onclick=csvOpen;$('pScan').onclick=scanStart;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
+ $('pCsv').onclick=csvOpen;$('pCus').onclick=()=>cuOpen(null);$('pScan').onclick=scanStart;$('csvTpl').onclick=csvTemplate;$('csvExp').onclick=csvMine;
  $('csvFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>csvShow(String(rd.result));rd.onerror=()=>{$('csvOut').innerHTML='<p class="s">That file could not be read.</p>'};rd.readAsText(f)};
  $('csvGo').onclick=()=>csvShow($('csvTxt').value);$('csvOut').addEventListener('change',csvSum);
  $('csvAdd').onclick=()=>{const pk=csvPicked(),ks=[...pk.keys()];if(!ks.length)return;$('csvDlg').close();
@@ -668,7 +753,7 @@ function renderPaints(){
   const det=()=>{const d={};pk.forEach((r,k)=>{if(r.q>1||r.c||r.h)d[k]={q:r.q,s:r.c,c:r.h}});setDet(d);if(paintsRedraw)paintsRedraw()};
   if(ks.length>=BULK){askBulk(ks,'from your CSV',true,det);return}setOwned(ks,true);det();undoBar(ks,true);if(paintsRedraw)paintsRedraw()};$('pTip').onclick=()=>colOpen();$('colOk').onclick=()=>$('colDlg').close();
  $('pbr').addEventListener('click',e=>{const c=e.target.closest('[data-bi]');if(c)colOpen(+c.dataset.bi)});
- renderShop();renderMixes();renderPlan();loadPlanRecs();{const d=$('plnd');if(!d.open)try{d.open=localStorage.getItem('pd-plnd')==='1'}catch(e){}d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-plnd',d.open?'1':'0')}catch(e){}})}const tr=$('ptree');
+ renderShop();renderCustom();renderMixes();renderPlan();loadPlanRecs();{const d=$('plnd');if(!d.open)try{d.open=localStorage.getItem('pd-plnd')==='1'}catch(e){}d.addEventListener('toggle',()=>{try{localStorage.setItem('pd-plnd',d.open?'1':'0')}catch(e){}})}const tr=$('ptree');
  // The collection tree (every paint in the database, tens of thousands of elements) is only built the first time the pop-up
  // opens: building it with the page made the Paints tab slow to open on phones.
  let trOk=false;const trBuild=()=>{if(trOk)return;trOk=true;tr.innerHTML=treeHTML('data-pc','data-pb');counts();filt()};
