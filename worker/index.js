@@ -196,6 +196,13 @@ async function route(request, env, url) {
     if (m === 'PUT') return saveBacklog(request, env, r[1]);
     if (m === 'DELETE') return deleteBacklog(request, env, r[1]);
   }
+  if (p === '/api/custom' && m === 'GET') return getCustom(request, env);
+  if (p === '/api/custom' && m === 'POST') return saveCustom(request, env, null);
+  if ((r = p.match(/^\/api\/custom\/([\w-]+)$/))) {
+    if (m === 'PUT') return saveCustom(request, env, r[1]);
+    if (m === 'DELETE') return deleteCustom(request, env, r[1]);
+  }
+  if ((r = p.match(/^\/api\/custom\/([\w-]+)\/suggest$/)) && m === 'POST') return suggestCustom(request, env, url, r[1]);
   if (p === '/api/mixes' && m === 'GET') return getMixes(request, env);
   if (p === '/api/mixes' && m === 'POST') return addMix(request, env);
   if ((r = p.match(/^\/api\/mixes\/([\w-]+)$/)) && m === 'DELETE') return deleteMix(request, env, r[1]);
@@ -418,8 +425,8 @@ async function me(request, env, url) {
   if (user && url?.searchParams.get('boot') === '1') {
     BOOT_USER.set(request, Promise.resolve(user));
     const part = f => f(request, env).then(r => r.ok ? r.json() : null).catch(() => null);
-    boot = Promise.all([part(getCollection), part(getWheel), part(getMixes), part(getWants), part(chatHome), part(listBlocks)])
-      .then(([collection, wheel, mixes, wants, chat, blocks]) => ({ collection, wheel, mixes, wants, chat, blocks }));
+    boot = Promise.all([part(getCollection), part(getWheel), part(getMixes), part(getWants), part(chatHome), part(listBlocks), part(getCustom)])
+      .then(([collection, wheel, mixes, wants, chat, blocks, custom]) => ({ collection, wheel, mixes, wants, chat, blocks, custom }));
   }
   let logins = [];
   if (user) logins = (await env.DB.prepare('SELECT provider FROM identities WHERE user_id = ?').bind(user.id).all()).results.map(r => r.provider);
@@ -967,6 +974,7 @@ async function deleteAccount(request, env) {
     env.DB.prepare('DELETE FROM collection WHERE user_id = ?').bind(u.id),
     ...(await hasSchema(env, 'collection_backups') ? [env.DB.prepare('DELETE FROM collection_backups WHERE user_id = ?').bind(u.id)] : []),
     ...(await hasSchema(env, 'backlog') ? [env.DB.prepare('DELETE FROM backlog WHERE user_id = ?').bind(u.id)] : []),
+    ...(await hasSchema(env, 'custom_paints') ? [env.DB.prepare('DELETE FROM custom_paints WHERE user_id = ?').bind(u.id)] : []),
     ...(await hasCommissions(env) ? [
       env.DB.prepare('DELETE FROM commissions WHERE user_id = ?').bind(u.id),
       env.DB.prepare('DELETE FROM commission_messages WHERE painter_id = ? OR sender_id = ?').bind(u.id, u.id),
@@ -1238,6 +1246,74 @@ async function deleteBacklog(request, env, id) {
   await env.DB.prepare('DELETE FROM backlog WHERE id = ? AND user_id = ?').bind(id, u.id).run();
   if (row?.photo) await dropUnusedImages(env, [row.photo]);
   return json({ ok: true });
+}
+
+/* ---------- custom paints (migration 0029) ---------- */
+// A painter's own paints that aren't in the catalogue. Private: only the owner reads them, and they never touch data.js.
+// The colour is the painter's own estimate. Until the migration is applied, GET says unavailable and the site hides the feature.
+const CU_TYPES = ['op', 'met', 'pearl', 'con', 'wash', 'ink', 'fx', 'tech'], CU_MAX = 300;
+const CU_TYPE_LABEL = { op: 'Opaque (base / layer)', met: 'Metallic', pearl: 'Pearl', con: 'Contrast / speedpaint', wash: 'Wash / shade', ink: 'Ink / glaze', fx: 'Fluorescent / effect', tech: 'Technical / medium' };
+// Names show on the wheel and in lists, so markup characters are dropped.
+const cuText = (v, n) => String(v ?? '').replace(/[<>"'`\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
+const cuRow = r => ({ id: r.id, name: r.name, brand: r.brand || '', type: r.type, hex: r.hex, photo: r.photo || '', notes: r.notes || '', suggested_at: r.suggested_at || null, created_at: r.created_at, updated_at: r.updated_at });
+async function getCustom(request, env) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'custom_paints')) return json({ paints: [], unavailable: true });
+  const rows = (await env.DB.prepare('SELECT * FROM custom_paints WHERE user_id = ? ORDER BY created_at').bind(u.id).all()).results;
+  return json({ paints: rows.map(cuRow) });
+}
+async function saveCustom(request, env, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'custom_paints')) throw new HttpError(503, 'Custom paints aren\'t switched on yet');
+  const b = await body(request);
+  const name = cuText(b.name, 60), brand = cuText(b.brand, 60) || null, hex = String(b.hex || '').trim().toLowerCase();
+  const type = CU_TYPES.includes(b.type) ? b.type : 'op', notes = String(b.notes || '').trim().slice(0, 1000) || null;
+  const photo = IMAGE_ID.test(String(b.photo || '')) ? String(b.photo) : null;
+  if (!name) throw new HttpError(400, 'Give the paint a name');
+  if (!/^#[0-9a-f]{6}$/.test(hex)) throw new HttpError(400, 'Colour must be a hex code like #4a7a2c');
+  const t = now();
+  let old = null;
+  if (id) {
+    old = await env.DB.prepare('SELECT photo FROM custom_paints WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+    if (!old) throw new HttpError(404, 'Not found');
+  }
+  if (photo && photo !== old?.photo) await checkImagesOwned(env, u, [photo]);
+  if (id) {
+    await env.DB.prepare('UPDATE custom_paints SET name = ?, brand = ?, type = ?, hex = ?, photo = ?, notes = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .bind(name, brand, type, hex, photo, notes, t, id, u.id).run();
+    if (old.photo && old.photo !== photo) await dropUnusedImages(env, [old.photo]);
+  } else {
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM custom_paints WHERE user_id = ?').bind(u.id).first();
+    if (n && n.n >= CU_MAX) throw new HttpError(400, `You can add up to ${CU_MAX} custom paints`);
+    id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO custom_paints (id, user_id, name, brand, type, hex, photo, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, u.id, name, brand, type, hex, photo, notes, t, t).run();
+  }
+  return json({ paint: cuRow(await env.DB.prepare('SELECT * FROM custom_paints WHERE id = ?').bind(id).first()) });
+}
+async function deleteCustom(request, env, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'custom_paints')) throw new HttpError(503, 'Custom paints aren\'t switched on yet');
+  const row = await env.DB.prepare('SELECT photo FROM custom_paints WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+  await env.DB.prepare('DELETE FROM custom_paints WHERE id = ? AND user_id = ?').bind(id, u.id).run();
+  if (row?.photo) await dropUnusedImages(env, [row.photo]);
+  return json({ ok: true });
+}
+// Suggest for the main list: goes to the team like feedback (kind 'paint', admin inbox + email), written from the saved paint
+// so the details match what the painter sees. Nothing is added to the catalogue: the team checks a verifiable source first.
+async function suggestCustom(request, env, url, id) {
+  const u = await requireUser(request, env);
+  if (!await hasSchema(env, 'custom_paints')) throw new HttpError(503, 'Custom paints aren\'t switched on yet');
+  const r = await env.DB.prepare('SELECT * FROM custom_paints WHERE id = ? AND user_id = ?').bind(id, u.id).first();
+  if (!r) throw new HttpError(404, 'Not found');
+  if (r.suggested_at) throw new HttpError(400, 'You already suggested this paint');
+  const b = await body(request), note = String(b.note || '').trim().slice(0, 1000);
+  const message = ['Please add this paint to the main list.', `Name: ${r.name}`, `Brand / range: ${r.brand || '(not given)'}`, `Type: ${CU_TYPE_LABEL[r.type] || r.type}`,
+    `Colour (their own estimate): ${r.hex}`, r.photo ? `Photo: ${url.origin}/api/images/${r.photo}` : 'Photo: none', note ? `\nNote: ${note}` : ''].filter(Boolean).join('\n');
+  const h = new Headers(request.headers); h.delete('content-length'); h.set('content-type', 'application/json');
+  const res = await sendFeedback(new Request(request.url, { method: 'POST', headers: h, body: JSON.stringify({ kind: 'paint', message, page: '/#/paints' }) }), env, url);
+  await env.DB.prepare('UPDATE custom_paints SET suggested_at = ? WHERE id = ? AND user_id = ?').bind(now(), id, u.id).run();
+  return json({ ok: true, conversation: (await res.json()).conversation || null });
 }
 
 const noMixes = e => /no such table: mixes/i.test(String(e && e.message));
@@ -1706,6 +1782,8 @@ async function moderation(request, env) {
     for (const img of JSON.parse(m.images)) add(img, { type: 'message', id: m.conv, kind: m.kind });
   if (await hasSchema(env, 'backlog')) for (const b of (await env.DB.prepare('SELECT user_id, name, photo FROM backlog WHERE photo IS NOT NULL').all()).results)
     add(b.photo, { type: 'backlog', id: b.user_id, title: b.name });
+  if (await hasSchema(env, 'custom_paints')) for (const c of (await env.DB.prepare('SELECT user_id, name, photo FROM custom_paints WHERE photo IS NOT NULL').all()).results)
+    add(c.photo, { type: 'custom', id: c.user_id, title: c.name });
   const person = id => { const x = users.get(id); return x ? { id: x.id, name: x.name, blocked: !!x.blocked, unconfirmed: !!x.email && !x.email_verified, created_at: x.created_at } : { id, name: '(deleted account)', blocked: false }; };
   const imgRow = i => ({ id: i.id, hidden: !!i.hidden, scan: i.scan, size: i.size, created_at: i.created_at, user: person(i.user_id), used: usedIn.get(i.id) || [] });
   const images = (await env.DB.prepare('SELECT * FROM images ORDER BY created_at DESC LIMIT 60').all()).results.map(imgRow);
@@ -2474,11 +2552,11 @@ async function cleanPost(env, u, b) {
 
 // Delete photos no recipe, profile, portfolio, chat message or other post still uses (a photo can be reused across them).
 async function dropUnusedImages(env, ids) {
-  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), bl = await hasSchema(env, 'backlog'), gone = [];
+  const cm = await hasCommissions(env), ch = await hasChat(env), mp = await hasMsgPhotos(env), bl = await hasSchema(env, 'backlog'), cu = await hasSchema(env, 'custom_paints'), gone = [];
   for (const id of new Set(ids)) {
     const like = `%"${id}"%`;
     const used = await env.DB.prepare(`SELECT 1 FROM recipes WHERE cover = ?1 OR steps LIKE ?2 UNION ALL SELECT 1 FROM users WHERE avatar_image = ?1
-      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''}${bl ? ' UNION ALL SELECT 1 FROM backlog WHERE photo = ?1' : ''} LIMIT 1`).bind(id, like).first();
+      UNION ALL SELECT 1 FROM forum_posts WHERE images LIKE ?2${cm ? ' UNION ALL SELECT 1 FROM commissions WHERE photos LIKE ?2' : ''}${ch ? ' UNION ALL SELECT 1 FROM chat_messages WHERE images LIKE ?2' : ''}${mp ? ' UNION ALL SELECT 1 FROM messages WHERE images LIKE ?2' : ''}${bl ? ' UNION ALL SELECT 1 FROM backlog WHERE photo = ?1' : ''}${cu ? ' UNION ALL SELECT 1 FROM custom_paints WHERE photo = ?1' : ''} LIMIT 1`).bind(id, like).first();
     if (!used) gone.push(id);
   }
   await deleteImages(env, gone);
@@ -2913,7 +2991,7 @@ async function deleteCategory(request, env, id) {
 
 // The Feedback button on every page. Saved to D1 and emailed to FEEDBACK_TO (else the first ADMIN_EMAILS address).
 // A hidden "website" field catches form-filling bots; each sender (by IP) can post 5 an hour.
-const FEEDBACK_KINDS = { bug: 'Bug', suggestion: 'Suggestion', other: 'Other' }, FEEDBACK_PER_HOUR = 5;
+const FEEDBACK_KINDS = { bug: 'Bug', suggestion: 'Suggestion', paint: 'Paint suggestion', other: 'Other' }, FEEDBACK_PER_HOUR = 5;
 
 // ---------- visit counts ----------
 // Anonymous counts for the owner's daily report: page views and referring sites per UTC hour, and unique
