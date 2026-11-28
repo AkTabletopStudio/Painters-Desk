@@ -294,6 +294,35 @@ const SITE_LD = { '@type': 'WebSite', '@id': SITE + '/#site', name: 'The Painter
 const FB_PAGE = 'https://www.facebook.com/profile.php?id=61596527891779';
 const ORG = { '@type': 'Organization', '@id': SITE + '/#org', name: 'AK Tabletop Studio', url: SITE + '/', logo: SITE + '/icons/icon-512.png', sameAs: [FB_PAGE] };
 
+// Shopping list without leaving the page (paint pages, brand lists, the guide pop-up). Signed in: every "Add to shopping list"
+// link (href .../#/?paint=<key>&want=1) toggles the paint in place, and each brand list row (li[data-k]) gets a ☆ button, so
+// several paints can go on the list in one visit. Signed out (or no shopping list yet): nothing changes, the links still go to the app.
+// Saves are batched like setWant() in account.js: PUT /api/wants {add, remove}.
+const WANT_JS = `<div id="wsT" role="status" hidden></div>
+<script>(function(){var d=document,W=null,L=0,P={add:{},remove:{}},T,TT,t=d.getElementById('wsT');
+function key(a){var m=/[?&]paint=([^&]+)/.exec(a.hash||'');return m&&/[?&]want=1/.test(a.hash)&&decodeURIComponent(m[1])}
+function nm(k){return k.split('|').slice(2).join('|')}
+function load(){if(L)return;L=1;fetch('/api/wants',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null}).then(function(x){if(!x||x.unavailable||!x.paints)return;W={};x.paints.forEach(function(k){W[k]=1});mark()}).catch(function(){})}
+function mark(r){if(!W){load();return}r=r||d;
+ r.querySelectorAll('a[href*="want=1"]').forEach(function(a){var k=key(a);if(!k)return;a.textContent=W[k]?'★ On shopping list':'☆ Add to shopping list';a.setAttribute('role','button');a.setAttribute('aria-pressed',W[k]?'true':'false');a.title=W[k]?'Tap to take it off your shopping list':''});
+ r.querySelectorAll('li[data-k]').forEach(function(li){var b=li.querySelector('button.st'),k=li.dataset.k,on=!!W[k];
+  if(!b){b=d.createElement('button');b.type='button';b.className='st';li.insertBefore(b,li.firstChild);li.parentNode.classList.add('ws')}
+  b.textContent=on?'★':'☆';b.setAttribute('aria-pressed',on?'true':'false');b.setAttribute('aria-label',(on?'Take '+nm(k)+' off':'Add '+nm(k)+' to')+' my shopping list');b.title=on?'On your shopping list (tap to take it off)':'Add to shopping list'});
+ var h=d.getElementById('wsH');if(h)h.hidden=false}
+window.pdWantMark=mark;
+function toast(m){clearTimeout(TT);t.textContent=m;var a=d.createElement('a');a.href='/#/paints?shop=1';a.textContent='See list';t.appendChild(a);t.hidden=false;TT=setTimeout(function(){t.hidden=true},4000)}
+function n(){return Object.keys(W).length}
+function set(k,on){if(on)W[k]=1;else delete W[k];P[on?'add':'remove'][k]=1;delete P[on?'remove':'add'][k];mark();
+ toast((on?'★ Added '+nm(k)+'.':'Took '+nm(k)+' off.')+' '+n()+' on your shopping list.');clearTimeout(T);T=setTimeout(send,400)}
+function send(){var b={add:Object.keys(P.add),remove:Object.keys(P.remove)};P={add:{},remove:{}};if(!b.add.length&&!b.remove.length)return;
+ fetch('/api/wants',{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+ .then(function(r){return r.json().then(function(x){if(!r.ok)throw x;return x})})
+ .then(function(x){if(x.paints&&!Object.keys(P.add).length&&!Object.keys(P.remove).length){W={};x.paints.forEach(function(k){W[k]=1});mark()}})
+ .catch(function(x){b.add.forEach(function(k){delete W[k]});b.remove.forEach(function(k){W[k]=1});mark();clearTimeout(TT);t.textContent=(x&&x.error)||'Couldn’t save your shopping list. Check your connection and try again.';t.hidden=false;TT=setTimeout(function(){t.hidden=true},6000)})}
+d.addEventListener('click',function(e){if(!W||e.button||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;var x=e.target.closest&&e.target.closest('button.st,a[href*="want=1"]');if(!x)return;
+ var k=x.tagName==='BUTTON'?x.parentNode.dataset.k:key(x);if(!k)return;e.preventDefault();set(k,!W[k])});
+if(d.querySelector('li[data-k],a[href*="want=1"]'))load()})()</script>`;
+
 // Paint pop-up on guide pages: tapping a paint opens this instead of leaving the guide, with a button to the full paint page.
 // Paint links are /paints/<brand>/<paint>; ctrl/shift/middle clicks still open the page as normal.
 const PL_DLG = `<dialog class="pd pl" id="plDlg" aria-labelledby="plT"><button class="plx" type="button" aria-label="Close">×</button><div id="plB"></div></dialog>
@@ -303,7 +332,7 @@ function show(u,x){B.innerHTML='<div class="plh"><span class="pls" style="backgr
  +'<div class="row"><a class="btn pri" href="'+e(x.u)+'">View paint page</a><a class="btn" href="'+e(x.w)+'">Show on wheel</a><a class="btn" href="'+e(x.w)+'&amp;want=1" rel="nofollow">☆ Add to shopping list</a></div>'
  +(x.m.length?'<h3>Closest in other brands</h3><ul class="m">'+x.m.map(function(m){return'<li><i class="sw" style="background:'+e(m.h)+'"></i><span>'+(m.ck?'<span class="ck" title="Listed in a conversion chart">✓</span> ':'≈ ')+'<a href="'+e(m.u)+'">'+e(m.n)+'</a><em>'+e(m.b)+' · ΔE '+m.d+', '+e(m.q)+'</em></span></li>'}).join('')+'</ul>':'')
  +'<p class="s">✓ = listed in a conversion chart, ≈ = closest swatch colour. Swatch colours are estimates, so check the paint in person.</p>';
- g.scrollTop=0;if(!g.open)g.showModal();g.querySelector('.plx').focus()}
+ window.pdWantMark&&pdWantMark(B);g.scrollTop=0;if(!g.open)g.showModal();g.querySelector('.plx').focus()}
 function open(u){var k=++n;if(C[u])return show(u,C[u]);
  fetch(u+'?look=1').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(x){C[u]=x;if(k===n)show(u,x)}).catch(function(){location.href=u})}
 d.addEventListener('click',function(ev){if(ev.defaultPrevented||ev.button||ev.ctrlKey||ev.metaKey||ev.shiftKey||ev.altKey)return;
@@ -391,6 +420,8 @@ i.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);flex:n
 .ppstrip figcaption{font-size:13px;line-height:1.3;margin-top:5px}.ppstrip figcaption b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ppstrip figcaption em{display:block;font-style:normal;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 ul.u li{display:block;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}ul.u li:first-child{border-top:0}
+ul.list.ws{list-style:none;padding-left:0}button.st{background:none;border:0;margin:0;padding:0 4px 0 0;min-width:30px;min-height:30px;font:400 20px/1 Rubik,sans-serif;color:var(--mut);cursor:pointer;vertical-align:middle}button.st[aria-pressed=true]{color:var(--fg)}
+#wsT{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;background:var(--card);color:var(--fg);border:3px solid var(--ink);border-radius:14px;box-shadow:4px 4px 0 var(--sh);padding:10px 14px;font-size:15px;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box}#wsT a{font-weight:700;margin-left:8px;white-space:nowrap}@media(max-width:700px){#wsT{bottom:calc(76px + env(safe-area-inset-bottom))}}
 ul.list{columns:3 220px;padding-left:18px}ul.list li{break-inside:avoid}ul.list li i.sw{display:inline-block;width:14px;height:14px;border-width:1.5px;vertical-align:-2px;margin:0 6px 0 0}ul.m.list{padding-left:0}ul.m.list li{display:block}
 ul.gl{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 20px}ul.gl li{display:block;padding:6px 0}ul.gl b{font-size:17px}ul.gl .chip{height:12px;margin:6px 0 4px;max-width:240px}.prose h3,.panel h3{font-size:17px;margin:4px 0 6px}
 footer{font-size:12px;color:var(--mut);margin-top:24px}
@@ -433,6 +464,7 @@ The Painters Desk is unofficial and not affiliated with or endorsed by any paint
 </div>
 ${THEME.dlg}
 ${path.startsWith('/guides') ? PL_DLG : ''}
+${path.startsWith('/guides') || path.startsWith('/paints/') ? WANT_JS : ''}
 <script>(function(){var d=document,h=d.documentElement,g=d.getElementById('thDlg'),os=g?g.querySelectorAll('.tho'):[];
 function ic(){var l=h.dataset.look;d.querySelectorAll('img.pdi').forEach(function(m){m.src=l?'/icons/themes/'+l+'.svg':m.dataset.def})}ic();
 var s=d.querySelector('nav.top .secs'),o=s&&s.querySelector('.on');if(o&&s.scrollWidth>s.clientWidth)s.scrollLeft=o.offsetLeft-s.offsetLeft-8;
@@ -944,9 +976,10 @@ function brandPage(D, br) {
   const desc = `Find the closest ${D.brands.filter(b => b !== br).slice(0, 4).map(short).join(', ')} and other matches for all ${br.paints.length} ${br.name} paints, and how the range compares. Swatch colours are estimates.`;
   const body = `<h1>${esc(br.name)} paint equivalents</h1>
 <p>Every ${esc(br.name)} paint on The Painters Desk (${br.paints.length} in all). Pick one to see its closest matches in the other brands. Swatch colours are estimates.</p>
+<p class="s" id="wsH" hidden>Tap ☆ next to any paint to put it on your shopping list, then carry on down the list. <a href="/#/paints?shop=1">See my shopping list</a></p>
 ${brandGuide(D, br)}
 <section class="panel"><h2>Conversion charts</h2><ul class="m"><li><a href="/guides/${ALL_SLUG}?from=${br.slug}">${esc(short(br))} to every other brand</a></li>${guides.map(g => `<li><a href="/guides/${g.slug}">${esc(g.title)}</a></li>`).join('')}</ul></section>
-${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="list">${x.ps.map(p => `<li><i class="sw" style="background:${p.h}"></i><a href="${paintUrl(p)}">${esc(label(p))}</a></li>`).join('')}</ul></section>`).join('')}`;
+${groups.map(x => `<section class="panel"><h2>${esc(D.GL[x.g])}</h2><ul class="list">${x.ps.map(p => `<li data-k="${esc(p.g + '|' + p.c + '|' + p.n)}"><i class="sw" style="background:${p.h}"></i><a href="${paintUrl(p)}">${esc(label(p))}</a></li>`).join('')}</ul></section>`).join('')}`;
   return page({
     title, desc, path: '/paints/' + br.slug, body,
     crumbs: [['Paints', '/paints'], [br.name, '/paints/' + br.slug]],

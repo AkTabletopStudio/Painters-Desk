@@ -61,7 +61,9 @@ function setWant(keys,on){keys.forEach(k=>{if(on){WANT.add(k);wantPend.add.add(k
 document.addEventListener('click',e=>{const b=e.target.closest('[data-want]');if(!b||!WANTOK)return;e.preventDefault();setWant([b.dataset.want],!WANT.has(b.dataset.want))});
 function shopText(){const by={};[...WANT].map(k=>BYKEY.get(k)).filter(Boolean).forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
  return'My Painters Desk shopping list\n'+Object.entries(by).map(([b,ps])=>'\n'+b+'\n'+ps.map(p=>'- '+p.n.trim()+' ('+GL[p.g]+(p.c?', '+p.c:'')+')'+(OWN&&OWN.has(p.k)?' - restock':'')).join('\n')).join('\n')+'\n'}
+// #/paints?shop=1 (the "See list" link on paint pages and brand lists, worker/seo.js WANT_JS) opens the shopping list and scrolls to it.
 function renderShop(){const el=$('shopP');if(!el)return;const wr=$('shopd')||el;if(!WANTOK){wr.hidden=true;return}wr.hidden=false;
+ if(/[?&]shop=1/.test(location.hash)){history.replaceState(null,'','#/paints');if(wr.tagName==='DETAILS')wr.open=true;setTimeout(()=>wr.scrollIntoView({block:'start'}),0)}
  const ps=[...WANT].map(k=>BYKEY.get(k)).filter(Boolean),by={};ps.forEach(p=>{const b=BRANDS[BR_OF[p.g]][0];(by[b]=by[b]||[]).push(p)});
  if($('shopN'))$('shopN').textContent=ps.length?`(${ps.length})`:'';
  el.innerHTML=(ps.length?`<div class="row shb"><button type="button" class="btn" id="shopCopy">Copy list</button><button type="button" class="btn" id="shopWheel">Show on wheel</button><span class="s" id="shopM"></span></div>`+
