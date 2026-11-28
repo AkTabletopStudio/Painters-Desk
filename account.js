@@ -1067,13 +1067,18 @@ function chalBox(box){
  const re=()=>chalBox(box);
  box.querySelectorAll('.chip[data-k]').forEach(e=>e.onclick=()=>{const p=BYKEY.get(e.dataset.k);if(p)paintLook(p)});
  box.querySelectorAll('[data-sw]').forEach(b=>b.onclick=()=>{if(pdChal.swap(CHAL,+b.dataset.sw)){chalSave();re()}else{b.textContent='No other paint';b.disabled=true}});
- const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
+ // Look ids up inside this box: the Challenges tab and the wheel's pop-up can both hold one.
+ const q=id=>box.querySelector('#'+id),on=(id,f)=>{const e=q(id);if(e)e.onclick=f};
  on('chNew',()=>{CHAL=null;re()});
- const s=$('chS');if(s)s.onchange=()=>{chalWant=s.value;CHAL=null;re()};
- const a=$('chAll');if(a)a.onchange=()=>{chalAll=a.checked;CHAL=null;re()};
+ const s=q('chS');if(s)s.onchange=()=>{chalWant=s.value;CHAL=null;re()};
+ const a=q('chAll');if(a)a.onchange=()=>{chalAll=a.checked;CHAL=null;re()};
  on('chGo',()=>{CHAL.acc=Date.now();chalSave();re()});
- on('chWheel',()=>showOnWheel(CHAL.items.map(x=>x.k)));
- on('chQuit',()=>{const b=$('chQuit');if(!b.dataset.c){b.dataset.c=1;b.textContent='Click again to give up';return}CHAL=null;chalSave();re()})}
+ on('chWheel',()=>{const d=box.closest('dialog');if(d)d.close();showOnWheel(CHAL.items.map(x=>x.k))});
+ on('chQuit',()=>{const b=q('chQuit');if(!b.dataset.c){b.dataset.c=1;b.textContent='Click again to give up';return}CHAL=null;chalSave();re()})}
+// The wheel's 🎲 Challenge button: the same palette in a pop-up, so you never leave the wheel. Links inside it close it.
+(()=>{const b=$('chBtn'),d=$('chDlg');if(!b||!d)return;
+ b.onclick=()=>{chalBox($('chDlgB'));d.showModal()};
+ addEventListener('hashchange',()=>{if(d.open)d.close()})})();
 // "Take this challenge" on someone's post: their palette becomes yours.
 function chalTake(r){CHAL={s:r.meta?.scheme||'',b:r.steps[0]?.mix[0]?.k,items:r.steps.filter(x=>x.mix[0]).map(x=>({r:x.title||'Colour',t:'',k:x.mix[0].k})),all:true,at:Date.now(),acc:Date.now(),from:r.id};chalSave();rKind='challenge';location.hash='#/recipes/challenge'}
 async function renderRecipes(k){
