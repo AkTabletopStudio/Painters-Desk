@@ -254,7 +254,7 @@ function de00([L1, a1, b1], [L2, a2, b2]) {
 const dE = (a, b) => de00(a.lab, b.lab);
 
 // Same rule as matchData() in app.js. Short list (default): per other brand, chart-listed equivalents within ΔE 18 of the swatch,
-// else the 1 nearest paint of the same type within ΔE 9; a name shown once per brand. all=true: every chart match plus the 2-3
+// plus the 1 nearest paint of the same type within ΔE 9 when it is closer than every chart pair; a name shown once per brand. all=true: every chart match plus the 2-3
 // nearest swatches, no limit (shown folded under "Show all matches"). Same finish only in ch/near (metallic and pearl paints match
 // each other); xch/xnear: the other finish, listed apart on the page.
 const isMetT = p => p.t === 'met' || p.t === 'pearl', M_TICK = 18, M_NEAR = 9, tyG = t => t === 'ink' ? 'wash' : t;
@@ -273,8 +273,9 @@ export function matches(D, p, all = false) {
     b = b.filter(m => m.d <= M_TICK);
     const ch = dedupe(b.filter(m => isMetT(m.p) === mt)), xch = dedupe(b.filter(m => isMetT(m.p) !== mt)), taken = new Set([...ch, ...xch].map(m => nk(m.p)));
     const ok = m => m.d <= M_NEAR && !taken.has(nk(m.p));
-    const near = ch.length ? [] : pool.filter(m => isMetT(m.p) === mt && (mt || tyG(m.p.t) === ty) && ok(m)).slice(0, 1);
-    const xnear = xch.length ? [] : pool.filter(m => isMetT(m.p) !== mt && ok(m)).slice(0, 1);
+    // The nearest swatch shows too whenever it is closer than every chart pair, so a far-off chart pair never hides a closer colour.
+    const near = pool.filter(m => isMetT(m.p) === mt && (mt || tyG(m.p.t) === ty) && ok(m)).slice(0, 1).filter(m => !ch.length || m.d < ch[0].d);
+    const xnear = pool.filter(m => isMetT(m.p) !== mt && ok(m)).slice(0, 1).filter(m => !xch.length || m.d < xch[0].d);
     return { br, ch, near, xch, xnear };
   }).filter(Boolean);
 }
@@ -548,7 +549,7 @@ function paintPage(D, p, rs, ph) {
 <dl><dt>Brand</dt><dd><a href="/paints/${br.slug}">${esc(br.name)}</a></dd><dt>Range</dt><dd>${esc(range)}</dd>${p.c ? `<dt>Code</dt><dd>${esc(p.c)}</dd>` : ''}<dt>Type</dt><dd><a href="/guides/miniature-paint-types#${TYPE_SEC[p.t]}">${esc(TYPE_ONE[p.t])}</a></dd><dt>Swatch</dt><dd>${p.h} (estimate)</dd></dl></div>
 <p>Looking for a substitute for ${esc(brandName)} ${esc(p.n)}? These are the closest paints in each other brand on The Painters Desk.
 <span class="ck">✓</span> means a manufacturer or community conversion chart lists it as an equivalent; ≈ means it is the nearest swatch colour.
-ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Swatches are estimates, so check the real paints before you commit.</p>
+ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: the nearest paint of the same type within ΔE 9, plus chart-listed paints within ΔE 18. Swatches are estimates, so check the real paints before you commit.</p>
 ${p.now ? `<p>${esc(p.n)} is an old Army Painter Warpaints colour. Army Painter's Warpaints Fanatic conversion chart lists <a href="${paintUrl(p.now)}">${esc(p.now.n)}</a> as its replacement in Warpaints Fanatic, a close match but not always exact. The swatch shown here is ${esc(p.now.n)}'s.</p>` : ''}
 <p><a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}">See ${esc(p.n)} on the colour wheel</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;own=1" rel="nofollow">＋ Add ${esc(p.n)} to My paints</a> <a class="btn" href="/#/?paint=${encodeURIComponent(p.g + '|' + p.c + '|' + p.n)}&amp;want=1" rel="nofollow">☆ Add to shopping list</a></p>
 ${stdLinksHTML(D, p)}
@@ -1071,7 +1072,7 @@ function convPage(D, g) {
   const desc = `${short(A)} to ${short(B)} paint conversion chart: the closest ${short(B)} match for all ${A.paints.length} ${short(A)} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} paint on The Painters Desk and its closest ${esc(short(B))} paints. The first column (<span class="ck">✓</span>) is the equivalent a manufacturer or community conversion chart lists, where there is one; the second (≈) is the nearest swatch colour of the same paint type (shade for shade, metallic for metallic), worked out from our swatch estimates. When the two disagree, either the chart pairing is a loose one or our swatch estimate is off, so compare the real paints.
-ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: the nearest paint of the same type within ΔE 9, plus chart-listed paints within ΔE 18. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
 ${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>${close} of ${A.paints.length} paints (${pct(close, A.paints.length)}) have a ${esc(short(B))} match under ΔE 4, and ${charted} have a chart-listed equivalent. Tap any paint for its matches in every other brand.</p></div>
 ${groups.map(x => `<section class="panel"><h2>${esc(short(A))} ${esc(D.GL[x.g])}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(short(A))}</th><th>Chart-listed ${esc(short(B))}</th><th>Nearest ${esc(short(B))} colour</th></tr></thead><tbody>${x.ps.map(p => { const r = by.get(p); return `<tr><td><i class="sw" style="background:${p.h}"></i><a href="${p.url}">${esc(label(p))}</a></td><td>${cell(r.doc)}</td><td>${cell(r.near)}</td></tr>` }).join('')}</tbody></table></div></section>`).join('')}
 ${guideLinks(g)}`;
@@ -1088,7 +1089,7 @@ function multiConvPage(D, g) {
   const desc = `${short(A)} ${rng} conversion chart: the closest ${Bs.map(short).join(', ')} match for all ${ps.length} ${rng} paints, with chart-listed equivalents marked. Swatch colours are estimates.`;
   const body = `<h1>${esc(title)}</h1>
 <div class="prose"><p>Every ${esc(short(A))} ${esc(rng)} paint on The Painters Desk and its closest match in ${Bs.map(B => esc(short(B))).join(', ')}. A <span class="ck">✓</span> means a manufacturer or community conversion chart lists that pairing; ≈ means it is the nearest swatch colour of the same paint type, worked out from our swatch estimates.
-ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: chart-listed paints within ΔE 18, otherwise the nearest paint of the same type within ΔE 9. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
+ΔE is the colour difference between the two swatches: ${CLOSE_TXT}. Each brand shows its best match: the nearest paint of the same type within ΔE 9, plus chart-listed paints within ΔE 18. Real paints differ in finish and coverage as well as colour, so check before you commit to a whole army.</p>
 ${g.note ? `<p>${esc(g.note)}</p>` : ''}<p>Tap any paint for its matches in every brand.</p></div>
 <section class="panel"><h2>${esc(short(A))} ${esc(rng)}</h2><div class="tw"><table class="cv"><thead><tr><th>${esc(rng)}</th>${Bs.map(B => `<th>${esc(short(B))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr><td><i class="sw" style="background:${r.p.h}"></i><a href="${r.p.url}">${esc(label(r.p))}</a></td>${r.m.map(m => `<td>${cell(m)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
 ${guideLinks(g)}`;

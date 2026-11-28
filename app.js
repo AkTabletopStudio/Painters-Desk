@@ -611,8 +611,8 @@ const MSRC={t:'Two Thin Coats comparison chart',m:'AMMO ATOM user guide chart',f
 // Metallic and pearl paints only match each other, and other paints only match other paints: a gold is never a yellow's match.
 // The other finish is listed apart (Metallic matches / Non-metallic colours), one nearest per brand plus any chart pairs.
 const isMetT=p=>{const t=paintType(p);return t==='met'||t==='pearl'};
-// Matches in other ranges (ΔE2000). Short list (default): per brand, chart ✓ matches within ΔE 18 of our swatch, else the 1 nearest paint of the
-// same type within ΔE 9; same-named paints in one brand shown once. MATCH_ALL (Show all button) brings back the full list: every chart
+// Matches in other ranges (ΔE2000). Short list (default): per brand, chart ✓ matches within ΔE 18 of our swatch, plus the 1 nearest paint of the
+// same type within ΔE 9 when it is closer than every chart match (a far-off chart pair never hides a closer colour); same-named paints in one brand shown once. MATCH_ALL (Show all button) brings back the full list: every chart
 // match plus the 2-3 nearest per brand, no limit. Same split by finish either way (xch/xnear = metallic vs non-metallic section).
 let MATCH_ALL=false;const M_TICK=18,M_NEAR=9,tyG=t=>t==='ink'?'wash':t;
 // Varnishes, mediums and thinners only match each other (mirrored in worker/seo.js clearOf).
@@ -624,7 +624,7 @@ let ch=b.filter(m=>isMetT(m.p)===mt),xch=b.filter(m=>isMetT(m.p)!==mt);
 const pool=P.filter(q=>BR_OF[q.g]===bi&&q.g!=='B'&&!have.has(q)&&mine(q)&&clearOf(q)===clearOf(p)).map(q=>({p:q,d:dE(p,q)})).sort((a,b)=>a.d-b.d);
 let near,xnear;if(all){near=pool.filter(m=>isMetT(m.p)===mt).slice(0,ch.length?2:3);xnear=pool.filter(m=>isMetT(m.p)!==mt).slice(0,xch.length?0:1)}
 else{ch=dedupe(ch);xch=dedupe(xch);const ok=m=>m.d<=M_NEAR&&!ch.concat(xch).some(c=>c.p.n.trim().toLowerCase()===m.p.n.trim().toLowerCase());
- near=ch.length?[]:pool.filter(m=>isMetT(m.p)===mt&&(mt||tyG(paintType(m.p))===ty)&&ok(m)).slice(0,1);xnear=xch.length?[]:pool.filter(m=>isMetT(m.p)!==mt&&ok(m)).slice(0,1)}
+ near=pool.filter(m=>isMetT(m.p)===mt&&(mt||tyG(paintType(m.p))===ty)&&ok(m)).slice(0,1).filter(m=>!ch.length||m.d<ch[0].d);xnear=pool.filter(m=>isMetT(m.p)!==mt&&ok(m)).slice(0,1).filter(m=>!xch.length||m.d<xch[0].d)}
 out.push({bn,ch,near,xch,xnear})});return out}
 const mCount=md=>md.reduce((a,o)=>a+o.ch.length+o.near.length+o.xch.length+o.xnear.length,0);
 // Links from a selected paint to its own paint page (the Worker's /paints/find looks up the page by paint key) and to a conversion chart for its brand.
@@ -635,7 +635,7 @@ const brSlug=n=>n==='Citadel / Warhammer'?'citadel':n.normalize('NFKD').replace(
 function guideLinks(p){if(p.g==='B'||p.mix)return'';const bn=BRANDS[BR_OF[p.g]][0],cv=CONV_G[bn]||['guides/conversion-chart?from='+brSlug(bn),'Conversion chart for '+bn.replace(' / Warhammer','')],o=window.pdOwnBtn?pdOwnBtn(p):'',w=window.pdWantBtn?pdWantBtn(p):'';
  return`<p class="s glinks">${o?o+'<br>':''}${w?w+' · ':''}<a href="paints/find?k=${encodeURIComponent(p.g+'|'+p.c+'|'+p.n)}">Paint page for ${p.n.replace(/[&<>"]/g,'')} →</a>${cv?` · <a href="${cv[0]}">${cv[1]} →</a>`:''}</p>`}
 function matchHTML(p){return guideLinks(p)+mixHTML(p)+mtHTML(p)}
-function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour, with its ΔE (colour difference: '+MQ_TXT+'). Swatches are estimates, so even a Perfect match is worth checking in person. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: chart ✓ matches within ΔE '+M_TICK+', otherwise the nearest paint of the same type within ΔE '+M_NEAR+'.</p>');
+function mtHTML(p){const md=matchData(p);let h='<div class="mt"><h2>Matches in other ranges</h2><p class="s"><b style="color:#2a9d5c">✓</b> = listed as an equivalent in a manufacturer / community conversion chart. ≈ = closest swatch colour, with its ΔE (colour difference: '+MQ_TXT+'). Swatches are estimates, so even a Perfect match is worth checking in person. Tap a chip to add it to the wheel.</p>'+(MATCH_ALL?'<p class="s">Showing every match, including loose ones.</p>':'<p class="s">Showing the best match from each range: the nearest paint of the same type within ΔE '+M_NEAR+', plus chart ✓ matches within ΔE '+M_TICK+'.</p>');
 const c=(m,k)=>`<span class="chip${k?' ck':''}" data-mi="${m.p.i}" title="${k?MSRC[m.s]+' · ':''}${GL[m.p.g]} · ΔE ${m.d.toFixed(1)} · ${mq(m.d)[1]} match"><i style="background:${m.p.h}"></i>${k?'<b>✓</b> ':'≈ '}${star(m.p)}${m.p.n} <em>${GL[m.p.g]} · ΔE ${m.d.toFixed(0)}</em></span>`;
 const rows=(a,b)=>md.map(o=>!o[a].length&&!o[b].length?'':`<div class="br2"><div class="bl">${o.bn}</div><div class="chips">${o[a].map(m=>c(m,1)).join('')}${o[b].map(m=>c(m,0)).join('')}</div></div>`).join('');
 // Warpaints Historical paints that the Historical to Fanatic chart says are the same paint under another name (MT source 'w').
