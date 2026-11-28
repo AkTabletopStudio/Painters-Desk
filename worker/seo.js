@@ -221,8 +221,8 @@ function typeOf(app) {
   const ptG = {};
   for (const m of app.match(/const PT_G=\{(.*?)\};/)[1].matchAll(/(?:'([^']*)'|(\w+))\s*:\s*'([^']*)'/g)) ptG[m[1] ?? m[2]] = m[3];
   const isMet = p => metG.has(p.g) || metK.has(p.g + '|' + p.n) || /anodized|^candy /i.test(p.n) && p.g !== 'Û' && p.g !== 'Ə' || /\bmet(al|allic)?\b/i.test(p.n + ' ' + p.c) ||
-    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï' && p.g !== 'Ý' && p.g !== 'Ű' && p.g !== 'Ŷ' && p.g !== 'Ÿ' && p.g !== 'Ź';
-  const isPearl = p => /\bpearl\b|iridescent|^interference /i.test(p.n) && !/skin/i.test(p.n) && p.g !== 'Ï' && p.g !== 'Ş';
+    /gunmetal/i.test(p.n) || p.c === '70.877' || metRx.test(p.n) && !/yellow|green|brown|grey|oxide|drab|blue|wolf/i.test(p.n) && p.g !== '8' && p.g !== 'Ë' && p.g !== 'Ê' && p.g !== 'Ü' && p.g !== 'Ï' && p.g !== 'Ý' && p.g !== 'Ű' && p.g !== 'Ŷ' && p.g !== 'Ÿ' && p.g !== 'Ź' && !'ƘƙƟƠơ'.includes(p.g);
+  const isPearl = p => p.g === 'Ɲ' || /\bpearl\b|iridescent|^interference /i.test(p.n) && !/skin/i.test(p.n) && p.g !== 'Ï' && p.g !== 'Ş';
   return p => isPearl(p) ? 'pearl' : isMet(p) ? 'met' : p.g === 'Ê' && /^fluorescent /i.test(p.n) ? 'fx' : ptG[p.g] || (/speedpaint|contrast/i.test(p.c) ? 'con' : /\bwash$/i.test(p.c) || /\bwash\b|\bshade$/i.test(p.n) || (p.g === 'A' || p.g === 'Ħ') && / tone$/i.test(p.n) ? 'wash' :
     /\bink$/i.test(p.n) || / ink$/i.test(p.c) ? 'ink' : /fluo|^neon|effects$/i.test(p.n + '|' + p.c) ? 'fx' :
     /^matt .*primer$|varnish$|^(shading|blending|chipping) medium$/i.test(p.n) ? 'tech' : 'op');
@@ -871,6 +871,7 @@ const BRAND_INFO = {
   'gilded-goblin': 'Gilded Goblin is a small miniature paint maker. Its Complete Paint Collection has 18 water based acrylics in 18 ml dropper bottles: three core colours (Titanium White, Castle Gray, Void Black), four natural tones, five fantasy colours and the six-colour Arcane Expansion.',
   nicpro: 'NicPro makes a budget acrylic Model Paint set for miniatures and models: 80 colours in dropper bottles, with washes, metallics and special effect colours such as Orange Rust and Fresh Blood. No paint codes are printed, so paints are listed by name.',
   meeden: 'MEEDEN makes water-based, ready-to-spray airbrush paints in 30 ml dropper bottles, sold as a 60-colour set with fluorescent and metallic colours. No paint codes are printed, so paints are listed by name.',
+  folkart: 'FolkArt (by Plaid) is a budget craft acrylic sold in 2oz bottles almost everywhere, and a favourite for terrain and basecoating on a budget. Listed here: the Matte and Multi-Surface ranges, Metallic, Color Shift, Perle pearls, Treasure Gold, Neon, Glossy and Flat, with Plaid item numbers.',
   'bear-cavalry': 'Bear Cavalry is an American miniature painting company. Its paints are named after battles, songs and history, and come in reds, oranges, yellows, greens, blues, purples, greys and browns.',
   'green-stuff-world': 'Green Stuff World is a Spanish hobby supplier. Alongside its standard acrylics it makes fluorescent, colour-shift, dipping and acrylic ink paints.',
 };
